@@ -51,11 +51,62 @@
     });
   }
 
+  var availDate = document.getElementById("availDate");
+  var availStatus = document.getElementById("availStatus");
+  var availMap = document.getElementById("availMap");
+
+  function loadAvailability(dateStr) {
+    if (!dateStr || !availMap || !window.VBRCabanaMap) return;
+    availStatus.textContent = "Loading availability for " + dateStr + "…";
+    Promise.all([
+      window.VBRCabanaMap.loadCabanas(sb),
+      sb.from("booking_requests")
+        .select("cabana_id,guest_name,order_code,status")
+        .eq("check_in", dateStr)
+        .neq("status", "declined"),
+    ])
+      .then(function (results) {
+        var cabanas = results[0];
+        var res = results[1];
+        if (res.error) throw res.error;
+        if (!cabanas.length) {
+          availStatus.textContent = "No cabanas set up yet — run the Section 6 SQL in SETUP-BOOKING.md, then reload this page.";
+          availMap.innerHTML = "";
+          return;
+        }
+        var heldSet = new Set();
+        var heldInfo = {};
+        (res.data || []).forEach(function (row) {
+          if (!row.cabana_id) return;
+          heldSet.add(row.cabana_id);
+          heldInfo[row.cabana_id] =
+            (row.guest_name || "Guest") + " — " + (row.order_code || "no order ID") + " (" + (STATUS_LABELS[row.status] || row.status) + ")";
+        });
+        availStatus.textContent = (cabanas.length - heldSet.size) + " of " + cabanas.length + " cabanas open on " + dateStr + ". Hover a booked tile to see who has it.";
+        window.VBRCabanaMap.render(availMap, {
+          cabanas: cabanas,
+          heldSet: heldSet,
+          heldInfo: heldInfo,
+          selectedId: null,
+          onSelect: function () {},
+        });
+      })
+      .catch(function (err) {
+        availStatus.textContent = "Couldn't load availability" + (err && err.message ? ": " + err.message : ".");
+      });
+  }
+
+  if (availDate) {
+    availDate.value = new Date().toISOString().slice(0, 10);
+    availDate.addEventListener("change", function () { loadAvailability(availDate.value); });
+  }
+
   function showDash() {
     loginScreen.style.display = "none";
     dashScreen.style.display = "block";
     logoutBtn.style.display = "inline-block";
     loadCabanaOptions().then(loadBookings);
+    if (availDate) loadAvailability(availDate.value);
   }
   function showLogin() {
     loginScreen.style.display = "block";

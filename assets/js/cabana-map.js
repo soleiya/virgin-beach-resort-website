@@ -72,10 +72,14 @@
     }, 0);
   }
 
-  // opts: { cabanas, heldSet, selectedId, onSelect(cabana) }
+  // opts: { cabanas, heldSet, heldInfo, selectedId, onSelect(cabana) }
+  // heldInfo (optional): { [cabana_id]: "extra text for the tile's tooltip" }
+  // — used by the staff dashboard to show who's holding a cabana; the public
+  // booking page omits it and gets the generic "already booked" tooltip.
   function render(container, opts) {
     var cabanas = opts.cabanas || [];
     var heldSet = opts.heldSet || new Set();
+    var heldInfo = opts.heldInfo || null;
     var selectedId = opts.selectedId || null;
     var onSelect = opts.onSelect || function () {};
 
@@ -116,7 +120,8 @@
             tile.style.gridColumn = c.col_index + 1;
             tile.style.gridRow = r + 1;
             tile.textContent = c.number;
-            tile.title = c.label + (isHeld ? " — already booked for this date" : " — available");
+            var heldNote = isHeld ? (heldInfo && heldInfo[c.id] ? heldInfo[c.id] : "already booked for this date") : null;
+            tile.title = c.label + (isHeld ? " — " + heldNote : " — available");
             tile.disabled = isHeld;
             tile.setAttribute("aria-pressed", isSelected ? "true" : "false");
             tile.addEventListener("click", function () {

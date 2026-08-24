@@ -1,4 +1,15 @@
-<!doctype html>
+# -*- coding: utf-8 -*-
+"""Standalone staff reservations dashboard — staff/index.html.
+Not part of the public site (no nav link, no public header/footer). Gated by
+a Supabase Auth login (shared staff account); reads/writes booking_requests
+directly via the Supabase JS client, respecting the 'authenticated' RLS
+policies set up in SETUP-BOOKING.md."""
+
+import os
+
+ROOT = os.path.dirname(os.path.abspath(__file__))
+
+html = """<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -256,3 +267,9 @@
 <script src="../assets/js/staff-dashboard.js"></script>
 </body>
 </html>
+"""
+
+os.makedirs(os.path.join(ROOT, "staff"), exist_ok=True)
+with open(os.path.join(ROOT, "staff", "index.html"), "w", encoding="utf-8") as f:
+    f.write(html)
+print("wrote staff/index.html")
