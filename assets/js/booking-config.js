@@ -25,7 +25,7 @@
    is ever lost while you finish setup.
    ========================================================================== */
 window.SUPABASE_CONFIG = {
-  url: "https://YOUR-PROJECT-REF.supabase.co",
-  anonKey: "YOUR-ANON-PUBLIC-KEY",
+  url: "https://dokscqjvqtyhecmbshqd.supabase.co",
+  anonKey: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRva3NjcWp2cXR5aGVjbWJzaHFkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODc1MTQzNDksImV4cCI6MjEwMzA5MDM0OX0.DbnnSokdaT_4E48LvgxG5An-xqVKGnxKjAVGrR-YLvk",
   fallbackEmail: "reservations@virginbeachresort.com",
 };
