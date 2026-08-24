@@ -80,6 +80,13 @@
   .empty-row td { text-align: center; padding: 48px 20px; color: var(--ink-soft); }
   .order-code { font-family: var(--font-body); font-weight: 700; font-size: 0.78rem; color: var(--ink-soft); white-space: nowrap; }
   .cabana-select { border: 1px solid var(--line); background: var(--sand); font-family: var(--font-body); font-size: 0.8rem; padding: 5px 8px; border-radius: 6px; min-width: 150px; }
+  .cabana-cell { min-width: 170px; }
+  .cabana-cell-chips { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 6px; }
+  .cabana-mini-chip { display: inline-flex; align-items: center; gap: 5px; background: var(--sand-deep); border-radius: 999px; padding: 3px 4px 3px 10px; font-size: 0.76rem; white-space: nowrap; }
+  .cabana-mini-remove { border: none; background: transparent; color: var(--ink-soft); width: 16px; height: 16px; border-radius: 50%; cursor: pointer; font-size: 0.85rem; line-height: 1; padding: 0; }
+  .cabana-mini-remove:hover { background: var(--driftwood); color: #fff; }
+  .cabana-add-select { border: 1px solid var(--line); background: var(--sand); font-family: var(--font-body); font-size: 0.76rem; padding: 4px 6px; border-radius: 6px; width: 100%; }
+  .col-total { font-weight: 700; white-space: nowrap; }
   .pay-cell { min-width: 150px; }
   .pay-link { display: inline-block; font-size: 0.78rem; color: var(--lagoon-deep); margin-bottom: 6px; }
   .pay-upload-btn { font-family: var(--font-body); font-size: 0.75rem; font-weight: 700; border: 1px solid var(--line); background: var(--surface); border-radius: 6px; padding: 5px 10px; cursor: pointer; white-space: nowrap; }
@@ -162,8 +169,9 @@
             <th>Contact</th>
             <th>Type</th>
             <th>Preferred Date</th>
-            <th>Cabana</th>
+            <th>Cabana(s)</th>
             <th>Party</th>
+            <th>Total</th>
             <th>Status</th>
             <th>Payment</th>
             <th>Source</th>
@@ -173,7 +181,7 @@
           </tr>
         </thead>
         <tbody id="bookingsBody">
-          <tr class="empty-row"><td colspan="13">Loading bookings&hellip;</td></tr>
+          <tr class="empty-row"><td colspan="14">Loading bookings&hellip;</td></tr>
         </tbody>
       </table>
     </div>
@@ -211,8 +219,9 @@
         <input id="addName" type="text" required>
       </div>
       <div class="modal-field">
-        <label for="addCabana">Cabana (optional)</label>
-        <select id="addCabana"><option value="">Not assigned yet</option></select>
+        <label for="addCabana">Cabana(s) (optional)</label>
+        <select id="addCabana" multiple size="4"><option value="">Not assigned yet</option></select>
+        <p class="field-hint">Ctrl/Cmd-click (or tap each) to select more than one.</p>
       </div>
       <div class="modal-row">
         <div class="modal-field" style="margin-bottom:0;">

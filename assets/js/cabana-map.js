@@ -64,15 +64,19 @@
     return null;
   }
 
-  // opts: { cabanas, heldSet, heldInfo, selectedId, onSelect(cabana), imageSrc }
+  // opts: { cabanas, heldSet, heldInfo, selectedIds, onSelect(cabana), imageSrc }
   // heldInfo (optional): { [cabana_id]: "extra text for the tile's tooltip" }
   // — used by the staff dashboard to show who's holding a cabana; the public
   // booking page omits it and gets the generic "already booked" tooltip.
+  // selectedIds (optional): a Set/array of cabana ids to show as selected —
+  // a booking can include more than one cabana, so this is plural. onSelect
+  // fires on every click (including on an already-selected tile, so the
+  // caller can toggle it back off); held tiles never fire onSelect.
   function render(container, opts) {
     var cabanas = opts.cabanas || [];
     var heldSet = opts.heldSet || new Set();
     var heldInfo = opts.heldInfo || null;
-    var selectedId = opts.selectedId || null;
+    var selectedIds = opts.selectedIds ? new Set(opts.selectedIds) : new Set();
     var onSelect = opts.onSelect || function () {};
     var imageSrc = opts.imageSrc || MAP_IMAGE_SRC_DEFAULT;
 
@@ -97,7 +101,7 @@
         return;
       }
       var isHeld = heldSet.has(c.id);
-      var isSelected = selectedId === c.id;
+      var isSelected = selectedIds.has(c.id);
       var tile = document.createElement("button");
       tile.type = "button";
       tile.className =

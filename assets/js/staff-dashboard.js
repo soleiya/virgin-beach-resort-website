@@ -61,7 +61,7 @@
     Promise.all([
       window.VBRCabanaMap.loadCabanas(sb),
       sb.from("booking_requests")
-        .select("cabana_id,guest_name,order_code,status")
+        .select("guest_name,order_code,status,booking_cabanas(cabana_id)")
         .eq("check_in", dateStr)
         .neq("status", "declined"),
     ])
@@ -77,17 +77,19 @@
         var heldSet = new Set();
         var heldInfo = {};
         (res.data || []).forEach(function (row) {
-          if (!row.cabana_id) return;
-          heldSet.add(row.cabana_id);
-          heldInfo[row.cabana_id] =
-            (row.guest_name || "Guest") + " — " + (row.order_code || "no order ID") + " (" + (STATUS_LABELS[row.status] || row.status) + ")";
+          var note = (row.guest_name || "Guest") + " — " + (row.order_code || "no order ID") + " (" + (STATUS_LABELS[row.status] || row.status) + ")";
+          (row.booking_cabanas || []).forEach(function (bc) {
+            if (!bc.cabana_id) return;
+            heldSet.add(bc.cabana_id);
+            heldInfo[bc.cabana_id] = note;
+          });
         });
         availStatus.textContent = (cabanas.length - heldSet.size) + " of " + cabanas.length + " cabanas open on " + dateStr + ". Hover a booked tile to see who has it.";
         window.VBRCabanaMap.render(availMap, {
           cabanas: cabanas,
           heldSet: heldSet,
           heldInfo: heldInfo,
-          selectedId: null,
+          selectedIds: [],
           onSelect: function () {},
         });
       })
@@ -142,7 +144,10 @@
 
   function loadBookings() {
     countLine.textContent = "Loading…";
-    sb.from("booking_requests").select("*").order("created_at", { ascending: false }).then(function (res) {
+    sb.from("booking_requests")
+      .select("*, booking_cabanas(cabana_id)")
+      .order("created_at", { ascending: false })
+      .then(function (res) {
       if (res.error) {
         countLine.textContent = "Couldn't load bookings: " + res.error.message;
         return;
@@ -189,6 +194,11 @@
     });
   }
 
+  function peso(n) {
+    if (n === null || n === undefined || n === "") return "—";
+    return "₱" + Number(n).toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  }
+
   function fmtDate(s) {
     if (!s) return "—";
     var d = new Date(s + (s.length <= 10 ? "T00:00:00" : ""));
@@ -212,6 +222,61 @@
     });
   }
 
+  // A booking can include more than one cabana. Shows each as a small
+  // removable chip plus a dropdown to add another — every change writes
+  // straight to the booking_cabanas join table.
+  function renderCabanaCell(td, r) {
+    td.innerHTML = "";
+    td.className = "cabana-cell";
+    var assignedIds = (r.booking_cabanas || []).map(function (bc) { return bc.cabana_id; });
+
+    var chipWrap = document.createElement("div");
+    chipWrap.className = "cabana-cell-chips";
+    assignedIds.forEach(function (id) {
+      var c = cabanasById[id];
+      var chip = document.createElement("span");
+      chip.className = "cabana-mini-chip";
+      chip.textContent = c ? c.label.replace(/^Section /, "") : "Unknown cabana";
+      var rm = document.createElement("button");
+      rm.type = "button";
+      rm.className = "cabana-mini-remove";
+      rm.textContent = "×";
+      rm.setAttribute("aria-label", "Remove " + (c ? c.label : "cabana"));
+      rm.addEventListener("click", function () {
+        sb.from("booking_cabanas").delete().eq("booking_id", r.id).eq("cabana_id", id).then(function (res) {
+          if (res.error) { alert("Couldn't remove cabana: " + res.error.message); return; }
+          r.booking_cabanas = (r.booking_cabanas || []).filter(function (bc) { return bc.cabana_id !== id; });
+          renderCabanaCell(td, r);
+        });
+      });
+      chip.appendChild(rm);
+      chipWrap.appendChild(chip);
+    });
+    td.appendChild(chipWrap);
+
+    if (Object.keys(cabanasById).length) {
+      var addSelect = document.createElement("select");
+      addSelect.className = "cabana-add-select";
+      var opts = ['<option value="">+ add cabana</option>'];
+      Object.keys(cabanasById).forEach(function (id) {
+        if (assignedIds.indexOf(id) === -1) {
+          opts.push('<option value="' + id + '">' + cabanasById[id].label + "</option>");
+        }
+      });
+      addSelect.innerHTML = opts.join("");
+      addSelect.addEventListener("change", function () {
+        var val = addSelect.value;
+        if (!val) return;
+        sb.from("booking_cabanas").insert([{ booking_id: r.id, cabana_id: val }]).then(function (res) {
+          if (res.error) { alert("Couldn't add cabana: " + res.error.message); return; }
+          r.booking_cabanas = (r.booking_cabanas || []).concat([{ cabana_id: val }]);
+          renderCabanaCell(td, r);
+        });
+      });
+      td.appendChild(addSelect);
+    }
+  }
+
   function renderPayCell(td, r) {
     td.innerHTML = "";
     if (r.payment_screenshot_path) {
@@ -227,6 +292,22 @@
       });
       td.appendChild(viewLink);
       td.appendChild(document.createElement("br"));
+    }
+    if (r.senior_id_paths && r.senior_id_paths.length) {
+      r.senior_id_paths.forEach(function (path, i) {
+        var idLink = document.createElement("a");
+        idLink.className = "pay-link";
+        idLink.href = "#";
+        idLink.textContent = "View senior ID" + (r.senior_id_paths.length > 1 ? " " + (i + 1) : "");
+        idLink.addEventListener("click", function (e) {
+          e.preventDefault();
+          sb.storage.from("senior-ids").createSignedUrl(path, 3600).then(function (res) {
+            if (res.data && res.data.signedUrl) window.open(res.data.signedUrl, "_blank");
+          });
+        });
+        td.appendChild(idLink);
+        td.appendChild(document.createElement("br"));
+      });
     }
     var uploadBtn = document.createElement("button");
     uploadBtn.type = "button";
@@ -278,7 +359,7 @@
     var rows = applyFilter(allRows);
     countLine.textContent = rows.length + " of " + allRows.length + " bookings shown";
     if (!rows.length) {
-      bookingsBody.innerHTML = '<tr class="empty-row"><td colspan="13">No bookings match this view.</td></tr>';
+      bookingsBody.innerHTML = '<tr class="empty-row"><td colspan="14">No bookings match this view.</td></tr>';
       return;
     }
     bookingsBody.innerHTML = "";
@@ -308,28 +389,24 @@
       tr.appendChild(tdDate);
 
       var tdCabana = document.createElement("td");
-      var cabanaSelect = document.createElement("select");
-      cabanaSelect.className = "cabana-select";
-      var cabanaOpts = ['<option value="">Not assigned</option>'];
-      Object.keys(cabanasById).forEach(function (id) {
-        var c = cabanasById[id];
-        cabanaOpts.push(
-          '<option value="' + id + '"' + (r.cabana_id === id ? " selected" : "") + ">" + c.label + "</option>"
-        );
-      });
-      cabanaSelect.innerHTML = cabanaOpts.join("");
-      cabanaSelect.addEventListener("change", function () {
-        var val = cabanaSelect.value || null;
-        r.cabana_id = val;
-        updateField(r.id, "cabana_id", val, cabanaSelect);
-      });
-      tdCabana.appendChild(cabanaSelect);
+      renderCabanaCell(tdCabana, r);
       tr.appendChild(tdCabana);
 
       var tdParty = document.createElement("td");
       var kids = (r.children_6_12 || 0) + (r.children_0_5 || 0);
-      tdParty.textContent = (r.adults || 0) + " adult" + (r.adults === 1 ? "" : "s") + (kids ? ", " + kids + " kid" + (kids === 1 ? "" : "s") : "");
+      var partyText = (r.adults || 0) + " adult" + (r.adults === 1 ? "" : "s") + (kids ? ", " + kids + " kid" + (kids === 1 ? "" : "s") : "");
+      if (r.senior_count) partyText += " (incl. " + r.senior_count + " senior)";
+      tdParty.textContent = partyText;
+      if (r.guest_names) tdParty.title = "Guests: " + r.guest_names;
       tr.appendChild(tdParty);
+
+      var tdTotal = document.createElement("td");
+      tdTotal.className = "col-total";
+      tdTotal.textContent = peso(r.total_amount);
+      if (r.total_amount != null) {
+        tdTotal.title = "People: " + peso(r.subtotal_people) + (r.senior_discount ? " (incl. " + peso(r.senior_discount) + " senior discount)" : "") + " · Cabana(s): " + peso(r.cabana_total);
+      }
+      tr.appendChild(tdTotal);
 
       var tdStatus = document.createElement("td");
       var statusBadge = document.createElement("span");
@@ -409,13 +486,15 @@
   addForm.addEventListener("submit", function (e) {
     e.preventDefault();
     var type = document.getElementById("addType").value;
+    var cabanaIds = addCabanaSelect
+      ? Array.prototype.filter.call(addCabanaSelect.options, function (o) { return o.selected && o.value; }).map(function (o) { return o.value; })
+      : [];
     var payload = {
       status: "pending",
       source: document.getElementById("addChannel").value,
       stay_type: type,
       stay_type_label: TYPE_LABELS[type],
       check_in: document.getElementById("addDate").value || null,
-      cabana_id: (document.getElementById("addCabana") || {}).value || null,
       adults: parseInt(document.getElementById("addAdults").value || "0", 10),
       children_6_12: parseInt(document.getElementById("addKids").value || "0", 10),
       children_0_5: 0,
@@ -424,32 +503,44 @@
       guest_email: document.getElementById("addEmail").value || null,
       notes: document.getElementById("addNotes").value || null,
     };
-    sb.from("booking_requests").insert([payload]).then(function (res) {
+    sb.from("booking_requests").insert([payload]).select().then(function (res) {
       if (res.error) {
         alert("Couldn't save this booking: " + res.error.message);
         return;
       }
-      closeModal();
-      loadBookings();
+      var row = res.data && res.data[0];
+      var attach = row && cabanaIds.length
+        ? sb.from("booking_cabanas").insert(cabanaIds.map(function (id) { return { booking_id: row.id, cabana_id: id }; }))
+        : Promise.resolve();
+      Promise.resolve(attach).then(function () {
+        closeModal();
+        loadBookings();
+      });
     });
   });
 
   // ---------- CSV export (currently filtered/visible rows) ----------
   document.getElementById("exportBtn").addEventListener("click", function () {
     var rows = applyFilter(allRows);
-    var headers = ["Order ID", "Guest", "Phone", "Email", "Type", "Preferred Date", "Cabana", "Adults", "Kids 6-12", "Kids 0-5", "Status", "Payment Proof", "Source", "How Heard", "Occasion", "Notes", "Staff Notes", "Received"];
+    var headers = ["Order ID", "Guest", "Guest Names", "Phone", "Email", "Type", "Preferred Date", "Cabana(s)", "Adults", "Senior Citizens", "Kids 6-12", "Kids 0-5", "Subtotal (People)", "Cabana Total", "Senior Discount", "Total", "Status", "Payment Proof", "Senior ID(s)", "Source", "How Heard", "Occasion", "Notes", "Staff Notes", "Received"];
     function csvCell(v) {
       v = v === null || v === undefined ? "" : String(v);
       return '"' + v.replace(/"/g, '""') + '"';
     }
     var lines = [headers.map(csvCell).join(",")];
     rows.forEach(function (r) {
-      var cabana = r.cabana_id && cabanasById[r.cabana_id] ? cabanasById[r.cabana_id].label : "";
+      var cabanaLabels = (r.booking_cabanas || [])
+        .map(function (bc) { return cabanasById[bc.cabana_id] ? cabanasById[bc.cabana_id].label : ""; })
+        .filter(Boolean)
+        .join("; ");
       lines.push([
-        r.order_code, r.guest_name, r.guest_phone, r.guest_email,
-        TYPE_LABELS[r.stay_type] || r.stay_type, fmtDate(r.check_in), cabana,
-        r.adults, r.children_6_12, r.children_0_5,
+        r.order_code, r.guest_name, r.guest_names || "", r.guest_phone, r.guest_email,
+        TYPE_LABELS[r.stay_type] || r.stay_type, fmtDate(r.check_in), cabanaLabels,
+        r.adults, r.senior_count || 0, r.children_6_12, r.children_0_5,
+        r.subtotal_people != null ? r.subtotal_people : "", r.cabana_total != null ? r.cabana_total : "",
+        r.senior_discount != null ? r.senior_discount : "", r.total_amount != null ? r.total_amount : "",
         STATUS_LABELS[r.status] || r.status, r.payment_screenshot_path ? "Uploaded" : "",
+        (r.senior_id_paths && r.senior_id_paths.length) ? "Uploaded (" + r.senior_id_paths.length + ")" : "",
         SOURCE_LABELS[r.source] || r.source, r.how_heard || "", r.occasion || "",
         r.notes, r.staff_notes, fmtDateTime(r.created_at),
       ].map(csvCell).join(","));

@@ -36,14 +36,13 @@ body = f"""
         </div>
 
         <div id="cabanaStep" hidden>
-          <label id="cabanaStepLabel">Choose your cabana</label>
-          <p class="field-hint" id="cabanaHint">Pick a date above first — availability updates live for that day.</p>
+          <label id="cabanaStepLabel">Choose your cabana(s)</label>
+          <p class="field-hint" id="cabanaHint">Pick a date above first — availability updates live for that day, and you can select more than one cabana.</p>
           <div class="cabana-map-wrap">
             <div id="cabanaMapStatus" class="cabana-map-status">Pick a date to see availability.</div>
             <div id="cabanaMap"></div>
             <div id="cabanaSelectedNote" class="cabana-selected-note" hidden></div>
           </div>
-          <input type="hidden" id="cabanaId" value="">
         </div>
 
         <div class="row-2" style="grid-template-columns:1fr 1fr 1fr;">
@@ -52,14 +51,34 @@ body = f"""
           <div><label for="kids05">Kids (0&ndash;5)</label><input id="kids05" type="number" min="0" value="0"></div>
         </div>
 
+        <div>
+          <label for="seniorCount">How many are Senior Citizens?</label>
+          <input id="seniorCount" type="number" min="0" value="0">
+          <p class="field-hint">Included in your Adults count above &mdash; each gets 20% off their own share.</p>
+        </div>
+        <div id="seniorIdWrap" hidden>
+          <label for="seniorIdFiles">Senior Citizen ID photo(s)</label>
+          <input id="seniorIdFiles" type="file" accept="image/*" multiple>
+          <p class="field-hint">One photo per senior citizen (or one photo with all IDs) &mdash; needed before we can apply the discount.</p>
+          <p class="field-hint" id="seniorIdError" style="color:var(--rose,#9c4a3f);" hidden>Please attach at least one senior citizen ID photo.</p>
+        </div>
+
+        <div>
+          <label for="guestNames">Names of everyone in your group</label>
+          <textarea id="guestNames" placeholder="e.g. Juan Dela Cruz, Maria Santos, Pedro Reyes&hellip;"></textarea>
+          <p class="field-hint">Just list them separated by commas &mdash; no need for a form field per person.</p>
+        </div>
+
         <div class="row-2">
-          <div><label for="guestName">Full Name</label><input id="guestName" type="text" required></div>
+          <div><label for="guestName">Your Name (Primary Contact)</label><input id="guestName" type="text" required></div>
           <div><label for="guestPhone">Phone</label><input id="guestPhone" type="tel" required></div>
         </div>
         <div class="row-2">
           <div><label for="guestEmail">Email</label><input id="guestEmail" type="email" required></div>
           <div><label for="country">Country</label><input id="country" type="text"></div>
         </div>
+
+        <div id="billSummary" class="bill-summary" hidden></div>
 
         <div>
           <label for="hearAbout">How did you hear about us?</label>

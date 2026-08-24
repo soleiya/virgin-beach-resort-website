@@ -303,6 +303,102 @@ This sends every guest an email the moment they submit a request, containing the
 
 That's it — every new row in `booking_requests` now triggers an email to the guest with their Order ID. Test it by submitting a real request through the website with your own email address.
 
+## 8. Multiple cabanas, automatic pricing, guest names, and the senior discount
+
+This adds: picking more than one cabana per booking, a live running total shown to the guest as they fill out the form, a simple "type names separated by commas" field for the guest list, and the 20% senior citizen discount (applied only to each senior's own per-person fee, per how the discount law is normally applied — cabana rental isn't discounted since it's shared). A senior citizen ID photo upload is required the moment a guest says any of their party are seniors.
+
+**Run this SQL** (SQL Editor → New query), in addition to everything above:
+
+```sql
+-- 1. Pricing lives on the cabana inventory itself, so you can change prices
+-- any time by editing these two numbers — no code change needed.
+alter table cabanas add column if not exists capacity int;
+alter table cabanas add column if not exists price numeric;
+
+update cabanas set capacity = 4, price = 2000 where cabana_type = 'lounge_cabana';
+update cabanas set capacity = 10, price = 1500 where cabana_type = 'dining_cabana';
+
+alter table cabanas alter column capacity set not null;
+alter table cabanas alter column price set not null;
+
+-- 2. A booking can now include more than one cabana — a join table instead
+-- of the old single cabana_id column (still there, just no longer used by
+-- new bookings).
+create table if not exists booking_cabanas (
+  booking_id uuid not null references booking_requests(id) on delete cascade,
+  cabana_id uuid not null references cabanas(id),
+  primary key (booking_id, cabana_id)
+);
+
+alter table booking_cabanas enable row level security;
+
+create policy "Public can attach cabanas to their own new booking"
+  on booking_cabanas for insert
+  to anon
+  with check (true);
+
+create policy "Authenticated staff can view booking cabanas"
+  on booking_cabanas for select
+  to authenticated
+  using (true);
+
+create policy "Authenticated staff can insert booking cabanas"
+  on booking_cabanas for insert
+  to authenticated
+  with check (true);
+
+create policy "Authenticated staff can delete booking cabanas"
+  on booking_cabanas for delete
+  to authenticated
+  using (true);
+
+-- 3. The public availability view now reflects the join table instead of
+-- the old single-cabana column.
+create or replace view public_cabana_holds as
+  select bc.cabana_id, br.check_in
+  from booking_cabanas bc
+  join booking_requests br on br.id = bc.booking_id
+  where br.status <> 'declined';
+
+-- 4. New fields: guest names (one simple text field — no rigid per-person
+-- inputs), the senior citizen count and their ID photo(s), and the computed
+-- bill so your team never has to re-calculate it by hand.
+alter table booking_requests add column if not exists guest_names text;
+alter table booking_requests add column if not exists senior_count int not null default 0;
+alter table booking_requests add column if not exists senior_id_paths text[];
+alter table booking_requests add column if not exists subtotal_people numeric;
+alter table booking_requests add column if not exists cabana_total numeric;
+alter table booking_requests add column if not exists senior_discount numeric;
+alter table booking_requests add column if not exists total_amount numeric;
+
+-- 5. Storage bucket for senior citizen ID photos — same private setup as
+-- the payment-proofs bucket.
+insert into storage.buckets (id, name, public)
+  values ('senior-ids', 'senior-ids', false)
+  on conflict (id) do nothing;
+
+create policy "Anyone can upload a senior ID photo"
+  on storage.objects for insert
+  to anon
+  with check (bucket_id = 'senior-ids');
+
+create policy "Staff can view senior ID photos"
+  on storage.objects for select
+  to authenticated
+  using (bucket_id = 'senior-ids');
+```
+
+**What this gets you:**
+
+- On the booking page, guests can tap as many cabanas as they need — each one adds to a running list with its own rental fee, and a total capacity check gently flags it if the party is bigger than the cabanas selected can seat (it won't block the booking, just a heads-up).
+- A live "Estimated Total" box updates as the guest fills in adults, kids, cabanas, and senior citizens — no surprises when your team follows up about payment.
+- Guests type all attendee names into one plain text box ("Juan Dela Cruz, Maria Santos, ...") — nothing fussier than that. Your team can split it by comma whenever they need individual names.
+- The moment a guest says 1 or more of their party are senior citizens, an ID upload appears and is required before they can submit — it's saved the same private way payment screenshots are.
+- Every booking now stores its own computed breakdown (`subtotal_people`, `cabana_total`, `senior_discount`, `total_amount`) so the staff dashboard and CSV exports always show the real total without anyone doing mental math.
+- On the staff dashboard, the Cabana column now shows every cabana attached to a booking (not just one), with a quick way to add or remove one.
+
+**Corporate Outings keep their current manual "request a quote" flow** — no automatic pricing there, since those usually need a custom negotiated rate. Day Trip, Half-day, and Day Picnic all get the calculator.
+
 ## What's next: a Google Drive backup of payment screenshots
 
 Copying payment screenshots into your Google Drive is ready to turn on whenever you want — I can do it myself using my own connected Google Drive access, either on request ("back up this week's payment screenshots to Drive") or on a schedule. I'll just need the shared staff login (from step 4 in Section 4 above) so I can read the Storage bucket the same way the dashboard does. Just share those credentials with me whenever you're ready — no rush.

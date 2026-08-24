@@ -490,6 +490,19 @@ form.inquiry .field-hint { font-size: 0.8rem; color: var(--ink-soft); margin-top
 .cabana-swatch.is-selected { background: rgba(255,255,255,0.18); border: 2px solid var(--ink); }
 .cabana-map-status { color: var(--ink-soft); font-size: 0.9rem; margin-bottom: 14px; }
 
+.cabana-selected-note { margin-top: 18px; padding: 14px 16px; border-radius: 8px; background: var(--lagoon-tint); font-size: 0.88rem; line-height: 2.2; }
+.cabana-chip { display: inline-flex; align-items: center; gap: 6px; background: var(--surface); border: 1px solid var(--line); border-radius: 999px; padding: 4px 6px 4px 12px; margin: 2px 4px 2px 0; font-size: 0.84rem; white-space: nowrap; }
+.cabana-chip-remove { border: none; background: var(--sand-deep); color: var(--ink); width: 20px; height: 20px; border-radius: 50%; cursor: pointer; font-size: 0.95rem; line-height: 1; }
+.cabana-chip-remove:hover { background: var(--driftwood); color: #fff; }
+
+/* ---------- live bill summary ---------- */
+.bill-summary { border: 1px solid var(--line); border-radius: 10px; padding: 22px 24px; background: var(--sand); }
+.bill-lines { display: flex; flex-direction: column; gap: 8px; margin-bottom: 14px; }
+.bill-row { display: flex; justify-content: space-between; gap: 16px; font-size: 0.88rem; color: var(--ink-soft); }
+.bill-row em { font-style: normal; color: var(--lagoon-deep); }
+.bill-warning { background: var(--sand-deep); border-radius: 6px; padding: 10px 14px; font-size: 0.84rem; color: var(--ink); margin-bottom: 14px; }
+.bill-total { display: flex; justify-content: space-between; align-items: baseline; padding-top: 14px; border-top: 1px solid var(--line); font-family: var(--font-display); font-size: 1.25rem; font-weight: 600; }
+
 /* ---------- payment proof upload ---------- */
 .upload-drop {
   border: 1.5px dashed var(--line); border-radius: 8px; padding: 26px; text-align: center;
