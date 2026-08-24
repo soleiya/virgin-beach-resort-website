@@ -33,6 +33,7 @@
     var type = stayTypeEl.value;
     return {
       status: "pending",
+      source: "website",
       stay_type: type,
       stay_type_label: TYPE_NAMES[type] || type,
       check_in: form.querySelector("#checkIn").value || null,

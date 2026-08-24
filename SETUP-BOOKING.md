@@ -78,22 +78,58 @@ window.SUPABASE_CONFIG = {
 
 4. Re-upload that file (or the whole site) to GitHub. That's the whole setup — every future booking request will now land in your `booking_requests` table.
 
-## 4. Managing bookings day to day
+## 4. Set up the staff dashboard
 
-You don't need a custom admin page — Supabase's own **Table Editor** is your booking dashboard:
+This is the tool your reservations team actually uses day to day — a simple, spreadsheet-like page at `staff/index.html` on your site. No Supabase account needed for staff; they sign in with one shared login you create.
 
-1. In your Supabase project, click **Table Editor** in the sidebar, then the `booking_requests` table.
-2. Every request appears as a row, newest first if you sort by `created_at`.
-3. Click a row's `status` cell to change it. Your workflow, from left to right:
-   - **pending** — just came in, availability not checked yet
-   - **pending_payment** — you've confirmed availability and are waiting for the guest to pay (bank transfer, GCash, on arrival — however you already collect payment; this is a status only, there's no online payment built in)
-   - **confirmed** — payment received, booking locked in
-   - **declined** — no availability, or the guest didn't follow through
-   - **completed** — the stay or visit has happened
-4. Use the `staff_notes` column for anything internal (e.g. "paid via GCash 8/24", "asked for late checkout") — guests never see this.
-5. Filter or sort using the controls above the table (e.g. filter `status = pending` to see what needs action), or use the search bar.
+**Run this SQL** (SQL Editor → New query), in addition to the table you already created:
 
-You can also invite teammates to your Supabase project (**Project Settings → Team**) so more than one person can manage bookings, with their own login.
+```sql
+alter table booking_requests add column if not exists source text not null default 'website';
+
+create policy "Authenticated staff can view all bookings"
+  on booking_requests for select
+  to authenticated
+  using (true);
+
+create policy "Authenticated staff can insert bookings"
+  on booking_requests for insert
+  to authenticated
+  with check (true);
+
+create policy "Authenticated staff can update bookings"
+  on booking_requests for update
+  to authenticated
+  using (true)
+  with check (true);
+```
+
+This adds a `source` column (Website / Messenger / Phone / Email / Walk-in — so you can tell where a booking came from), and gives any **signed-in** user full access, while the public website keeps its insert-only access from before. Nothing changes for the public form.
+
+**Create the shared staff login** (one-time):
+
+1. In Supabase, go to **Authentication → Users → Add User**.
+2. Email: `reservations@virginbeachresort.com` (or whatever inbox your team checks).
+3. Password: pick one your team can remember and share — e.g. something like `SunriseCove2026!`.
+4. Toggle **Auto Confirm User** on, so no confirmation email is required.
+5. Click **Create User**.
+
+Share that email and password with your reservations team — that's the login for the dashboard.
+
+**The dashboard itself**: open `staff/index.html` on your site (e.g. `https://soleiya.github.io/virgin-beach-resort-website/staff/index.html`, or your own domain once connected). It isn't linked from the public site's menu, but it's not meant to be secret either — the login is what actually protects the data, not the URL. From there staff can:
+
+- See every booking in one table — guest, contact, type, date, party size, status, source, notes.
+- Filter with one click: **Today**, **This Week**, **This Month**, or **Unpaid** (pending + pending payment), or just search.
+- Click **+ Add Booking** to log a request that came in through Messenger, a phone call, or a walk-in — same idea as filling in a spreadsheet row.
+- Click a status badge to move it forward (Pending → Pending Payment → Confirmed → Declined/Completed) — no dropdowns, just a click.
+- Type directly into the **Staff Notes** column — it saves automatically.
+- Click **Export CSV** to download whatever's currently on screen as a spreadsheet file — handy for the "today's bookings" kind of file your team is used to pulling from Google Sheets.
+
+## 5. Managing bookings day to day
+
+The staff dashboard above is the everyday tool. Supabase's own **Table Editor** (Table Editor → `booking_requests`) is still there underneath if you ever want the raw view — same data, same columns — but your team shouldn't need it.
+
+You can also invite teammates to your Supabase project itself (**Project Settings → Team**) if you want someone with their own Supabase login (separate from the shared staff dashboard login) to manage things at the database level.
 
 ## Overnight stays (Cloudbeds, not this database)
 
