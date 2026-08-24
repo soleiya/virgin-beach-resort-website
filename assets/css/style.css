@@ -270,7 +270,7 @@ section { padding: clamp(56px, 9vw, 128px) 0; }
 }
 .hero-content { position: relative; z-index: 2; padding-bottom: clamp(48px, 8vw, 96px); width: 100%; }
 .hero .eyebrow { color: var(--night-ink); opacity: 0.85; }
-.hero h1 { color: #fff; max-width: 16ch; }
+.hero h1 { color: #fff; max-width: 20ch; }
 .hero .lede { max-width: 46ch; color: rgba(238,231,214,0.92); font-size: 1.1rem; margin-top: 18px; }
 .hero-actions { display: flex; gap: 14px; flex-wrap: wrap; margin-top: 30px; }
 

@@ -1,6 +1,8 @@
 # Setting up your booking database (Supabase)
 
-Your site's booking form (Overnight, Day Trip, Corporate) writes straight to a real database you own — Supabase, a free hosted Postgres database with a built-in dashboard. No app to install, no server to run. This takes about 10 minutes, once.
+This covers **Day Trip, Half-day Tour, Day Picnic, and Corporate** requests only. Overnight casita reservations are handled separately, straight through Cloudbeds (see "Overnight stays" below) — they never touch this database.
+
+Your site's Day Trip / Corporate request form writes straight to a real database you own — Supabase, a free hosted Postgres database with a built-in dashboard. No app to install, no server to run. This takes about 10 minutes, once.
 
 ## 1. Create your project
 
@@ -92,6 +94,10 @@ You don't need a custom admin page — Supabase's own **Table Editor** is your b
 5. Filter or sort using the controls above the table (e.g. filter `status = pending` to see what needs action), or use the search bar.
 
 You can also invite teammates to your Supabase project (**Project Settings → Team**) so more than one person can manage bookings, with their own login.
+
+## Overnight stays (Cloudbeds, not this database)
+
+Every "Book Now" button tied to an overnight casita — the nav bar, the homepage hero, each casita's own page — links straight to `https://booking.virginbeachresort.com`, which redirects to your Cloudbeds reservation page. That's the same flow the current virginbeachresort.com site uses today. Nothing about that needs Supabase, and none of those bookings appear in the `booking_requests` table — manage them in Cloudbeds as you already do.
 
 ## If you skip this setup
 
