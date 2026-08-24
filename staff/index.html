@@ -71,6 +71,13 @@
   .status-completed { background: var(--sand-deep); color: var(--ink-soft); }
 
   .empty-row td { text-align: center; padding: 48px 20px; color: var(--ink-soft); }
+  .order-code { font-family: var(--font-body); font-weight: 700; font-size: 0.78rem; color: var(--ink-soft); white-space: nowrap; }
+  .cabana-select { border: 1px solid var(--line); background: var(--sand); font-family: var(--font-body); font-size: 0.8rem; padding: 5px 8px; border-radius: 6px; min-width: 150px; }
+  .pay-cell { min-width: 150px; }
+  .pay-link { display: inline-block; font-size: 0.78rem; color: var(--lagoon-deep); margin-bottom: 6px; }
+  .pay-upload-btn { font-family: var(--font-body); font-size: 0.75rem; font-weight: 700; border: 1px solid var(--line); background: var(--surface); border-radius: 6px; padding: 5px 10px; cursor: pointer; white-space: nowrap; }
+  .pay-upload-btn:hover { background: var(--sand-deep); }
+  .pay-uploading { font-size: 0.76rem; color: var(--ink-soft); }
 
   /* ---------- add-booking modal ---------- */
   .modal-backdrop { position: fixed; inset: 0; background: rgba(18,32,29,0.55); display: none; align-items: center; justify-content: center; z-index: 200; padding: 20px; }
@@ -133,12 +140,15 @@
       <table>
         <thead>
           <tr>
+            <th>Order ID</th>
             <th>Guest</th>
             <th>Contact</th>
             <th>Type</th>
             <th>Preferred Date</th>
+            <th>Cabana</th>
             <th>Party</th>
             <th>Status</th>
+            <th>Payment</th>
             <th>Source</th>
             <th>Notes</th>
             <th>Staff Notes</th>
@@ -146,7 +156,7 @@
           </tr>
         </thead>
         <tbody id="bookingsBody">
-          <tr class="empty-row"><td colspan="10">Loading bookings&hellip;</td></tr>
+          <tr class="empty-row"><td colspan="13">Loading bookings&hellip;</td></tr>
         </tbody>
       </table>
     </div>
@@ -182,6 +192,10 @@
       <div class="modal-field">
         <label for="addName">Guest Name</label>
         <input id="addName" type="text" required>
+      </div>
+      <div class="modal-field">
+        <label for="addCabana">Cabana (optional)</label>
+        <select id="addCabana"><option value="">Not assigned yet</option></select>
       </div>
       <div class="modal-row">
         <div class="modal-field" style="margin-bottom:0;">
@@ -221,6 +235,7 @@
 
 <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
 <script src="../assets/js/booking-config.js"></script>
+<script src="../assets/js/cabana-map.js"></script>
 <script src="../assets/js/staff-dashboard.js"></script>
 </body>
 </html>

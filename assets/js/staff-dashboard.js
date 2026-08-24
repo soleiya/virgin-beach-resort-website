@@ -32,12 +32,30 @@
 
   var allRows = [];
   var activeFilter = "all";
+  var cabanasById = {};
+  var addCabanaSelect = document.getElementById("addCabana");
+
+  function loadCabanaOptions() {
+    if (!window.VBRCabanaMap) return Promise.resolve([]);
+    return window.VBRCabanaMap.loadCabanas(sb).then(function (cabanas) {
+      cabanasById = {};
+      cabanas.forEach(function (c) { cabanasById[c.id] = c; });
+      if (addCabanaSelect) {
+        var opts = ['<option value="">Not assigned yet</option>'];
+        cabanas.forEach(function (c) {
+          opts.push('<option value="' + c.id + '">' + c.label + "</option>");
+        });
+        addCabanaSelect.innerHTML = opts.join("");
+      }
+      return cabanas;
+    });
+  }
 
   function showDash() {
     loginScreen.style.display = "none";
     dashScreen.style.display = "block";
     logoutBtn.style.display = "inline-block";
-    loadBookings();
+    loadCabanaOptions().then(loadBookings);
   }
   function showLogin() {
     loginScreen.style.display = "block";
@@ -143,16 +161,82 @@
     });
   }
 
+  function renderPayCell(td, r) {
+    td.innerHTML = "";
+    if (r.payment_screenshot_path) {
+      var viewLink = document.createElement("a");
+      viewLink.className = "pay-link";
+      viewLink.href = "#";
+      viewLink.textContent = "View screenshot";
+      viewLink.addEventListener("click", function (e) {
+        e.preventDefault();
+        sb.storage.from("payment-proofs").createSignedUrl(r.payment_screenshot_path, 3600).then(function (res) {
+          if (res.data && res.data.signedUrl) window.open(res.data.signedUrl, "_blank");
+        });
+      });
+      td.appendChild(viewLink);
+      td.appendChild(document.createElement("br"));
+    }
+    var uploadBtn = document.createElement("button");
+    uploadBtn.type = "button";
+    uploadBtn.className = "pay-upload-btn";
+    uploadBtn.textContent = r.payment_screenshot_path ? "Replace" : "Mark Paid (Upload)";
+    var fileInput = document.createElement("input");
+    fileInput.type = "file";
+    fileInput.accept = "image/*";
+    fileInput.style.display = "none";
+    uploadBtn.addEventListener("click", function () { fileInput.click(); });
+    fileInput.addEventListener("change", function () {
+      var file = fileInput.files && fileInput.files[0];
+      if (!file) return;
+      var status = document.createElement("span");
+      status.className = "pay-uploading";
+      status.textContent = "Uploading…";
+      td.innerHTML = "";
+      td.appendChild(status);
+      var ext = (file.name.split(".").pop() || "jpg").toLowerCase().replace(/[^a-z0-9]/g, "") || "jpg";
+      var path = "staff/" + r.id + "-" + Date.now() + "." + ext;
+      sb.storage
+        .from("payment-proofs")
+        .upload(path, file, { contentType: file.type || "image/jpeg" })
+        .then(function (res) {
+          if (res.error) throw res.error;
+          var patch = {
+            payment_screenshot_path: path,
+            payment_uploaded_at: new Date().toISOString(),
+          };
+          if (r.status === "pending" || r.status === "pending_payment") patch.status = "confirmed";
+          return sb.from("booking_requests").update(patch).eq("id", r.id).then(function (res2) {
+            if (res2.error) throw res2.error;
+            Object.assign(r, patch);
+          });
+        })
+        .then(function () {
+          render();
+        })
+        .catch(function () {
+          status.textContent = "Upload failed — try again.";
+          setTimeout(function () { renderPayCell(td, r); }, 1500);
+        });
+    });
+    td.appendChild(uploadBtn);
+    td.appendChild(fileInput);
+  }
+
   function render() {
     var rows = applyFilter(allRows);
     countLine.textContent = rows.length + " of " + allRows.length + " bookings shown";
     if (!rows.length) {
-      bookingsBody.innerHTML = '<tr class="empty-row"><td colspan="10">No bookings match this view.</td></tr>';
+      bookingsBody.innerHTML = '<tr class="empty-row"><td colspan="13">No bookings match this view.</td></tr>';
       return;
     }
     bookingsBody.innerHTML = "";
     rows.forEach(function (r) {
       var tr = document.createElement("tr");
+
+      var tdOrder = document.createElement("td");
+      tdOrder.innerHTML = '<span class="order-code">' + (r.order_code || "—") + "</span>";
+      tr.appendChild(tdOrder);
 
       var tdGuest = document.createElement("td");
       tdGuest.className = "col-guest";
@@ -171,6 +255,25 @@
       var tdDate = document.createElement("td");
       tdDate.textContent = fmtDate(r.check_in);
       tr.appendChild(tdDate);
+
+      var tdCabana = document.createElement("td");
+      var cabanaSelect = document.createElement("select");
+      cabanaSelect.className = "cabana-select";
+      var cabanaOpts = ['<option value="">Not assigned</option>'];
+      Object.keys(cabanasById).forEach(function (id) {
+        var c = cabanasById[id];
+        cabanaOpts.push(
+          '<option value="' + id + '"' + (r.cabana_id === id ? " selected" : "") + ">" + c.label + "</option>"
+        );
+      });
+      cabanaSelect.innerHTML = cabanaOpts.join("");
+      cabanaSelect.addEventListener("change", function () {
+        var val = cabanaSelect.value || null;
+        r.cabana_id = val;
+        updateField(r.id, "cabana_id", val, cabanaSelect);
+      });
+      tdCabana.appendChild(cabanaSelect);
+      tr.appendChild(tdCabana);
 
       var tdParty = document.createElement("td");
       var kids = (r.children_6_12 || 0) + (r.children_0_5 || 0);
@@ -191,6 +294,11 @@
       });
       tdStatus.appendChild(statusBadge);
       tr.appendChild(tdStatus);
+
+      var tdPay = document.createElement("td");
+      tdPay.className = "pay-cell";
+      renderPayCell(tdPay, r);
+      tr.appendChild(tdPay);
 
       var tdSource = document.createElement("td");
       tdSource.innerHTML = '<span class="source-badge">' + (SOURCE_LABELS[r.source] || r.source || "Website") + "</span>";
@@ -256,6 +364,7 @@
       stay_type: type,
       stay_type_label: TYPE_LABELS[type],
       check_in: document.getElementById("addDate").value || null,
+      cabana_id: (document.getElementById("addCabana") || {}).value || null,
       adults: parseInt(document.getElementById("addAdults").value || "0", 10),
       children_6_12: parseInt(document.getElementById("addKids").value || "0", 10),
       children_0_5: 0,
@@ -277,18 +386,20 @@
   // ---------- CSV export (currently filtered/visible rows) ----------
   document.getElementById("exportBtn").addEventListener("click", function () {
     var rows = applyFilter(allRows);
-    var headers = ["Guest", "Phone", "Email", "Type", "Preferred Date", "Adults", "Kids 6-12", "Kids 0-5", "Status", "Source", "Notes", "Staff Notes", "Received"];
+    var headers = ["Order ID", "Guest", "Phone", "Email", "Type", "Preferred Date", "Cabana", "Adults", "Kids 6-12", "Kids 0-5", "Status", "Payment Proof", "Source", "How Heard", "Occasion", "Notes", "Staff Notes", "Received"];
     function csvCell(v) {
       v = v === null || v === undefined ? "" : String(v);
       return '"' + v.replace(/"/g, '""') + '"';
     }
     var lines = [headers.map(csvCell).join(",")];
     rows.forEach(function (r) {
+      var cabana = r.cabana_id && cabanasById[r.cabana_id] ? cabanasById[r.cabana_id].label : "";
       lines.push([
-        r.guest_name, r.guest_phone, r.guest_email,
-        TYPE_LABELS[r.stay_type] || r.stay_type, fmtDate(r.check_in),
+        r.order_code, r.guest_name, r.guest_phone, r.guest_email,
+        TYPE_LABELS[r.stay_type] || r.stay_type, fmtDate(r.check_in), cabana,
         r.adults, r.children_6_12, r.children_0_5,
-        STATUS_LABELS[r.status] || r.status, SOURCE_LABELS[r.source] || r.source,
+        STATUS_LABELS[r.status] || r.status, r.payment_screenshot_path ? "Uploaded" : "",
+        SOURCE_LABELS[r.source] || r.source, r.how_heard || "", r.occasion || "",
         r.notes, r.staff_notes, fmtDateTime(r.created_at),
       ].map(csvCell).join(","));
     });
