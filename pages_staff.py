@@ -61,8 +61,8 @@ html = """<!doctype html>
   .avail-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; flex-wrap: wrap; gap: 10px; }
   .avail-head h3 { font-family: var(--font-display); font-size: 1.05rem; margin: 0; }
   .avail-head input[type="date"] { border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; font-family: var(--font-body); font-size: 0.88rem; background: var(--sand); }
-  #availMap .cabana-tile { cursor: default; }
-  #availMap .cabana-tile:hover:not(:disabled) { transform: none; }
+  #availMap .cabana-hotspot:not(:disabled):not(.is-held) { cursor: default; }
+  #availMap .cabana-hotspot:hover:not(:disabled) { background: rgba(255,255,255,0.22); }
 
   .count-line { font-size: 0.82rem; color: var(--ink-soft); margin-bottom: 12px; }
 
