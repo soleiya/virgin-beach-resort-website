@@ -271,9 +271,38 @@ The booking form still works without any of the above — it just falls back to 
 
 This setup intentionally does **not** take payment online — no card fields, no payment gateway. Guests still pay you directly (bank transfer, GCash, etc.) exactly as before; the only thing that changed is that now a screenshot of that payment can be attached to the right booking, by the guest themselves or by staff, and that flips the status forward automatically. Nothing is charged, verified, or moved by the website — a human on your team still glances at every screenshot before treating a booking as paid. If you ever want guests to pay online (card, GCash, PayMongo, etc.) and have that update the status automatically without a human checking a screenshot, that's a separate, bigger project — happy to help if you want it later.
 
-## What's next: automatic confirmation emails and a Google Drive backup of screenshots
+## 7. Set up automatic "here's your Order ID" confirmation emails
 
-Two pieces from this round aren't wired up yet because they need a decision from you first, not more code:
+This sends every guest an email the moment they submit a request, containing their Order ID — the same thing `pay/index.html` asks for. It needs a real email-sending service (not something Supabase does on its own), so there are a few one-time setup steps outside of SQL. The code is already written — `supabase-functions/send-booking-email/index.ts` (included alongside this file) — you're just connecting it.
 
-- **Automatic "here's your Order ID" email** the moment someone books. This needs a real email-sending service (I'd suggest Resend — simple, generous free tier) connected via a small Supabase Edge Function, and for that service to send convincingly "from" `reservations@virginbeachresort.com` without landing in spam, it needs to verify your domain, which means adding a couple of DNS records for `virginbeachresort.com`. Once you tell me you're OK signing up for that and have (or can get) access to your domain's DNS settings, I'll build it.
-- **Copying payment screenshots into Google Drive.** I can do this myself using my own connected Google Drive access — either on request ("back up this week's payment screenshots to Drive") or on a schedule — but I'll need the shared staff login (the one from step 4 above) so I can read the Storage bucket the same way the dashboard does. Just share those credentials with me whenever you'd like this turned on.
+**A. Sign up for Resend and verify your domain**
+
+1. Go to **resend.com** and create a free account (100 emails/day, 3,000/month free — plenty for this).
+2. In Resend, go to **Domains → Add Domain** and enter `virginbeachresort.com`.
+3. Resend will show you 2–3 DNS records (usually TXT/CNAME for SPF and DKIM). Add those at wherever `virginbeachresort.com`'s DNS is managed. This can take a few minutes to a few hours to verify — Resend's dashboard will show "Verified" once it's done.
+4. Go to **API Keys** in Resend and create one. Copy it — you'll paste it into Supabase next.
+
+**B. Create the Edge Function in Supabase**
+
+1. In your Supabase project, go to **Edge Functions** in the left sidebar → **Create a new function**.
+2. Name it exactly `send-booking-email`.
+3. Paste in the full contents of `supabase-functions/send-booking-email/index.ts`.
+4. Turn **off** "Enforce JWT verification" for this function (there's a toggle when creating/editing it) — the function checks its own secret instead (see below), since the trigger calling it won't have a user login.
+5. Under the function's **Secrets** (or Project Settings → Edge Functions → Secrets), add two:
+   - `RESEND_API_KEY` — the key you copied from Resend.
+   - `WEBHOOK_SECRET` — make up any random string, e.g. `vbr-hook-8f3k2p91` — just remember it for the next step.
+6. Deploy the function.
+
+**C. Wire it up with a Database Webhook**
+
+1. In Supabase, go to **Database → Webhooks → Create a new webhook**.
+2. Table: `booking_requests`. Events: **Insert** only.
+3. Type: **Supabase Edge Functions** (or "HTTP Request" pointing at the function's URL, shown on the function's page — looks like `https://<your-project-ref>.functions.supabase.co/send-booking-email`).
+4. Add a custom HTTP header: `x-webhook-secret` → the same random string you set as `WEBHOOK_SECRET` above.
+5. Save it.
+
+That's it — every new row in `booking_requests` now triggers an email to the guest with their Order ID. Test it by submitting a real request through the website with your own email address.
+
+## What's next: a Google Drive backup of payment screenshots
+
+Copying payment screenshots into your Google Drive is ready to turn on whenever you want — I can do it myself using my own connected Google Drive access, either on request ("back up this week's payment screenshots to Drive") or on a schedule. I'll just need the shared staff login (from step 4 in Section 4 above) so I can read the Storage bucket the same way the dashboard does. Just share those credentials with me whenever you're ready — no rush.
