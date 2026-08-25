@@ -44,103 +44,105 @@
 
 <section>
   <div class="wrap" style="max-width:760px;">
-    <div id="bookingFormWrap">
-      <form class="inquiry" id="bookingForm">
-        <div>
-          <label for="stayType">What are you booking?</label>
-          <select id="stayType">
-            <option value="day_trip">Day Trip (Full Day)</option>
+    
+<div id="bookingFormWrap">
+  <form class="inquiry" id="bookingForm">
+    <div>
+      <label for="stayType">What are you booking?</label>
+      <select id="stayType">
+            <option value="day_trip" selected>Day Trip (Full Day)</option>
             <option value="half_day">Half-day Tour</option>
             <option value="day_picnic">Day Picnic</option>
             <option value="corporate">Corporate Outing</option>
-          </select>
-        </div>
-
-        <div>
-          <label for="checkIn" id="checkInLabel">Preferred Date</label>
-          <input id="checkIn" type="date" required>
-        </div>
-
-        <div id="cabanaStep" hidden>
-          <label id="cabanaStepLabel">Choose your cabana(s)</label>
-          <p class="field-hint" id="cabanaHint">Pick a date above first — availability updates live for that day, and you can select more than one cabana.</p>
-          <div class="cabana-map-wrap">
-            <div id="cabanaMapStatus" class="cabana-map-status">Pick a date to see availability.</div>
-            <div id="cabanaMap"></div>
-            <div id="cabanaSelectedNote" class="cabana-selected-note" hidden></div>
-          </div>
-        </div>
-
-        <div class="row-2" style="grid-template-columns:1fr 1fr 1fr;">
-          <div><label for="adults">Adults</label><input id="adults" type="number" min="1" value="2" required></div>
-          <div><label for="kids612">Kids (6&ndash;12)</label><input id="kids612" type="number" min="0" value="0"></div>
-          <div><label for="kids05">Kids (0&ndash;5)</label><input id="kids05" type="number" min="0" value="0"></div>
-        </div>
-
-        <div>
-          <label for="seniorCount">How many are Senior Citizens?</label>
-          <input id="seniorCount" type="number" min="0" value="0">
-          <p class="field-hint">Included in your Adults count above &mdash; each gets 20% off their own share.</p>
-        </div>
-        <div id="seniorIdWrap" hidden>
-          <label for="seniorIdFiles">Senior Citizen ID photo(s)</label>
-          <input id="seniorIdFiles" type="file" accept="image/*" multiple>
-          <p class="field-hint">One photo per senior citizen (or one photo with all IDs) &mdash; needed before we can apply the discount.</p>
-          <p class="field-hint" id="seniorIdError" style="color:var(--rose,#9c4a3f);" hidden>Please attach at least one senior citizen ID photo.</p>
-        </div>
-
-        <div>
-          <label for="guestNames">Names of everyone in your group</label>
-          <textarea id="guestNames" placeholder="e.g. Juan Dela Cruz, Maria Santos, Pedro Reyes&hellip;"></textarea>
-          <p class="field-hint">Just list them separated by commas &mdash; no need for a form field per person.</p>
-        </div>
-
-        <div class="row-2">
-          <div><label for="guestName">Your Name (Primary Contact)</label><input id="guestName" type="text" required></div>
-          <div><label for="guestPhone">Phone</label><input id="guestPhone" type="tel" required></div>
-        </div>
-        <div class="row-2">
-          <div><label for="guestEmail">Email</label><input id="guestEmail" type="email" required></div>
-          <div><label for="country">Country</label><input id="country" type="text"></div>
-        </div>
-
-        <div id="billSummary" class="bill-summary" hidden></div>
-
-        <div>
-          <label for="hearAbout">How did you hear about us?</label>
-          <select id="hearAbout">
-            <option value="">Prefer not to say</option>
-            <option value="facebook">Facebook / Instagram</option>
-            <option value="google">Google Search</option>
-            <option value="referral">Friend / Family Referral</option>
-            <option value="repeat_guest">I've stayed before</option>
-            <option value="travel_agent">Travel Agent</option>
-            <option value="other">Other</option>
-          </select>
-        </div>
-        <div>
-          <label for="occasion">Any occasion we should know about?</label>
-          <select id="occasion">
-            <option value="">None in particular</option>
-            <option value="birthday">Birthday</option>
-            <option value="anniversary">Anniversary</option>
-            <option value="team_building">Team Building / Company Outing</option>
-            <option value="reunion">Reunion</option>
-            <option value="other">Other</option>
-          </select>
-        </div>
-        <div><label for="notes">Anything else we should know?</label><textarea id="notes" placeholder="Special requests, occasion, group size details, etc."></textarea></div>
-
-        <label class="field-hint" style="display:flex; align-items:flex-start; gap:8px; font-size:0.85rem;">
-          <input type="checkbox" id="marketingOptIn" style="margin-top:3px;" checked>
-          Send me occasional promos and updates from Virgin Beach Resort.
-        </label>
-
-        <button class="btn btn-primary" type="submit" id="submitBtn">Send Request</button>
-        <p class="field-hint">This secures your request &mdash; it isn't confirmed until our team follows up with availability and payment details.</p>
-      </form>
+      </select>
     </div>
-    <div id="bookingStatus" class="form-status" hidden></div>
+
+    <div>
+      <label for="checkIn" id="checkInLabel">Preferred Date</label>
+      <input id="checkIn" type="date" required>
+    </div>
+
+    <div id="cabanaStep" hidden>
+      <label id="cabanaStepLabel">Choose your cabana(s)</label>
+      <p class="field-hint" id="cabanaHint">Pick a date above first — availability updates live for that day, and you can select more than one cabana.</p>
+      <div class="cabana-map-wrap">
+        <div id="cabanaMapStatus" class="cabana-map-status">Pick a date to see availability.</div>
+        <div id="cabanaMap"></div>
+        <div id="cabanaSelectedNote" class="cabana-selected-note" hidden></div>
+      </div>
+    </div>
+
+    <div class="row-2" style="grid-template-columns:1fr 1fr 1fr;">
+      <div><label for="adults">Adults</label><input id="adults" type="number" min="1" value="2" required></div>
+      <div><label for="kids612">Kids (6&ndash;12)</label><input id="kids612" type="number" min="0" value="0"></div>
+      <div><label for="kids05">Kids (0&ndash;5)</label><input id="kids05" type="number" min="0" value="0"></div>
+    </div>
+
+    <div>
+      <label for="seniorCount">How many are Senior Citizens?</label>
+      <input id="seniorCount" type="number" min="0" value="0">
+      <p class="field-hint">Included in your Adults count above &mdash; each gets 20% off their own share.</p>
+    </div>
+    <div id="seniorIdWrap" hidden>
+      <label for="seniorIdFiles">Senior Citizen ID photo(s)</label>
+      <input id="seniorIdFiles" type="file" accept="image/*" multiple>
+      <p class="field-hint">One photo per senior citizen (or one photo with all IDs) &mdash; needed before we can apply the discount.</p>
+      <p class="field-hint" id="seniorIdError" style="color:var(--rose,#9c4a3f);" hidden>Please attach at least one senior citizen ID photo.</p>
+    </div>
+
+    <div>
+      <label for="guestNames">Names of everyone in your group</label>
+      <textarea id="guestNames" placeholder="e.g. Juan Dela Cruz, Maria Santos, Pedro Reyes&hellip;"></textarea>
+      <p class="field-hint">Just list them separated by commas &mdash; no need for a form field per person.</p>
+    </div>
+
+    <div class="row-2">
+      <div><label for="guestName">Your Name (Primary Contact)</label><input id="guestName" type="text" required></div>
+      <div><label for="guestPhone">Phone</label><input id="guestPhone" type="tel" required></div>
+    </div>
+    <div class="row-2">
+      <div><label for="guestEmail">Email</label><input id="guestEmail" type="email" required></div>
+      <div><label for="country">Country</label><input id="country" type="text"></div>
+    </div>
+
+    <div id="billSummary" class="bill-summary" hidden></div>
+
+    <div>
+      <label for="hearAbout">How did you hear about us?</label>
+      <select id="hearAbout">
+        <option value="">Prefer not to say</option>
+        <option value="facebook">Facebook / Instagram</option>
+        <option value="google">Google Search</option>
+        <option value="referral">Friend / Family Referral</option>
+        <option value="repeat_guest">I've stayed before</option>
+        <option value="travel_agent">Travel Agent</option>
+        <option value="other">Other</option>
+      </select>
+    </div>
+    <div>
+      <label for="occasion">Any occasion we should know about?</label>
+      <select id="occasion">
+        <option value="">None in particular</option>
+        <option value="birthday">Birthday</option>
+        <option value="anniversary">Anniversary</option>
+        <option value="team_building">Team Building / Company Outing</option>
+        <option value="reunion">Reunion</option>
+        <option value="other">Other</option>
+      </select>
+    </div>
+    <div><label for="notes">Anything else we should know?</label><textarea id="notes" placeholder="Special requests, occasion, group size details, etc."></textarea></div>
+
+    <label class="field-hint" style="display:flex; align-items:flex-start; gap:8px; font-size:0.85rem;">
+      <input type="checkbox" id="marketingOptIn" style="margin-top:3px;" checked>
+      Send me occasional promos and updates from Virgin Beach Resort.
+    </label>
+
+    <button class="btn btn-primary" type="submit" id="submitBtn">Send Request</button>
+    <p class="field-hint">This secures your request &mdash; it isn't confirmed until our team follows up with availability and payment details.</p>
+  </form>
+</div>
+<div id="bookingStatus" class="form-status" hidden></div>
+
   </div>
 </section>
 
@@ -166,6 +168,7 @@
 <script src="../assets/js/booking-config.js"></script>
 <script src="../assets/js/cabana-map.js"></script>
 <script src="../assets/js/booking.js"></script>
+
 <footer class="site-footer">
   <div class="wrap">
     <div class="footer-grid">
