@@ -66,7 +66,7 @@ day_body = """
   </div>
 </section>
 
-<section class="center" style="max-width:640px; margin:0 auto; padding-bottom:0;">
+<section class="center" id="planYourTrip" style="max-width:640px; margin:0 auto; padding-bottom:0;">
   <span class="eyebrow">Reservations</span>
   <h2>Plan your day trip</h2>
   <p class="prose mx-auto" style="margin-top:14px;">Fill in the form below and our reservations team will confirm availability directly with you. Prefer to talk first?
@@ -91,7 +91,7 @@ day_body = """
 {booking_scripts_html}
 """.format(fine_print_1=FINE_PRINT_A, booking_form=booking_form_section("day_trip"), booking_scripts_html=booking_scripts())
 
-page("day-packages/index.html", "Day Trip", "Day Trip packages at Virgin Beach Resort — dining and lounge cabanas, with instant online booking.", day_body)
+page("day-packages/index.html", "Day Trip", "Day Trip packages at Virgin Beach Resort — dining and lounge cabanas, with instant online booking.", day_body, cta_label="Book a Day Trip", cta_href="#planYourTrip")
 
 
 # ---------------------------------------------------------------- Corporate

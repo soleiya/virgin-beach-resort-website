@@ -198,9 +198,12 @@ def head(base, title, description, current_path):
 """
 
 
-def nav_html(base, current_path, solid=False):
+def nav_html(base, current_path, solid=False, cta_label=None, cta_href=None):
     def is_current(path):
         return path == current_path
+
+    cta_label = cta_label or "Book Now"
+    cta_href = cta_href if cta_href is not None else CLOUDBEDS_URL
 
     links = []
     for path, label, sub in NAV_ITEMS:
@@ -230,7 +233,7 @@ def nav_html(base, current_path, solid=False):
       <ul class="nav-links">{nav_links}</ul>
     </nav>
     <div class="nav-cta">
-      <a class="btn {"btn-primary" if solid else "btn-on-dark"}" id="bookBtn" href="{CLOUDBEDS_URL}">Book Now</a>
+      <a class="btn {"btn-primary" if solid else "btn-on-dark"}" id="bookBtn" href="{cta_href}">{cta_label}</a>
       <button class="nav-toggle" aria-label="Menu">&#9776;</button>
     </div>
   </div>
@@ -292,13 +295,13 @@ def footer_html(base):
 """
 
 
-def page(path, title, description, body, solid_header=True):
+def page(path, title, description, body, solid_header=True, cta_label=None, cta_href=None):
     """path: e.g. 'index.html' or 'overnight/index.html' or 'overnight/deluxe-king-casita/index.html'"""
     depth = path.count("/")
     base = "../" * depth
     html = head(base, title, description, path)
     html += "<body>\n"
-    html += nav_html(base, path, solid=solid_header)
+    html += nav_html(base, path, solid=solid_header, cta_label=cta_label, cta_href=cta_href)
     html += body
     html += footer_html(base)
     html += "</body>\n</html>\n"

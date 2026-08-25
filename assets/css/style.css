@@ -169,6 +169,7 @@ section { padding: clamp(56px, 9vw, 128px) 0; }
   transition: background 0.35s ease, box-shadow 0.35s ease, padding 0.35s ease;
 }
 .site-header .wrap { display: flex; align-items: center; justify-content: space-between; gap: 24px; }
+[id] { scroll-margin-top: 96px; }
 .site-header.is-solid, .site-header.no-hero {
   background: var(--sand);
   box-shadow: 0 1px 0 var(--line);
