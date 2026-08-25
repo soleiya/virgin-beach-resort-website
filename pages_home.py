@@ -12,7 +12,7 @@ RATES = {
 CASITA_IMG = {
     "deluxe-king-casita": "casita-king-exterior.jpg",
     "double-queen-casita": "casita-queen-exterior.jpg",
-    "sunrise-casita": "sunrise-casita-sunset.jpg",
+    "sunrise-casita": "sunrise-casita-exterior-day.jpg",
     "louver-window-casita": "casita-louver-exterior.jpg",
     "bamboo-king-casita": "bamboo-casita-day.jpg",
     "bamboo-casita": "bamboo-basita.jpg",
@@ -42,7 +42,9 @@ for slug, name in CASITAS:
 
 body = f"""
 <section class="hero">
-  <img src="assets/images/hero.jpg" alt="Aerial view of Virgin Beach Resort's cove, casitas lined along a curving white sand beach">
+  <img class="hero-slide is-active" src="assets/images/hero.jpg" alt="Aerial view of Virgin Beach Resort's cove, casitas lined along a curving white sand beach">
+  <img class="hero-slide" src="assets/images/fire-tree-and-coastline.jpg" alt="Aerial view of the shoreline with flowering fire trees along the coast">
+  <img class="hero-slide" src="assets/images/reef-of-virgin-beach.jpg" alt="Aerial view of the turquoise reef off Virgin Beach Resort">
   <div class="wrap hero-content">
     <span class="eyebrow">Laiya &middot; San Juan &middot; Batangas</span>
     <h1>Manila&rsquo;s Quick Escape to Pure Unspoiled Paradise</h1>
@@ -145,7 +147,7 @@ body = f"""
       <p class="prose" style="max-width:44ch;">Turn your most meaningful events into moments that everyone will remember.</p>
     </div>
     <div class="grid-2">
-      <div class="feature-media wide"><img src="assets/images/virgin-beach-resort-gallery-015.jpg" alt="A beachside celebration set up at night with string lanterns and a banquet table"></div>
+      <div class="feature-media wide"><img src="assets/images/celebrate.jpg" alt="A beachside celebration set up at night with string lanterns and a banquet table"></div>
       <div class="feature-media wide"><img src="assets/images/fire-tree-and-coastline.jpg" alt="Wide aerial view of the shoreline suited for a beach ceremony"></div>
     </div>
     <p class="prose mt-lg" style="color:rgba(238,231,214,0.85);">Tie the knot on a picturesque beach as the sound of waves become the perfect tune to the exact moment

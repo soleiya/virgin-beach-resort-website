@@ -23,4 +23,40 @@
       });
     });
   }
+
+  // Premium scroll-in reveal for images/cards as the guest scrolls the page.
+  var revealTargets = document.querySelectorAll('.feature-media, .card, .masonry > img');
+  if (revealTargets.length) {
+    revealTargets.forEach(function (el, i) {
+      el.classList.add('reveal');
+      el.style.transitionDelay = (i % 3) * 0.1 + 's';
+    });
+    if ('IntersectionObserver' in window) {
+      var revealIO = new IntersectionObserver(
+        function (entries) {
+          entries.forEach(function (entry) {
+            if (entry.isIntersecting) {
+              entry.target.classList.add('is-visible');
+              revealIO.unobserve(entry.target);
+            }
+          });
+        },
+        { threshold: 0.15, rootMargin: '0px 0px -60px 0px' }
+      );
+      revealTargets.forEach(function (el) { revealIO.observe(el); });
+    } else {
+      revealTargets.forEach(function (el) { el.classList.add('is-visible'); });
+    }
+  }
+
+  // Homepage hero: slow crossfade between a few signature shots.
+  var heroSlides = document.querySelectorAll('.hero .hero-slide');
+  if (heroSlides.length > 1 && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    var heroIdx = 0;
+    setInterval(function () {
+      heroSlides[heroIdx].classList.remove('is-active');
+      heroIdx = (heroIdx + 1) % heroSlides.length;
+      heroSlides[heroIdx].classList.add('is-active');
+    }, 6000);
+  }
 })();

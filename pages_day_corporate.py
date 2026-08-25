@@ -54,11 +54,11 @@ day_body = """
     <div class="two-col-head"><div><span class="eyebrow">Cabanas</span><h2>Available Facilities</h2></div></div>
     <div class="grid-2">
       <div class="card">
-        <div class="card-media"><img src="../assets/images/Day-trip-cabanass.jpg" alt="Dining Cabana"></div>
+        <div class="card-media"><img src="../assets/images/dining-cabana-thatch.jpg" alt="Dining Cabana"></div>
         <div class="card-body"><span class="meta">10 Persons</span><h3>Dining Cabana</h3><div class="price"><b>&#8369;1,500</b></div></div>
       </div>
       <div class="card">
-        <div class="card-media"><img src="../assets/images/day-trip-cabanas.jpg" alt="Lounge Cabana"></div>
+        <div class="card-media"><img src="../assets/images/lounge-cabana-canopy.jpg" alt="Lounge Cabana"></div>
         <div class="card-body"><span class="meta">4 Persons</span><h3>Lounge Cabana</h3><div class="price"><b>&#8369;2,000</b></div></div>
       </div>
     </div>
@@ -117,7 +117,7 @@ corp_body = """
         <p class="prose" style="margin-top:14px;">Our spacious outing area with its wide beachfront, cleverly-designed cabanas and more than adequate
         toilet &amp; bath facilities is an ideal venue for corporate outings and team building activities. Packages are available for groups of 30
         persons or more.</p>
-        <a class="btn btn-primary mt-lg" href="../book/index.html?type=corporate">Request for a Proposal</a>
+        <a class="btn btn-primary mt-lg" href="mailto:virginbeach.events@gmail.com?subject=Corporate%20Outing%20Proposal%20Request">Request for a Proposal</a>
       </div>
       <div class="feature-media"><img src="../assets/images/path-way-to-the-beach.jpg" alt="Aerial view of the path leading down to the resort's beachfront outing area"></div>
     </div>
@@ -138,7 +138,7 @@ corp_body = """
   <h2>Let's plan your outing</h2>
   <p class="prose mx-auto" style="margin-top:14px;">For inquiries, call our reservations office at (02) 8815 2584 or 87, or email
   <a class="text-link" href="mailto:reservations@virginbeachresort.com">reservations@virginbeachresort.com</a></p>
-  <a class="btn btn-primary mt-lg" href="../book/index.html?type=corporate">Request for a Proposal</a>
+  <a class="btn btn-primary mt-lg" href="mailto:virginbeach.events@gmail.com?subject=Corporate%20Outing%20Proposal%20Request">Request for a Proposal</a>
 </section>
 """
 

@@ -191,7 +191,8 @@ section { padding: clamp(56px, 9vw, 128px) 0; }
   text-decoration: none;
   color: var(--night-ink);
 }
-.wordmark-icon { height: 34px; width: auto; display: block; flex-shrink: 0; }
+.wordmark-icon { height: 56px; width: auto; display: block; flex-shrink: 0; transition: height 0.35s ease; }
+.site-header.is-solid .wordmark-icon, .site-header.no-hero .wordmark-icon { height: 48px; }
 .site-header.is-solid .wordmark, .site-header.no-hero .wordmark { color: var(--ink); }
 .wordmark b { font-weight: 600; }
 .wordmark span { font-style: italic; font-weight: 400; opacity: 0.85; }
@@ -263,6 +264,14 @@ section { padding: clamp(56px, 9vw, 128px) 0; }
 }
 .hero img {
   position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; z-index: 0;
+}
+.hero img.hero-slide {
+  opacity: 0;
+  transition: opacity 2.2s ease;
+}
+.hero img.hero-slide.is-active { opacity: 1; z-index: 1; }
+@media (prefers-reduced-motion: reduce) {
+  .hero img.hero-slide { transition: none; }
 }
 .hero::after {
   content: ""; position: absolute; inset: 0; z-index: 1;
@@ -516,3 +525,15 @@ form.inquiry .field-hint { font-size: 0.8rem; color: var(--ink-soft); margin-top
 .mx-auto { margin-left: auto; margin-right: auto; }
 .mt-lg { margin-top: clamp(40px, 6vw, 72px); }
 .two-col-head { display: flex; justify-content: space-between; align-items: flex-end; gap: 24px; flex-wrap: wrap; margin-bottom: 44px; }
+
+/* ---------- scroll reveal ---------- */
+.reveal {
+  opacity: 0;
+  transform: translateY(28px) scale(0.985);
+  transition: opacity 0.9s cubic-bezier(0.16, 0.8, 0.24, 1), transform 0.9s cubic-bezier(0.16, 0.8, 0.24, 1);
+  will-change: opacity, transform;
+}
+.reveal.is-visible { opacity: 1; transform: translateY(0) scale(1); }
+@media (prefers-reduced-motion: reduce) {
+  .reveal { opacity: 1; transform: none; transition: none; }
+}

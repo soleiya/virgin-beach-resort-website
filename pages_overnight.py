@@ -13,7 +13,7 @@ FINE_PRINT = """
 RELATED_IMG = {
     "deluxe-king-casita": "casita-king-exterior.jpg",
     "double-queen-casita": "casita-queen-exterior.jpg",
-    "sunrise-casita": "sunrise-casita-sunset.jpg",
+    "sunrise-casita": "sunrise-casita-exterior-day.jpg",
     "louver-window-casita": "casita-louver-exterior.jpg",
     "bamboo-king-casita": "bamboo-casita-day.jpg",
     "bamboo-casita": "bamboo-basita.jpg",
@@ -104,7 +104,7 @@ RATES = {
 IMG = {
     "deluxe-king-casita": "casita-king-exterior.jpg",
     "double-queen-casita": "casita-queen-exterior.jpg",
-    "sunrise-casita": "sunrise-casita-sunset.jpg",
+    "sunrise-casita": "sunrise-casita-exterior-day.jpg",
     "louver-window-casita": "casita-louver-exterior.jpg",
     "bamboo-king-casita": "bamboo-casita-day.jpg",
     "bamboo-casita": "bamboo-basita.jpg",
@@ -204,7 +204,7 @@ casita_page(
     "With sliding glass doors in front, along with its window treatment, this casita is suited for early risers who can't wait to get to the beach.",
     "4 Persons", "2 Queen-sized Beds", "35 m&sup2;", "15,525",
     ["Elevated Patio with sofa", "Air-conditioning", "Writing Desk", "In-room Safe", "Complimentary Coffee and Tea", "Power Outlets (220v)"],
-    ["sunrise-casita-sunset.jpg", "casita-sunrise-interior.jpg", "casita-sunrise-bathroom.jpg"],
+    ["sunrise-casita-exterior-day.jpg", "casita-sunrise-interior.jpg", "casita-sunrise-bathroom.jpg"],
 )
 
 casita_page(

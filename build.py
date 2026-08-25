@@ -50,7 +50,6 @@ def book_link(base, **params):
 
 BOOKING_TYPE_LABELS = [
     ("day_trip", "Day Trip (Full Day)"),
-    ("corporate", "Corporate Outing"),
 ]
 
 
@@ -65,15 +64,23 @@ def booking_form_section(default_type="day_trip"):
         f'<option value="{val}"{" selected" if val == default_type else ""}>{label}</option>'
         for val, label in BOOKING_TYPE_LABELS
     )
-    return f"""
-<div id="bookingFormWrap">
-  <form class="inquiry" id="bookingForm">
-    <div>
+    # With only one booking type on offer, the picker is redundant — keep the
+    # (hidden) select for booking.js to read from, but don't show a pointless
+    # single-option dropdown to the guest.
+    stay_type_field = (
+        f'<select id="stayType" hidden>{type_options}</select>'
+        if len(BOOKING_TYPE_LABELS) == 1 else
+        f'''<div>
       <label for="stayType">What are you booking?</label>
       <select id="stayType">
             {type_options}
       </select>
-    </div>
+    </div>'''
+    )
+    return f"""
+<div id="bookingFormWrap">
+  <form class="inquiry" id="bookingForm">
+    {stay_type_field}
 
     <div>
       <label for="checkIn" id="checkInLabel">Preferred Date</label>
@@ -218,7 +225,7 @@ def nav_html(base, current_path, solid=False):
 
     return f"""<header class="{header_class}">
   <div class="wrap">
-    <a class="wordmark" href="{base}index.html"><img class="wordmark-icon" src="{base}assets/brand/logo-mark.png" alt=""><b>Virgin</b> <span>Beach Resort</span></a>
+    <a class="wordmark" href="{base}index.html"><img class="wordmark-icon" src="{base}assets/brand/logo-mark.png" alt="Virgin Beach Resort"></a>
     <nav>
       <ul class="nav-links">{nav_links}</ul>
     </nav>
