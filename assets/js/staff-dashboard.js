@@ -9,7 +9,7 @@
   var sb = window.supabase.createClient(cfg.url, cfg.anonKey);
 
   var TYPE_LABELS = {
-    day_trip: "Day Trip", half_day: "Half-day", day_picnic: "Picnic", corporate: "Corporate",
+    day_trip: "Day Trip", corporate: "Corporate",
   };
   var SOURCE_LABELS = {
     website: "Website", messenger: "Messenger", phone: "Phone", email: "Email", walk_in: "Walk-in", other: "Other",

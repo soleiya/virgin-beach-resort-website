@@ -126,7 +126,7 @@ html = """<!doctype html>
       <img src="../assets/brand/logo-mark.png" alt="">
       <div>
         <h1>Reservations Dashboard</h1>
-        <span>Day Trip &middot; Half-day &middot; Picnic &middot; Corporate</span>
+        <span>Day Trip &middot; Corporate</span>
       </div>
     </div>
     <button class="btn-sm ghost" id="logoutBtn">Sign Out</button>
@@ -219,8 +219,6 @@ html = """<!doctype html>
           <label for="addType">Booking Type</label>
           <select id="addType">
             <option value="day_trip">Day Trip (Full Day)</option>
-            <option value="half_day">Half-day Tour</option>
-            <option value="day_picnic">Day Picnic</option>
             <option value="corporate">Corporate Outing</option>
           </select>
         </div>

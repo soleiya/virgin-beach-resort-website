@@ -2,8 +2,8 @@
   var form = document.getElementById("bookingForm");
   if (!form) return;
 
-  // This form handles Day Trip / Half-day / Day Picnic / Corporate requests
-  // only. Overnight casita reservations go straight to Cloudbeds (see the
+  // This form handles Day Trip / Corporate requests only. Overnight casita
+  // reservations go straight to Cloudbeds (see the
   // "Book an Overnight Stay" link on this page and the site's Book Now
   // buttons) — they never reach this script.
 
@@ -42,8 +42,6 @@
 
   var TYPE_NAMES = {
     day_trip: "Day Trip (Full Day)",
-    half_day: "Half-day Tour",
-    day_picnic: "Day Picnic",
     corporate: "Corporate Outing",
   };
 

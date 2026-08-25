@@ -66,33 +66,6 @@ day_body = """
   </div>
 </section>
 
-<section class="band-tint">
-  <div class="wrap">
-    <div class="feature-row">
-      <div class="feature-media wide"><img src="../assets/images/Private-Cabana-Day-Trip-with-family.jpg" alt="A family enjoying a private cabana during their day trip"></div>
-      <div>
-        <span class="eyebrow">Bring Your Own</span>
-        <h2>Day Picnic Package</h2>
-        <p class="prose" style="margin-top:16px;">Inclusive of Entrance and Corkage from 8:00 AM to 5:00 PM. Our outing area is open to picnickers when
-        there are no scheduled company outings. Guests may bring in food and drinks and enjoy grilling and having lunch by the beach.</p>
-      </div>
-    </div>
-    <div class="table-wrap mt-lg">
-      <table class="rate-table">
-        <thead><tr><th>Guest</th><th class="num">Rate</th></tr></thead>
-        <tbody>
-          <tr><td>Adults</td><td class="num">&#8369;400.00</td></tr>
-          <tr><td>Children (9 years old and below)</td><td class="num">&#8369;400.00</td></tr>
-        </tbody>
-      </table>
-    </div>
-    <div class="fine-print">
-      <p>Prices are inclusive of 12% VAT and 5% service charge.</p>
-      <p>Prices may be subject to change without prior notice.</p>
-    </div>
-  </div>
-</section>
-
 <section class="center" style="max-width:640px; margin:0 auto; padding-bottom:0;">
   <span class="eyebrow">Reservations</span>
   <h2>Plan your day trip</h2>
@@ -118,7 +91,7 @@ day_body = """
 {booking_scripts_html}
 """.format(fine_print_1=FINE_PRINT_A, booking_form=booking_form_section("day_trip"), booking_scripts_html=booking_scripts())
 
-page("day-packages/index.html", "Day Trip", "Day Trip and Day Picnic packages at Virgin Beach Resort — dining and lounge cabanas, with instant online booking.", day_body)
+page("day-packages/index.html", "Day Trip", "Day Trip packages at Virgin Beach Resort — dining and lounge cabanas, with instant online booking.", day_body)
 
 
 # ---------------------------------------------------------------- Corporate

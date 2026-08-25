@@ -42,4 +42,4 @@ body = f"""
 {booking_scripts()}
 """
 
-page("book/index.html", "Request Your Day Trip", "Request a Day Trip, Half-day Tour, Day Picnic, or Corporate outing directly with Virgin Beach Resort. Booking an overnight casita? That's handled through our booking engine.", body)
+page("book/index.html", "Request Your Day Trip", "Request a Day Trip or Corporate outing directly with Virgin Beach Resort. Booking an overnight casita? That's handled through our booking engine.", body)
