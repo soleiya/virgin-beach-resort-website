@@ -12,7 +12,7 @@ FINE_PRINT_A = """
 
 day_body = """
 <section class="page-hero">
-  <img src="../assets/images/aerial-cabanas-shoreline.jpg" alt="Aerial view of dining and lounge cabanas along the shoreline">
+  <img src="../assets/images/day-trip-area.jpg" alt="Aerial view of dining and lounge cabanas along the shoreline, mountains in the background">
   <div class="wrap page-hero-content">
     <span class="eyebrow">Day Trip</span>
     <h1>A fleeting escape that will leave you wanting more.</h1>
@@ -54,11 +54,11 @@ day_body = """
     <div class="two-col-head"><div><span class="eyebrow">Cabanas</span><h2>Available Facilities</h2></div></div>
     <div class="grid-2">
       <div class="card">
-        <div class="card-media"><img src="../assets/images/day-trip-cabanas-path.jpg" alt="Dining Cabana"></div>
+        <div class="card-media"><img src="../assets/images/Day-trip-cabanass.jpg" alt="Dining Cabana"></div>
         <div class="card-body"><span class="meta">10 Persons</span><h3>Dining Cabana</h3><div class="price"><b>&#8369;1,500</b></div></div>
       </div>
       <div class="card">
-        <div class="card-media"><img src="../assets/images/lounge-corner-orange.jpg" alt="Lounge Cabana"></div>
+        <div class="card-media"><img src="../assets/images/day-trip-cabanas.jpg" alt="Lounge Cabana"></div>
         <div class="card-body"><span class="meta">4 Persons</span><h3>Lounge Cabana</h3><div class="price"><b>&#8369;2,000</b></div></div>
       </div>
     </div>
@@ -69,7 +69,7 @@ day_body = """
 <section class="band-tint">
   <div class="wrap">
     <div class="feature-row">
-      <div class="feature-media wide"><img src="../assets/images/night-beach-lounge.jpg" alt="Beachfront picnic setting under string lights"></div>
+      <div class="feature-media wide"><img src="../assets/images/Private-Cabana-Day-Trip-with-family.jpg" alt="A family enjoying a private cabana during their day trip"></div>
       <div>
         <span class="eyebrow">Bring Your Own</span>
         <h2>Day Picnic Package</h2>
@@ -125,7 +125,7 @@ page("day-packages/index.html", "Day Trip", "Day Trip and Day Picnic packages at
 
 corp_body = """
 <section class="page-hero">
-  <img src="../assets/images/day-trip-cabanas-path.jpg" alt="Outing area with dining cabanas beneath the trees">
+  <img src="../assets/images/corporate-outing.jpg" alt="Aerial view of the outing area with a tour bus arriving beneath the trees">
   <div class="wrap page-hero-content">
     <span class="eyebrow">Corporate</span>
     <h1>Give your company outings a <em style="font-style:italic;">tropical touch.</em></h1>
@@ -146,7 +146,7 @@ corp_body = """
         persons or more.</p>
         <a class="btn btn-primary mt-lg" href="../book/index.html?type=corporate">Request for a Proposal</a>
       </div>
-      <div class="feature-media"><img src="../assets/images/aerial-cabanas-wide.jpg" alt="Wide aerial view of the resort's beachfront outing area"></div>
+      <div class="feature-media"><img src="../assets/images/path-way-to-the-beach.jpg" alt="Aerial view of the path leading down to the resort's beachfront outing area"></div>
     </div>
   </div>
 </section>
@@ -154,8 +154,8 @@ corp_body = """
 <section class="band-tint">
   <div class="wrap">
     <div class="grid-2">
-      <div class="feature-media wide"><img src="../assets/images/aerial-road-coast.jpg" alt="Coastal road winding through the property"></div>
-      <div class="feature-media wide"><img src="../assets/images/pavilion-porch-seating.jpg" alt="Covered pavilion seating for group gatherings"></div>
+      <div class="feature-media wide"><img src="../assets/images/18-private-villas-only.jpg" alt="Aerial view of the resort's villas along the coastline"></div>
+      <div class="feature-media wide"><img src="../assets/images/reef-of-virgin-beach.jpg" alt="Aerial view of the turquoise reef for group beach activities"></div>
     </div>
   </div>
 </section>

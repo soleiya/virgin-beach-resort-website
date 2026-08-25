@@ -5,7 +5,7 @@ from build import page, CLOUDBEDS_URL
 
 dining_body = f"""
 <section class="page-hero">
-  <img src="../assets/images/dining-lanterns-evening.jpg" alt="Candlelit dinner tables set up on the beach at The Pavilion">
+  <img src="../assets/images/dining-area1.jpg" alt="Candlelit dinner tables set up on the beach at The Pavilion">
   <div class="wrap page-hero-content">
     <span class="eyebrow">Dining</span>
     <h1>Indulge in a selection of local and international cuisine at <em style="font-style:italic;">The Pavilion.</em></h1>
@@ -31,8 +31,8 @@ dining_body = f"""
 <section>
   <div class="wrap">
     <div class="grid-2">
-      <div class="feature-media wide"><img src="../assets/images/dining-pizza.jpg" alt="Wood-fired pizza fresh from the oven"></div>
-      <div class="feature-media wide"><img src="../assets/images/pavilion-porch-seating.jpg" alt="Covered pavilion seating at The Pavilion"></div>
+      <div class="feature-media wide"><img src="../assets/images/dining.jpg" alt="The Pavilion's dining tables set beneath string lights in the evening"></div>
+      <div class="feature-media wide"><img src="../assets/images/dining2.jpg" alt="Covered pavilion seating at The Pavilion"></div>
     </div>
     <div class="feature-row mt-lg">
       <div>
@@ -79,14 +79,14 @@ page("dining/index.html", "Dining", "Al fresco dining at The Pavilion — local 
 # ---------------------------------------------------------------- Experiences
 
 EXPERIENCES = [
-    ("Private Dining", "Make special moments even more memorable with a private dinner by the beach. Let you and your loved ones be enveloped in a warm ambience coupled with a sunset backdrop. Whether it's in celebration of an event or each other, we are sure to make this dinner a memorable one.", "spa-towels-detail.jpg"),
-    ("Bonfire by the Beach", "Enjoy a memorable evening with family and friends while roasting marshmallows and watching the stars come alive.", "night-beach-lounge.jpg"),
-    ("Massage", "Our visiting wellness experts are here to skillfully relieve your aching muscles and to provide the most restful experience.", "aerial-extra-01.jpg"),
-    ("Kayaking", "Row towards the horizon and set out into the sea, just don't forget to come back!", "reef-turquoise-aerial.jpg"),
-    ("Boat Trip", "Set out to sea to marvel at the azure water and sky or go snorkeling at one of Laiya's marine sanctuaries.", "aerial-beach-vertical.jpg"),
-    ("Biking &amp; Bird Watching", "Go on a mini-adventure by exploring the many scenic trails and paths found around the property. The opportunities for a wheely great ride are endless. Take a ride, enjoy a cool ocean breeze and keep your eyes peeled for various species of birds.", "aerial-road-coast.jpg"),
-    ("Snorkeling", "Get acquainted with the breathtaking world below in either of Laiya's marine sanctuaries as you surround yourself with corals teeming with undersea life. Snorkels, goggles, and full face masks are available for rent and at your disposal all day.", "aerial-extra-05.jpg"),
-    ("ATV Riding", "Experience a mini-adventure by exploring the many scenic trails and paths around the property. Excite your senses with the ultimate off-road experience with our All Terrain Vehicles.", "aerial-cabanas-wide.jpg"),
+    ("Private Dining", "Make special moments even more memorable with a private dinner by the beach. Let you and your loved ones be enveloped in a warm ambience coupled with a sunset backdrop. Whether it's in celebration of an event or each other, we are sure to make this dinner a memorable one.", "dining2.jpg"),
+    ("Bonfire by the Beach", "Enjoy a memorable evening with family and friends while roasting marshmallows and watching the stars come alive.", "mother-tree.jpg"),
+    ("Massage", "Our visiting wellness experts are here to skillfully relieve your aching muscles and to provide the most restful experience.", "virgin-beach-resort-experiences-massage.jpg"),
+    ("Kayaking", "Row towards the horizon and set out into the sea, just don't forget to come back!", "virgin-beach-resort-experiences-kayaking.jpg"),
+    ("Boat Trip", "Set out to sea to marvel at the azure water and sky or go snorkeling at one of Laiya's marine sanctuaries.", "drone-shot-hero.jpg"),
+    ("Biking &amp; Bird Watching", "Go on a mini-adventure by exploring the many scenic trails and paths found around the property. The opportunities for a wheely great ride are endless. Take a ride, enjoy a cool ocean breeze and keep your eyes peeled for various species of birds.", "virgin-beach-resort-laiya-experiences-biking-bird-watching.jpg"),
+    ("Snorkeling", "Get acquainted with the breathtaking world below in either of Laiya's marine sanctuaries as you surround yourself with corals teeming with undersea life. Snorkels, goggles, and full face masks are available for rent and at your disposal all day.", "virgin-beach-resort-experiences-snorkeling-scaled.jpg"),
+    ("ATV Riding", "Experience a mini-adventure by exploring the many scenic trails and paths around the property. Excite your senses with the ultimate off-road experience with our All Terrain Vehicles.", "hero-atv.jpg"),
     ("Sunset Lounging", "Spend the afternoon lounging by the beach and taking in the ocean breeze. Let the golden hues of the setting sun paint a serene backdrop as you relax.", "lounge-corner-orange.jpg"),
 ]
 
@@ -100,7 +100,7 @@ for name, desc, img in EXPERIENCES:
 
 exp_body = f"""
 <section class="page-hero">
-  <img src="../assets/images/reef-turquoise-aerial.jpg" alt="Aerial view of a turquoise reef along the shoreline">
+  <img src="../assets/images/reef-of-virgin-beach.jpg" alt="Aerial view of a turquoise reef along the shoreline">
   <div class="wrap page-hero-content">
     <span class="eyebrow">Experiences</span>
     <h1>Go on a water adventure or take a moment of quiet contemplation.</h1>

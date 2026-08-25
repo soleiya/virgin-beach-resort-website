@@ -123,7 +123,7 @@ def group(title, items):
 
 body = f"""
 <section class="page-hero" style="min-height:44vh;">
-  <img src="../assets/images/aerial-extra-14.jpg" alt="Aerial view of Virgin Beach Resort">
+  <img src="../assets/images/fire-tree-and-coastline.jpg" alt="Aerial view of Virgin Beach Resort">
   <div class="wrap page-hero-content">
     <span class="eyebrow">FAQ</span>
     <h1>Frequently Asked Questions</h1>

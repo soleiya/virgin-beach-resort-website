@@ -2,18 +2,23 @@
 from build import page, CLOUDBEDS_URL
 
 GALLERY_IMAGES = [
-    "hero-coastline-aerial.jpg", "casita-king-interior.jpg", "aerial-cabanas-shoreline.jpg",
-    "casita-queen-interior.jpg", "dining-lanterns-evening.jpg", "aerial-villas-cove.jpg",
-    "casita-bamboo-interior.jpg", "reef-turquoise-aerial.jpg", "casita-louver-interior.jpg",
-    "night-beach-lounge.jpg", "casita-sunrise-interior.jpg", "aerial-bay-mountains.jpg",
-    "dining-pizza.jpg", "casita-king-bathtub.jpg", "aerial-cabanas-wide.jpg",
-    "spa-towels-detail.jpg", "casita-queen-bathroom.jpg", "aerial-beach-vertical.jpg",
-    "pavilion-porch-seating.jpg", "casita-bamboo-shower.jpg", "aerial-road-coast.jpg",
-    "lounge-corner-orange.jpg", "casita-louver-bathroom.jpg", "night-beach-tree.jpg",
-    "casita-bamboo-exterior.jpg", "aerial-extra-03.jpg", "casita-sunrise-bathroom.jpg",
-    "aerial-extra-08.jpg", "interior-twin-beds.jpg", "aerial-extra-14.jpg",
-    "casita-king-patio.jpg", "aerial-extra-19.jpg", "interior-desk-tv.jpg",
-    "cottage-exterior-alt1.jpg", "aerial-extra-24.jpg", "lounge-sofa-room.jpg",
+    "drone-hero.jpg", "casita-king-interior.jpg", "ATV-and-view.jpg",
+    "Hero-Virgin-vertical.jpg", "dining-area1.jpg", "casita-queen-interior.jpg",
+    "reef-of-virgin.jpg", "bamboo-casita-romantic.jpg", "18-private-villas-only.jpg",
+    "mother-tree.jpg", "casita-sunrise-interior.jpg", "Day-Trip-Area-with-mountains-at-the-back.jpg",
+    "our-service.jpg", "hero-image-vertical.jpg",
+    "virgin-beach-resort-experiences-massage.jpg", "path-way-to-the-beach.jpg",
+    "dining2.jpg", "Private-Duluxe-Villa.jpg", "fire-tree-and-coastline.jpg",
+    "virgin-beach-resort-experiences-kayaking.jpg", "roads-inside-virgin-beach.jpg",
+    "bamboo-casita-day.jpg", "Hero-Day-Trip-vertical.jpg",
+    "hero-atv.jpg", "interior-twin-beds.jpg", "corporate-outing.jpg",
+    "sunrise-casita-sunset.jpg", "virgin-beach-resort-laiya-experiences-hero.jpg", "interior-desk-tv.jpg",
+    "cottage-exterior-alt1.jpg", "Private-villas-tucked-in-the-canopy-shade-of-the-surrounding-trees.jpg", "lounge-sofa-room.jpg",
+    "virgin-beach-resort-experiences-snorkeling-scaled.jpg", "ATV-ride.jpg", "day-trip-area.jpg",
+    "virgin-beach-resort-laiya-experiences-biking-bird-watching.jpg", "Hero-Day-Trip-vertical-2.jpg", "drone-shot-hero.jpg",
+    "private-villas-tucked-in.jpg", "bamboo-basita.jpg", "Private-Cabana-Day-Trip-with-family.jpg",
+    "hero-drone-vertical.jpg", "reef-of-virgin-beach.jpg", "deluxe-room.jpg",
+    "Day-trip-cabanass.jpg", "day-trip-cabanas.jpg", "day-trip.jpg",
 ]
 
 imgs_html = "".join(
@@ -23,7 +28,7 @@ imgs_html = "".join(
 
 body = f"""
 <section class="page-hero">
-  <img src="../assets/images/aerial-extra-19.jpg" alt="Aerial view of the resort's coastline">
+  <img src="../assets/images/hero.jpg" alt="Aerial view of the resort's coastline">
   <div class="wrap page-hero-content">
     <span class="eyebrow">Gallery</span>
     <h1>Paradise awaits.</h1>

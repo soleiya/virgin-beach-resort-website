@@ -13,10 +13,10 @@ FINE_PRINT = """
 RELATED_IMG = {
     "deluxe-king-casita": "casita-king-exterior.jpg",
     "double-queen-casita": "casita-queen-exterior.jpg",
-    "sunrise-casita": "casita-sunrise-exterior.jpg",
+    "sunrise-casita": "sunrise-casita-sunset.jpg",
     "louver-window-casita": "casita-louver-exterior.jpg",
-    "bamboo-king-casita": "casita-bamboo-exterior.jpg",
-    "bamboo-casita": "casita-bamboo-exterior-detail.jpg",
+    "bamboo-king-casita": "bamboo-casita-day.jpg",
+    "bamboo-casita": "bamboo-basita.jpg",
 }
 
 
@@ -104,10 +104,10 @@ RATES = {
 IMG = {
     "deluxe-king-casita": "casita-king-exterior.jpg",
     "double-queen-casita": "casita-queen-exterior.jpg",
-    "sunrise-casita": "casita-sunrise-exterior.jpg",
+    "sunrise-casita": "sunrise-casita-sunset.jpg",
     "louver-window-casita": "casita-louver-exterior.jpg",
-    "bamboo-king-casita": "casita-bamboo-exterior.jpg",
-    "bamboo-casita": "casita-bamboo-exterior-detail.jpg",
+    "bamboo-king-casita": "bamboo-casita-day.jpg",
+    "bamboo-casita": "bamboo-basita.jpg",
 }
 BLURB = {
     "deluxe-king-casita": "Perfect for couples out for a romantic getaway — sublime wooden furniture, a bathtub, and a private outdoor shower.",
@@ -136,7 +136,7 @@ for slug, name in CASITAS:
 
 overnight_body = f"""
 <section class="page-hero">
-  <img src="../assets/images/aerial-villas-cove.jpg" alt="Aerial view of Virgin Beach Resort's casitas along the cove">
+  <img src="../assets/images/18-private-villas-only.jpg" alt="Aerial view of Virgin Beach Resort's casitas along the cove">
   <div class="wrap page-hero-content">
     <span class="eyebrow">Overnight</span>
     <h1>A perfect escape from the city.</h1>
@@ -184,7 +184,7 @@ casita_page(
     ["Private Outdoor Shower", "Elevated Patio with sofa", "Daybed", "Bathtub", "Air-conditioning", "Satellite TV",
      "Writing Desk", "In-room Safe", "Mini-bar &amp; Refrigerator", "Complimentary Coffee and Tea", "Power Outlets (220v)",
      "Extra Person may be Added, Charges Apply"],
-    ["casita-king-exterior.jpg", "casita-king-interior.jpg", "casita-king-patio.jpg", "casita-king-bathtub.jpg"],
+    ["casita-king-exterior.jpg", "deluxe-room.jpg", "casita-king-patio.jpg", "casita-king-bathtub.jpg"],
 )
 
 casita_page(
@@ -204,7 +204,7 @@ casita_page(
     "With sliding glass doors in front, along with its window treatment, this casita is suited for early risers who can't wait to get to the beach.",
     "4 Persons", "2 Queen-sized Beds", "35 m&sup2;", "15,525",
     ["Elevated Patio with sofa", "Air-conditioning", "Writing Desk", "In-room Safe", "Complimentary Coffee and Tea", "Power Outlets (220v)"],
-    ["casita-sunrise-exterior.jpg", "casita-sunrise-interior.jpg", "casita-sunrise-bathroom.jpg"],
+    ["sunrise-casita-sunset.jpg", "casita-sunrise-interior.jpg", "casita-sunrise-bathroom.jpg"],
 )
 
 casita_page(
@@ -222,7 +222,7 @@ casita_page(
     "Inspired by traditional Filipino architecture with its bamboo build and cozy interiors, popular among our guests. Its wide floor-to-ceiling sliding doors can either be enclosed or left open to provide a view of the sea. Its elevated patio is the perfect spot to lounge.",
     "2 Persons", "1 King Bed", "30 m&sup2;", "9,225",
     ["Elevated Patio with sofa", "In-room Safe", "Complimentary Coffee and Tea", "Power Outlets (220v)", "Air-conditioning"],
-    ["casita-bamboo-exterior.jpg", "casita-bamboo-king-interior.jpg", "casita-bamboo-exterior-detail.jpg"],
+    ["bamboo-casita-day.jpg", "bamboo-casita-romantic.jpg", "casita-bamboo-exterior-detail.jpg"],
 )
 
 casita_page(
@@ -231,5 +231,5 @@ casita_page(
     "Inspired by traditional Filipino architecture with its bamboo build and cozy interiors, popular among our guests. Its wide floor-to-ceiling sliding doors can either be enclosed or left open to provide a view of the sea. Its elevated patio is the perfect spot to lounge.",
     "4 Persons", "2 Queen Beds", "30 m&sup2;", "9,225",
     ["Elevated Patio with sofa", "In-room Safe", "Complimentary Coffee and Tea", "Power Outlets (220v)", "Air-conditioning"],
-    ["casita-bamboo-exterior-detail.jpg", "casita-bamboo-interior.jpg", "casita-bamboo-interior-2.jpg", "casita-bamboo-shower.jpg"],
+    ["bamboo-basita.jpg", "casita-bamboo-interior.jpg", "casita-bamboo-interior-2.jpg", "casita-bamboo-shower.jpg"],
 )

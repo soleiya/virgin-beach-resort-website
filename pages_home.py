@@ -12,10 +12,10 @@ RATES = {
 CASITA_IMG = {
     "deluxe-king-casita": "casita-king-exterior.jpg",
     "double-queen-casita": "casita-queen-exterior.jpg",
-    "sunrise-casita": "casita-sunrise-exterior.jpg",
+    "sunrise-casita": "sunrise-casita-sunset.jpg",
     "louver-window-casita": "casita-louver-exterior.jpg",
-    "bamboo-king-casita": "casita-bamboo-exterior.jpg",
-    "bamboo-casita": "casita-bamboo-exterior-detail.jpg",
+    "bamboo-king-casita": "bamboo-casita-day.jpg",
+    "bamboo-casita": "bamboo-basita.jpg",
 }
 CASITA_META = {
     "deluxe-king-casita": "2 Persons · King Bed",
@@ -42,7 +42,7 @@ for slug, name in CASITAS:
 
 body = f"""
 <section class="hero">
-  <img src="assets/images/hero-coastline-aerial.jpg" alt="Aerial view of Virgin Beach Resort's cove, casitas lined along a curving white sand beach">
+  <img src="assets/images/drone-hero.jpg" alt="Aerial view of Virgin Beach Resort's cove, casitas lined along a curving white sand beach">
   <div class="wrap hero-content">
     <span class="eyebrow">Laiya &middot; San Juan &middot; Batangas</span>
     <h1>Manila&rsquo;s Quick Escape to Pure Unspoiled Paradise</h1>
@@ -68,7 +68,7 @@ body = f"""
 <section>
   <div class="wrap stack">
     <div class="feature-row">
-      <div class="feature-media"><img src="assets/images/aerial-bay-mountains.jpg" alt="Aerial view of Sigayan Bay and the mountains of Daguldol and Lobo"></div>
+      <div class="feature-media"><img src="assets/images/Day-Trip-Area-with-mountains-at-the-back.jpg" alt="Aerial view of Sigayan Bay and the mountains of Daguldol and Lobo"></div>
       <div>
         <span class="eyebrow">Paradise within reach</span>
         <h2>Paradise within reach</h2>
@@ -80,7 +80,7 @@ body = f"""
     </div>
 
     <div class="feature-row reverse">
-      <div class="feature-media"><img src="assets/images/casita-king-patio.jpg" alt="Private patio of an oceanfront casita, shaded among the trees"></div>
+      <div class="feature-media"><img src="assets/images/private-villas-tucked-in.jpg" alt="Aerial view of private villas nestled amidst the tree canopy"></div>
       <div>
         <span class="eyebrow">Privacy &amp; Serenity</span>
         <h2>Privacy &amp; Serenity.</h2>
@@ -109,7 +109,7 @@ body = f"""
 <section>
   <div class="wrap">
     <div class="feature-row">
-      <div class="feature-media wide"><img src="assets/images/dining-lanterns-evening.jpg" alt="Candlelit tables set for dinner on the beach at The Pavilion"></div>
+      <div class="feature-media wide"><img src="assets/images/dining.jpg" alt="Candlelit tables set for dinner on the beach at The Pavilion"></div>
       <div>
         <span class="eyebrow">Dining</span>
         <h2>Dining at <em style="font-style:italic;">The Pavilion</em></h2>
@@ -120,7 +120,7 @@ body = f"""
     </div>
 
     <div class="feature-row reverse mt-lg">
-      <div class="feature-media wide"><img src="assets/images/day-trip-cabanas-path.jpg" alt="Sandy path lined with dining cabanas beneath the trees"></div>
+      <div class="feature-media wide"><img src="assets/images/day-trip.jpg" alt="Aerial view of dining cabanas lining the beach"></div>
       <div>
         <span class="eyebrow">Day Activities</span>
         <h2>Spend the day with us</h2>
@@ -145,8 +145,8 @@ body = f"""
       <p class="prose" style="max-width:44ch;">Turn your most meaningful events into moments that everyone will remember.</p>
     </div>
     <div class="grid-2">
-      <div class="feature-media wide"><img src="assets/images/night-beach-lounge.jpg" alt="String lights over a beachfront reception setup at night"></div>
-      <div class="feature-media wide"><img src="assets/images/aerial-cabanas-shoreline.jpg" alt="Wide aerial view of the shoreline suited for a beach ceremony"></div>
+      <div class="feature-media wide"><img src="assets/images/mother-tree.jpg" alt="The resort's illuminated mother tree glowing at night"></div>
+      <div class="feature-media wide"><img src="assets/images/fire-tree-and-coastline.jpg" alt="Wide aerial view of the shoreline suited for a beach ceremony"></div>
     </div>
     <p class="prose mt-lg" style="color:rgba(238,231,214,0.85);">Tie the knot on a picturesque beach as the sound of waves become the perfect tune to the exact moment
     you and your loved one become one.</p>

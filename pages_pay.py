@@ -3,7 +3,7 @@ from build import page
 
 body = """
 <section class="page-hero" style="min-height:32vh;">
-  <img src="../assets/images/aerial-extra-19.jpg" alt="Aerial view of Virgin Beach Resort">
+  <img src="../assets/images/day-trip.jpg" alt="Aerial view of Virgin Beach Resort">
   <div class="wrap page-hero-content">
     <span class="eyebrow">Payment</span>
     <h1>Upload Your Payment Proof</h1>

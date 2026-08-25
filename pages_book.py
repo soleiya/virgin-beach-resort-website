@@ -3,7 +3,7 @@ from build import page, CLOUDBEDS_URL, booking_form_section, booking_scripts
 
 body = f"""
 <section class="page-hero" style="min-height:40vh;">
-  <img src="../assets/images/aerial-extra-19.jpg" alt="Aerial view of Virgin Beach Resort">
+  <img src="../assets/images/drone-shot-hero.jpg" alt="Aerial view of Virgin Beach Resort">
   <div class="wrap page-hero-content">
     <span class="eyebrow">Book Direct</span>
     <h1>Request Your Day Trip</h1>
