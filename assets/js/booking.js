@@ -109,21 +109,25 @@
         "Live availability isn't connected yet — mention your preferred cabana(s) in the notes below and we'll confirm by hand.";
       return;
     }
-    if (!dateStr) {
-      cabanaMapStatus.textContent = "Pick a date above to see availability.";
-      cabanaMapEl.innerHTML = "";
-      return;
-    }
-    cabanaMapStatus.textContent = "Loading availability for " + dateStr + "…";
+    // The map itself (layout, numbering, dining vs. lounge) never depends on
+    // a date, so it loads and is tappable right away. Only the held/taken
+    // state is date-specific — until a date is picked we show every cabana
+    // as open, then swap in real availability once loadHolds resolves.
+    cabanaMapStatus.textContent = dateStr
+      ? "Loading availability for " + dateStr + "…"
+      : "Tap all the cabanas you'd like — pick a date above to check live availability for that day.";
 
     var loadCabanas = cabanasLoaded || window.VBRCabanaMap.loadCabanas(sb);
     cabanasLoaded = loadCabanas;
+    var loadHolds = dateStr ? window.VBRCabanaMap.loadHolds(sb, dateStr) : Promise.resolve(new Set());
 
-    Promise.all([loadCabanas, window.VBRCabanaMap.loadHolds(sb, dateStr)])
+    Promise.all([loadCabanas, loadHolds])
       .then(function (results) {
         var cabanas = results[0];
         var heldSet = results[1];
-        cabanaMapStatus.textContent = "Tap all the cabanas you'd like for " + dateStr + " — you can pick more than one.";
+        cabanaMapStatus.textContent = dateStr
+          ? "Tap all the cabanas you'd like for " + dateStr + " — you can pick more than one."
+          : "Tap all the cabanas you'd like — pick a date above to check live availability for that day.";
         window.VBRCabanaMap.render(cabanaMapEl, {
           cabanas: cabanas,
           heldSet: heldSet,

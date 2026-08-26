@@ -89,9 +89,9 @@ def booking_form_section(default_type="day_trip"):
 
     <div id="cabanaStep" hidden>
       <label id="cabanaStepLabel">Choose your cabana(s)</label>
-      <p class="field-hint" id="cabanaHint">Pick a date above first — availability updates live for that day, and you can select more than one cabana.</p>
+      <p class="field-hint" id="cabanaHint">Tap the map to see exactly where each cabana sits — pick a date above to check live availability for that day, and you can select more than one cabana.</p>
       <div class="cabana-map-wrap">
-        <div id="cabanaMapStatus" class="cabana-map-status">Pick a date to see availability.</div>
+        <div id="cabanaMapStatus" class="cabana-map-status">Loading the cabana map…</div>
         <div id="cabanaMap"></div>
         <div id="cabanaSelectedNote" class="cabana-selected-note" hidden></div>
       </div>
