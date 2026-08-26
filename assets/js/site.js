@@ -49,6 +49,23 @@
     }
   }
 
+  // Cards with a second (alt-angle) photo: tap the corner pill to swap
+  // which image is showing, e.g. Dining/Lounge Cabana interior <-> exterior.
+  var mediaToggles = document.querySelectorAll('.card-media-toggle');
+  mediaToggles.forEach(function (btn) {
+    btn.addEventListener('click', function (e) {
+      e.preventDefault();
+      e.stopPropagation();
+      var media = btn.closest('.card-media');
+      if (!media) return;
+      var imgs = media.querySelectorAll('img');
+      if (imgs.length < 2) return;
+      imgs.forEach(function (img) { img.classList.toggle('is-active'); });
+      var showingAlt = !imgs[0].classList.contains('is-active');
+      btn.textContent = showingAlt ? btn.getAttribute('data-label-alt') : btn.getAttribute('data-label-primary');
+    });
+  });
+
   // Homepage hero: slow crossfade between a few signature shots.
   var heroSlides = document.querySelectorAll('.hero .hero-slide');
   if (heroSlides.length > 1 && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) {

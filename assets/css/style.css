@@ -330,6 +330,36 @@ section { padding: clamp(56px, 9vw, 128px) 0; }
 .card .card-media { aspect-ratio: 4/3; overflow: hidden; }
 .card .card-media img { width: 100%; height: 100%; object-fit: cover; transition: transform 0.6s ease; }
 .card:hover .card-media img { transform: scale(1.04); }
+
+/* Cards with a second (alt-angle) photo: both images stack in the same box;
+   a small corner toggle swaps which one is visible. */
+.card .card-media.has-alt { position: relative; }
+.card .card-media.has-alt img {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  transition: opacity 0.5s ease, transform 0.6s ease;
+}
+.card .card-media.has-alt img.is-active { opacity: 1; }
+.card-media-toggle {
+  position: absolute;
+  right: 10px;
+  bottom: 10px;
+  z-index: 2;
+  border: none;
+  border-radius: 999px;
+  padding: 7px 14px;
+  font-family: var(--font-body);
+  font-size: 0.76rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: #fff;
+  background: rgba(20, 24, 22, 0.6);
+  backdrop-filter: blur(2px);
+  cursor: pointer;
+  transition: background 0.25s ease;
+}
+.card-media-toggle:hover { background: rgba(20, 24, 22, 0.82); }
 .card .card-body { padding: 22px 24px 26px; display: flex; flex-direction: column; gap: 8px; flex: 1; }
 .card h3 { font-size: 1.2rem; }
 .card .meta { font-size: 0.78rem; letter-spacing: 0.06em; text-transform: uppercase; color: var(--lagoon-deep); font-weight: 700; }
