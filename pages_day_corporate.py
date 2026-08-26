@@ -42,10 +42,87 @@ day_body = """
           <tr><td>Adults</td><td class="num">&#8369;1,250.00</td></tr>
           <tr><td>Children (6&ndash;12 years old)</td><td class="num">&#8369;825.00</td></tr>
           <tr><td>Children (5 years old and below)</td><td class="num">Free</td></tr>
+          <tr><td>Pets</td><td class="num">&#8369;750.00</td></tr>
         </tbody>
       </table>
     </div>
     <p class="prose" style="margin-top:20px; font-size:0.92rem;">&Agrave; la carte dining and snacks are available for merienda upon request.</p>
+  </div>
+</section>
+
+<section class="band-tint">
+  <div class="wrap">
+    <div class="two-col-head">
+      <div><span class="eyebrow">More Ways to Visit</span><h2>Other Day Trip Packages</h2></div>
+      <p class="prose" style="max-width:44ch;">Prefer a shorter visit, a limited-time deal, or an all-in package for the whole barkada? Pick your type when you fill in the form below.</p>
+    </div>
+    <div class="grid-2 mt-lg">
+      <div class="card">
+        <div class="card-body">
+          <h3>Half-Day Trip</h3>
+          <p class="prose" style="margin:10px 0 16px; font-size:0.92rem;">A shorter stay at the same beach, same cabanas &mdash; ideal if you only need a few hours.</p>
+          <div class="table-wrap">
+            <table class="rate-table">
+              <tbody>
+                <tr><td>Adults</td><td class="num">&#8369;800.00</td></tr>
+                <tr><td>Children (6&ndash;12)</td><td class="num">&#8369;550.00</td></tr>
+                <tr><td>Pets</td><td class="num">&#8369;375.00</td></tr>
+                <tr><td>Dining Cabana</td><td class="num">&#8369;750.00</td></tr>
+                <tr><td>Lounge Cabana</td><td class="num">&#8369;1,000.00</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-body">
+          <h3>Flash Sale Day Trip</h3>
+          <p class="prose" style="margin:10px 0 16px; font-size:0.92rem;">Our discounted full-day rate, offered from time to time &mdash; ask our team if one's currently running.</p>
+          <div class="table-wrap">
+            <table class="rate-table">
+              <tbody>
+                <tr><td>Adults</td><td class="num">&#8369;995.00</td></tr>
+                <tr><td>Children (6&ndash;12)</td><td class="num">&#8369;645.00</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-body">
+          <h3>All Inclusive &mdash; Family Package</h3>
+          <p class="prose" style="margin:10px 0 16px; font-size:0.92rem;">A flat rate for up to 4 guests and 1 cabana &mdash; simple, all-in pricing for a small family outing.</p>
+          <div class="table-wrap">
+            <table class="rate-table">
+              <tbody>
+                <tr><td>Package (up to 4 guests, 1 cabana)</td><td class="num">&#8369;5,000.00</td></tr>
+                <tr><td>Additional Adult</td><td class="num">&#8369;1,250.00</td></tr>
+                <tr><td>Additional Child</td><td class="num">&#8369;825.00</td></tr>
+                <tr><td>Additional Pet</td><td class="num">&#8369;750.00</td></tr>
+                <tr><td>Additional Cabana</td><td class="num">&#8369;1,000.00</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-body">
+          <h3>All Inclusive &mdash; Barkada Package</h3>
+          <p class="prose" style="margin:10px 0 16px; font-size:0.92rem;">A flat rate for up to 10 guests and 1 cabana &mdash; built for a bigger group of friends.</p>
+          <div class="table-wrap">
+            <table class="rate-table">
+              <tbody>
+                <tr><td>Package (up to 10 guests, 1 cabana)</td><td class="num">&#8369;10,000.00</td></tr>
+                <tr><td>Additional Adult</td><td class="num">&#8369;1,250.00</td></tr>
+                <tr><td>Additional Child</td><td class="num">&#8369;825.00</td></tr>
+                <tr><td>Additional Pet</td><td class="num">&#8369;750.00</td></tr>
+                <tr><td>Additional Cabana</td><td class="num">&#8369;1,000.00</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 </section>
 

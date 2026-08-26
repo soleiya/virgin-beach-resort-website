@@ -9,7 +9,12 @@
   var sb = window.supabase.createClient(cfg.url, cfg.anonKey);
 
   var TYPE_LABELS = {
-    day_trip: "Day Trip", corporate: "Corporate",
+    day_trip: "Day Trip",
+    half_day: "Half-Day Trip",
+    flash_sale: "Flash Sale",
+    all_inclusive_family: "All Inclusive (Family)",
+    all_inclusive_barkada: "All Inclusive (Barkada)",
+    corporate: "Corporate",
   };
   var SOURCE_LABELS = {
     website: "Website", messenger: "Messenger", phone: "Phone", email: "Email", walk_in: "Walk-in", other: "Other",
@@ -396,6 +401,7 @@
       var kids = (r.children_6_12 || 0) + (r.children_0_5 || 0);
       var partyText = (r.adults || 0) + " adult" + (r.adults === 1 ? "" : "s") + (kids ? ", " + kids + " kid" + (kids === 1 ? "" : "s") : "");
       if (r.senior_count) partyText += " (incl. " + r.senior_count + " senior)";
+      if (r.pet_count) partyText += ", " + r.pet_count + " pet" + (r.pet_count === 1 ? "" : "s");
       tdParty.textContent = partyText;
       if (r.guest_names) tdParty.title = "Guests: " + r.guest_names;
       tr.appendChild(tdParty);
@@ -498,6 +504,8 @@
       adults: parseInt(document.getElementById("addAdults").value || "0", 10),
       children_6_12: parseInt(document.getElementById("addKids").value || "0", 10),
       children_0_5: 0,
+      senior_count: parseInt(document.getElementById("addSeniors").value || "0", 10),
+      pet_count: parseInt(document.getElementById("addPets").value || "0", 10),
       guest_name: document.getElementById("addName").value,
       guest_phone: document.getElementById("addPhone").value || null,
       guest_email: document.getElementById("addEmail").value || null,
@@ -522,7 +530,7 @@
   // ---------- CSV export (currently filtered/visible rows) ----------
   document.getElementById("exportBtn").addEventListener("click", function () {
     var rows = applyFilter(allRows);
-    var headers = ["Order ID", "Guest", "Guest Names", "Phone", "Email", "Type", "Preferred Date", "Cabana(s)", "Adults", "Senior Citizens", "Kids 6-12", "Kids 0-5", "Subtotal (People)", "Cabana Total", "Senior Discount", "Total", "Status", "Payment Proof", "Senior ID(s)", "Source", "How Heard", "Occasion", "Notes", "Staff Notes", "Received"];
+    var headers = ["Order ID", "Guest", "Guest Names", "Phone", "Email", "Type", "Preferred Date", "Cabana(s)", "Adults", "Senior Citizens", "Kids 6-12", "Kids 0-5", "Pets", "Subtotal (People)", "Cabana Total", "Senior Discount", "Total", "Status", "Payment Proof", "Senior ID(s)", "Source", "How Heard", "Occasion", "Notes", "Staff Notes", "Received"];
     function csvCell(v) {
       v = v === null || v === undefined ? "" : String(v);
       return '"' + v.replace(/"/g, '""') + '"';
@@ -536,7 +544,7 @@
       lines.push([
         r.order_code, r.guest_name, r.guest_names || "", r.guest_phone, r.guest_email,
         TYPE_LABELS[r.stay_type] || r.stay_type, fmtDate(r.check_in), cabanaLabels,
-        r.adults, r.senior_count || 0, r.children_6_12, r.children_0_5,
+        r.adults, r.senior_count || 0, r.children_6_12, r.children_0_5, r.pet_count || 0,
         r.subtotal_people != null ? r.subtotal_people : "", r.cabana_total != null ? r.cabana_total : "",
         r.senior_discount != null ? r.senior_discount : "", r.total_amount != null ? r.total_amount : "",
         STATUS_LABELS[r.status] || r.status, r.payment_screenshot_path ? "Uploaded" : "",

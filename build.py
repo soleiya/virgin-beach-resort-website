@@ -50,6 +50,10 @@ def book_link(base, **params):
 
 BOOKING_TYPE_LABELS = [
     ("day_trip", "Day Trip (Full Day)"),
+    ("half_day", "Half-Day Trip"),
+    ("flash_sale", "Flash Sale Day Trip"),
+    ("all_inclusive_family", "All Inclusive — Family Package"),
+    ("all_inclusive_barkada", "All Inclusive — Barkada Package"),
 ]
 
 
@@ -108,6 +112,12 @@ def booking_form_section(default_type="day_trip"):
       <input id="seniorCount" type="number" min="0" value="0">
       <p class="field-hint">Included in your Adults count above &mdash; each gets 20% off their own share.</p>
     </div>
+    <div>
+      <label for="petCount">Bringing any pets?</label>
+      <input id="petCount" type="number" min="0" value="0">
+      <p class="field-hint">Number of pets joining you for the day.</p>
+    </div>
+    <div id="packageNote" class="field-hint" hidden></div>
     <div id="seniorIdWrap" hidden>
       <label for="seniorIdFiles">Senior Citizen ID photo(s)</label>
       <input id="seniorIdFiles" type="file" accept="image/*" multiple>

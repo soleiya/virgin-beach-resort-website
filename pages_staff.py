@@ -219,6 +219,10 @@ html = """<!doctype html>
           <label for="addType">Booking Type</label>
           <select id="addType">
             <option value="day_trip">Day Trip (Full Day)</option>
+            <option value="half_day">Half-Day Trip</option>
+            <option value="flash_sale">Flash Sale Day Trip</option>
+            <option value="all_inclusive_family">All Inclusive — Family Package</option>
+            <option value="all_inclusive_barkada">All Inclusive — Barkada Package</option>
             <option value="corporate">Corporate Outing</option>
           </select>
         </div>
@@ -254,6 +258,16 @@ html = """<!doctype html>
         <div class="modal-field" style="margin-bottom:0;">
           <label for="addKids">Kids</label>
           <input id="addKids" type="number" min="0" value="0">
+        </div>
+      </div>
+      <div class="modal-row">
+        <div class="modal-field" style="margin-bottom:0;">
+          <label for="addSeniors">Senior Citizens</label>
+          <input id="addSeniors" type="number" min="0" value="0">
+        </div>
+        <div class="modal-field" style="margin-bottom:0;">
+          <label for="addPets">Pets</label>
+          <input id="addPets" type="number" min="0" value="0">
         </div>
       </div>
       <div class="modal-field">

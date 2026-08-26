@@ -47,7 +47,16 @@
     
 <div id="bookingFormWrap">
   <form class="inquiry" id="bookingForm">
-    <select id="stayType" hidden><option value="day_trip" selected>Day Trip (Full Day)</option></select>
+    <div>
+      <label for="stayType">What are you booking?</label>
+      <select id="stayType">
+            <option value="day_trip" selected>Day Trip (Full Day)</option>
+            <option value="half_day">Half-Day Trip</option>
+            <option value="flash_sale">Flash Sale Day Trip</option>
+            <option value="all_inclusive_family">All Inclusive — Family Package</option>
+            <option value="all_inclusive_barkada">All Inclusive — Barkada Package</option>
+      </select>
+    </div>
 
     <div>
       <label for="checkIn" id="checkInLabel">Preferred Date</label>
@@ -75,6 +84,12 @@
       <input id="seniorCount" type="number" min="0" value="0">
       <p class="field-hint">Included in your Adults count above &mdash; each gets 20% off their own share.</p>
     </div>
+    <div>
+      <label for="petCount">Bringing any pets?</label>
+      <input id="petCount" type="number" min="0" value="0">
+      <p class="field-hint">Number of pets joining you for the day.</p>
+    </div>
+    <div id="packageNote" class="field-hint" hidden></div>
     <div id="seniorIdWrap" hidden>
       <label for="seniorIdFiles">Senior Citizen ID photo(s)</label>
       <input id="seniorIdFiles" type="file" accept="image/*" multiple>

@@ -13,12 +13,27 @@
   var isConnected = cfg.url && cfg.url.indexOf("YOUR-PROJECT-REF") === -1;
   var sb = isConnected && window.supabase ? window.supabase.createClient(cfg.url, cfg.anonKey) : null;
 
-  // Pricing — change these any time in Supabase (cabanas.price) for cabana
-  // rentals; these three are the per-person rates, quoted by the resort.
-  var ADULT_PRICE = 1250;
-  var CHILD_612_PRICE = 825;
-  var CHILD_05_PRICE = 0;
+  // Pricing per package. Day Trip / Half-Day / Flash Sale are priced per
+  // person plus whichever cabana(s) the guest picks off the live map. All
+  // Inclusive (Family / Barkada) is a flat voucher-style package that
+  // already includes a set number of guests and one cabana — extra guests,
+  // pets, or cabanas beyond that are billed at the package's own add-on
+  // rates. Every rate below matches the resort's 2026 Rate Sheet.
   var SENIOR_DISCOUNT_RATE = 0.2; // 20% off a senior's own per-person fee only
+
+  var PRICING = {
+    day_trip: { adult: 1250, child612: 825, child05: 0, pet: 750, dining: 1500, lounge: 2000 },
+    half_day: { adult: 800, child612: 550, child05: 0, pet: 375, dining: 750, lounge: 1000 },
+    flash_sale: { adult: 995, child612: 645, child05: 0, pet: 750, dining: 1500, lounge: 2000 },
+  };
+  var PACKAGE_PRICING = {
+    all_inclusive_family: { base: 5000, includedPax: 4, includedCabanas: 1, addlAdult: 1250, addlChild: 825, addlPet: 750, addlCabana: 1000 },
+    all_inclusive_barkada: { base: 10000, includedPax: 10, includedCabanas: 1, addlAdult: 1250, addlChild: 825, addlPet: 750, addlCabana: 1000 },
+  };
+
+  function isPackageType(t) {
+    return !!PACKAGE_PRICING[t];
+  }
 
   var stayTypeEl = form.querySelector("#stayType");
   var checkInEl = form.querySelector("#checkIn");
@@ -27,9 +42,11 @@
   var kids612El = form.querySelector("#kids612");
   var kids05El = form.querySelector("#kids05");
   var seniorCountEl = form.querySelector("#seniorCount");
+  var petCountEl = form.querySelector("#petCount");
   var seniorIdWrap = document.getElementById("seniorIdWrap");
   var seniorIdFilesEl = document.getElementById("seniorIdFiles");
   var seniorIdError = document.getElementById("seniorIdError");
+  var packageNoteEl = document.getElementById("packageNote");
   var billSummaryEl = document.getElementById("billSummary");
   var submitBtn = form.querySelector("#submitBtn");
   var statusEl = document.getElementById("bookingStatus");
@@ -42,6 +59,10 @@
 
   var TYPE_NAMES = {
     day_trip: "Day Trip (Full Day)",
+    half_day: "Half-Day Trip",
+    flash_sale: "Flash Sale Day Trip",
+    all_inclusive_family: "All Inclusive — Family Package",
+    all_inclusive_barkada: "All Inclusive — Barkada Package",
     corporate: "Corporate Outing",
   };
 
@@ -161,30 +182,67 @@
 
   // ---------- live bill ----------
   function computeBill() {
+    var type = stayTypeEl.value;
     var adults = parseInt(adultsEl.value || "0", 10) || 0;
     var kids612 = parseInt(kids612El.value || "0", 10) || 0;
     var kids05 = parseInt(kids05El.value || "0", 10) || 0;
     var seniorsRaw = parseInt((seniorCountEl && seniorCountEl.value) || "0", 10) || 0;
     var seniors = Math.max(0, Math.min(seniorsRaw, adults));
     if (seniorCountEl && seniors !== seniorsRaw) seniorCountEl.value = seniors;
+    var pets = parseInt((petCountEl && petCountEl.value) || "0", 10) || 0;
     var regularAdults = adults - seniors;
-    var seniorRate = ADULT_PRICE * (1 - SENIOR_DISCOUNT_RATE);
-    var subtotalPeople = regularAdults * ADULT_PRICE + seniors * seniorRate + kids612 * CHILD_612_PRICE + kids05 * CHILD_05_PRICE;
-    var seniorDiscount = seniors * ADULT_PRICE * SENIOR_DISCOUNT_RATE;
+    var totalGuests = adults + kids612 + kids05;
     var cabanaTotal = selectedCabanas.reduce(function (sum, c) { return sum + (Number(c.price) || 0); }, 0);
     var totalCapacity = selectedCabanas.reduce(function (sum, c) { return sum + (Number(c.capacity) || 0); }, 0);
-    var totalGuests = adults + kids612 + kids05;
+
+    if (isPackageType(type)) {
+      var pkg = PACKAGE_PRICING[type];
+      var extraPax = Math.max(0, totalGuests - pkg.includedPax);
+      var extraCabanas = Math.max(0, selectedCabanas.length - pkg.includedCabanas);
+      var extraPaxCost = extraPax * pkg.addlAdult;
+      var extraPetCost = pets * pkg.addlPet;
+      var extraCabanaCost = extraCabanas * pkg.addlCabana;
+      return {
+        type: type, adults: adults, kids612: kids612, kids05: kids05, seniors: seniors, pets: pets,
+        regularAdults: regularAdults, totalGuests: totalGuests, cabanaTotal: cabanaTotal, totalCapacity: totalCapacity,
+        isPackage: true, base: pkg.base, includedPax: pkg.includedPax, includedCabanas: pkg.includedCabanas,
+        extraPax: extraPax, extraPaxCost: extraPaxCost, extraPetCost: extraPetCost,
+        extraCabanas: extraCabanas, extraCabanaCost: extraCabanaCost,
+        subtotalPeople: pkg.base + extraPaxCost, seniorDiscount: 0,
+        total: pkg.base + extraPaxCost + extraPetCost + extraCabanaCost,
+      };
+    }
+
+    var rate = PRICING[type] || PRICING.day_trip;
+    var seniorRate = rate.adult * (1 - SENIOR_DISCOUNT_RATE);
+    var subtotalPeople = regularAdults * rate.adult + seniors * seniorRate + kids612 * rate.child612 + kids05 * rate.child05;
+    var petCost = pets * rate.pet;
+    var seniorDiscount = seniors * rate.adult * SENIOR_DISCOUNT_RATE;
     return {
-      adults: adults, kids612: kids612, kids05: kids05, seniors: seniors, regularAdults: regularAdults,
-      seniorRate: seniorRate, subtotalPeople: subtotalPeople, seniorDiscount: seniorDiscount,
-      cabanaTotal: cabanaTotal, totalCapacity: totalCapacity, totalGuests: totalGuests,
-      total: subtotalPeople + cabanaTotal,
+      type: type, adults: adults, kids612: kids612, kids05: kids05, seniors: seniors, pets: pets,
+      regularAdults: regularAdults, rate: rate, seniorRate: seniorRate, subtotalPeople: subtotalPeople,
+      petCost: petCost, seniorDiscount: seniorDiscount, cabanaTotal: cabanaTotal, totalCapacity: totalCapacity,
+      totalGuests: totalGuests, isPackage: false,
+      total: subtotalPeople + petCost + cabanaTotal,
     };
+  }
+
+  function renderPackageNote(bill) {
+    if (!packageNoteEl) return;
+    if (!bill.isPackage) {
+      packageNoteEl.hidden = true;
+      return;
+    }
+    packageNoteEl.hidden = false;
+    packageNoteEl.innerHTML =
+      "This package is a flat " + peso(bill.base) + " covering up to " + bill.includedPax +
+      " guests and " + bill.includedCabanas + " cabana. Extra guests, pets, and cabanas beyond that are billed at the add-on rates below.";
   }
 
   function renderBill() {
     if (!billSummaryEl) return;
     var bill = computeBill();
+    renderPackageNote(bill);
 
     if (seniorIdWrap) seniorIdWrap.hidden = bill.seniors <= 0;
     if (seniorIdFilesEl) seniorIdFilesEl.required = bill.seniors > 0;
@@ -197,30 +255,49 @@
     billSummaryEl.hidden = false;
 
     var lines = [];
-    if (bill.regularAdults > 0) {
-      lines.push(
-        '<div class="bill-row"><span>' + bill.regularAdults + " adult" + (bill.regularAdults === 1 ? "" : "s") +
-        " × " + peso(ADULT_PRICE) + "</span><span>" + peso(bill.regularAdults * ADULT_PRICE) + "</span></div>"
-      );
+
+    if (bill.isPackage) {
+      lines.push('<div class="bill-row"><span>Package (up to ' + bill.includedPax + ' guests, ' + bill.includedCabanas + ' cabana)</span><span>' + peso(bill.base) + "</span></div>");
+      if (bill.extraPax > 0) {
+        lines.push('<div class="bill-row"><span>' + bill.extraPax + " extra guest" + (bill.extraPax === 1 ? "" : "s") + "</span><span>" + peso(bill.extraPaxCost) + "</span></div>");
+      }
+      if (bill.pets > 0) {
+        lines.push('<div class="bill-row"><span>' + bill.pets + " pet" + (bill.pets === 1 ? "" : "s") + "</span><span>" + peso(bill.extraPetCost) + "</span></div>");
+      }
+      if (bill.extraCabanas > 0) {
+        lines.push('<div class="bill-row"><span>' + bill.extraCabanas + " extra cabana" + (bill.extraCabanas === 1 ? "" : "s") + "</span><span>" + peso(bill.extraCabanaCost) + "</span></div>");
+      }
+    } else {
+      if (bill.regularAdults > 0) {
+        lines.push(
+          '<div class="bill-row"><span>' + bill.regularAdults + " adult" + (bill.regularAdults === 1 ? "" : "s") +
+          " × " + peso(bill.rate.adult) + "</span><span>" + peso(bill.regularAdults * bill.rate.adult) + "</span></div>"
+        );
+      }
+      if (bill.seniors > 0) {
+        lines.push(
+          '<div class="bill-row"><span>' + bill.seniors + " senior citizen" + (bill.seniors === 1 ? "" : "s") +
+          " × " + peso(bill.seniorRate) + " <em>(20% off)</em></span><span>" + peso(bill.seniors * bill.seniorRate) + "</span></div>"
+        );
+      }
+      if (bill.kids612 > 0) {
+        lines.push(
+          '<div class="bill-row"><span>' + bill.kids612 + " child" + (bill.kids612 === 1 ? "" : "ren") +
+          " (6–12) × " + peso(bill.rate.child612) + "</span><span>" + peso(bill.kids612 * bill.rate.child612) + "</span></div>"
+        );
+      }
+      if (bill.kids05 > 0) {
+        lines.push('<div class="bill-row"><span>' + bill.kids05 + " child" + (bill.kids05 === 1 ? "" : "ren") + " (0–5)</span><span>Free</span></div>");
+      }
+      if (bill.pets > 0) {
+        lines.push('<div class="bill-row"><span>' + bill.pets + " pet" + (bill.pets === 1 ? "" : "s") + " × " + peso(bill.rate.pet) + "</span><span>" + peso(bill.petCost) + "</span></div>");
+      }
     }
-    if (bill.seniors > 0) {
-      lines.push(
-        '<div class="bill-row"><span>' + bill.seniors + " senior citizen" + (bill.seniors === 1 ? "" : "s") +
-        " × " + peso(bill.seniorRate) + " <em>(20% off)</em></span><span>" + peso(bill.seniors * bill.seniorRate) + "</span></div>"
-      );
+    if (!bill.isPackage) {
+      selectedCabanas.forEach(function (c) {
+        lines.push('<div class="bill-row"><span>' + c.label + "</span><span>" + peso(c.price) + "</span></div>");
+      });
     }
-    if (bill.kids612 > 0) {
-      lines.push(
-        '<div class="bill-row"><span>' + bill.kids612 + " child" + (bill.kids612 === 1 ? "" : "ren") +
-        " (6–12) × " + peso(CHILD_612_PRICE) + "</span><span>" + peso(bill.kids612 * CHILD_612_PRICE) + "</span></div>"
-      );
-    }
-    if (bill.kids05 > 0) {
-      lines.push('<div class="bill-row"><span>' + bill.kids05 + " child" + (bill.kids05 === 1 ? "" : "ren") + " (0–5)</span><span>Free</span></div>");
-    }
-    selectedCabanas.forEach(function (c) {
-      lines.push('<div class="bill-row"><span>' + c.label + "</span><span>" + peso(c.price) + "</span></div>");
-    });
 
     var warning = "";
     if (selectedCabanas.length && bill.totalCapacity < bill.totalGuests) {
@@ -237,7 +314,7 @@
       '<p class="field-hint">This is an estimate for your reference — our team confirms the final amount when arranging payment.</p>';
   }
 
-  [adultsEl, kids612El, kids05El, seniorCountEl].forEach(function (el) {
+  [adultsEl, kids612El, kids05El, seniorCountEl, petCountEl].forEach(function (el) {
     if (el) el.addEventListener("input", renderBill);
   });
 
@@ -274,8 +351,9 @@
       marketing_opt_in: !!form.querySelector("#marketingOptIn").checked,
       notes: form.querySelector("#notes").value || null,
       senior_count: bill.seniors,
+      pet_count: bill.pets,
       subtotal_people: usesCabanaMap() ? bill.subtotalPeople : null,
-      cabana_total: usesCabanaMap() ? bill.cabanaTotal : null,
+      cabana_total: usesCabanaMap() ? (bill.isPackage ? bill.extraCabanaCost : bill.cabanaTotal) : null,
       senior_discount: usesCabanaMap() ? bill.seniorDiscount : null,
       total_amount: usesCabanaMap() ? bill.total : null,
     };
@@ -292,6 +370,7 @@
       "Adults: " + payload.adults + (payload.senior_count ? " (incl. " + payload.senior_count + " senior citizen" + (payload.senior_count === 1 ? "" : "s") + ")" : ""),
       "Children (6–12): " + payload.children_6_12,
       "Children (0–5): " + payload.children_0_5,
+      "Pets: " + (payload.pet_count || 0),
       "Guest Names: " + (payload.guest_names || "—"),
       "Estimated Total: " + (bill && usesCabanaMap() ? peso(bill.total) : "—"),
       "",
