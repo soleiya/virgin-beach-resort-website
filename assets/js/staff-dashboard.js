@@ -41,14 +41,26 @@
     all_inclusive_family: "All Inclusive (Family)",
     all_inclusive_barkada: "All Inclusive (Barkada)",
     corporate: "Corporate",
+    other: "Other / Add-on",
   };
   var SOURCE_LABELS = {
     website: "Website", messenger: "Messenger", phone: "Phone", email: "Email", walk_in: "Walk-in", other: "Other",
+    sheet_import: "Imported (2026 Sheet)",
   };
   var STATUS_ORDER = ["pending", "pending_payment", "confirmed", "declined", "completed"];
   var STATUS_LABELS = {
     pending: "Pending", pending_payment: "Pending Payment", confirmed: "Confirmed",
     declined: "Declined", completed: "Completed",
+  };
+  // Actions the booking_audit_log trigger can record — see the SQL that
+  // created log_booking_change() / log_cabana_change() for exactly how
+  // and when each one is written.
+  var LOG_ACTION_LABELS = {
+    insert: "Booking created",
+    update: "Booking edited",
+    delete: "Booking deleted",
+    cabana_added: "Cabana added",
+    cabana_removed: "Cabana removed",
   };
 
   var loginScreen = document.getElementById("loginScreen");
@@ -60,9 +72,21 @@
   var countLine = document.getElementById("countLine");
   var searchBox = document.getElementById("searchBox");
   var filterPills = document.getElementById("filterPills");
+  var summaryBar = document.getElementById("summaryBar");
+
+  var filterDateField = document.getElementById("filterDateField");
+  var filterDateFrom = document.getElementById("filterDateFrom");
+  var filterDateTo = document.getElementById("filterDateTo");
+  var filterStatus = document.getElementById("filterStatus");
+  var filterType = document.getElementById("filterType");
+  var filterBookedBy = document.getElementById("filterBookedBy");
+  var filterSource = document.getElementById("filterSource");
+  var clearFiltersBtn = document.getElementById("clearFiltersBtn");
 
   var allRows = [];
   var activeFilter = "all";
+  var sortField = "created_at";
+  var sortDir = "desc";
   var cabanasById = {};
   var addCabanaSelect = document.getElementById("addCabana");
 
@@ -82,64 +106,12 @@
     });
   }
 
-  var availDate = document.getElementById("availDate");
-  var availStatus = document.getElementById("availStatus");
-  var availMap = document.getElementById("availMap");
-
-  function loadAvailability(dateStr) {
-    if (!dateStr || !availMap || !window.VBRCabanaMap) return;
-    availStatus.textContent = "Loading availability for " + dateStr + "…";
-    Promise.all([
-      window.VBRCabanaMap.loadCabanas(sb),
-      sb.from("booking_requests")
-        .select("guest_name,order_code,status,booking_cabanas(cabana_id)")
-        .eq("check_in", dateStr)
-        .neq("status", "declined"),
-    ])
-      .then(function (results) {
-        var cabanas = results[0];
-        var res = results[1];
-        if (res.error) throw res.error;
-        if (!cabanas.length) {
-          availStatus.textContent = "No cabanas set up yet — run the Section 6 SQL in SETUP-BOOKING.md, then reload this page.";
-          availMap.innerHTML = "";
-          return;
-        }
-        var heldSet = new Set();
-        var heldInfo = {};
-        (res.data || []).forEach(function (row) {
-          var note = (row.guest_name || "Guest") + " — " + (row.order_code || "no order ID") + " (" + (STATUS_LABELS[row.status] || row.status) + ")";
-          (row.booking_cabanas || []).forEach(function (bc) {
-            if (!bc.cabana_id) return;
-            heldSet.add(bc.cabana_id);
-            heldInfo[bc.cabana_id] = note;
-          });
-        });
-        availStatus.textContent = (cabanas.length - heldSet.size) + " of " + cabanas.length + " cabanas open on " + dateStr + ". Hover a booked tile to see who has it.";
-        window.VBRCabanaMap.render(availMap, {
-          cabanas: cabanas,
-          heldSet: heldSet,
-          heldInfo: heldInfo,
-          selectedIds: [],
-          onSelect: function () {},
-        });
-      })
-      .catch(function (err) {
-        availStatus.textContent = "Couldn't load availability" + (err && err.message ? ": " + err.message : ".");
-      });
-  }
-
-  if (availDate) {
-    availDate.value = new Date().toISOString().slice(0, 10);
-    availDate.addEventListener("change", function () { loadAvailability(availDate.value); });
-  }
-
   function showDash() {
     loginScreen.style.display = "none";
     dashScreen.style.display = "block";
     logoutBtn.style.display = "inline-block";
+    populateStaticFilterOptions();
     loadCabanaOptions().then(loadBookings);
-    if (availDate) loadAvailability(availDate.value);
   }
   function showLogin() {
     loginScreen.style.display = "block";
@@ -190,18 +162,77 @@
     });
   });
 
-  function loadBookings() {
-    countLine.textContent = "Loading…";
-    sb.from("booking_requests")
+  // ---------- static filter dropdown options (status / type / source) ----------
+  function populateStaticFilterOptions() {
+    STATUS_ORDER.forEach(function (s) {
+      var opt = document.createElement("option");
+      opt.value = s;
+      opt.textContent = STATUS_LABELS[s];
+      filterStatus.appendChild(opt);
+    });
+    Object.keys(TYPE_LABELS).forEach(function (t) {
+      var opt = document.createElement("option");
+      opt.value = t;
+      opt.textContent = TYPE_LABELS[t];
+      filterType.appendChild(opt);
+    });
+    Object.keys(SOURCE_LABELS).forEach(function (s) {
+      var opt = document.createElement("option");
+      opt.value = s;
+      opt.textContent = SOURCE_LABELS[s];
+      filterSource.appendChild(opt);
+    });
+    // "Booked by" is free text entered by staff over time, so its option
+    // list is filled in from whatever names actually appear in the data —
+    // see populateBookedByOptions(), called once bookings are loaded.
+  }
+
+  function populateBookedByOptions() {
+    var names = {};
+    allRows.forEach(function (r) { if (r.booked_by) names[r.booked_by] = true; });
+    var sorted = Object.keys(names).sort(function (a, b) { return a.localeCompare(b); });
+    var current = filterBookedBy.value;
+    filterBookedBy.innerHTML = '<option value="">Anyone</option>';
+    sorted.forEach(function (n) {
+      var opt = document.createElement("option");
+      opt.value = n;
+      opt.textContent = n;
+      filterBookedBy.appendChild(opt);
+    });
+    if (sorted.indexOf(current) !== -1) filterBookedBy.value = current;
+  }
+
+  // Supabase caps a single request at its project "Max Rows" setting
+  // (1000 by default) — with 2000+ bookings now on file, one plain
+  // .select() would silently show staff only the newest 1000 and quietly
+  // under-count every summary stat. This pages through in batches of
+  // 1000 until a page comes back short, so every row actually loads.
+  var PAGE_SIZE = 1000;
+  function loadBookingsPage(offset, acc) {
+    return sb.from("booking_requests")
       .select("*, booking_cabanas(cabana_id)")
       .order("created_at", { ascending: false })
+      .range(offset, offset + PAGE_SIZE - 1)
       .then(function (res) {
-      if (res.error) {
-        countLine.textContent = "Couldn't load bookings: " + res.error.message;
-        return;
-      }
-      allRows = res.data || [];
+        if (res.error) return Promise.reject(res.error);
+        var page = res.data || [];
+        acc = acc.concat(page);
+        if (page.length === PAGE_SIZE) {
+          countLine.textContent = "Loading… (" + acc.length + " so far)";
+          return loadBookingsPage(offset + PAGE_SIZE, acc);
+        }
+        return acc;
+      });
+  }
+
+  function loadBookings() {
+    countLine.textContent = "Loading…";
+    loadBookingsPage(0, []).then(function (rows) {
+      allRows = rows;
+      populateBookedByOptions();
       render();
+    }, function (err) {
+      countLine.textContent = "Couldn't load bookings: " + (err && err.message ? err.message : err);
     });
   }
 
@@ -227,21 +258,93 @@
     return d.getFullYear() === t.getFullYear() && d.getMonth() === t.getMonth();
   }
 
+  function partyTotal(r) {
+    return (r.adults || 0) + (r.children_6_12 || 0) + (r.children_0_5 || 0);
+  }
+
+  function isPaidStatus(status) { return status === "confirmed" || status === "completed"; }
+  function isUnpaidStatus(status) { return status === "pending" || status === "pending_payment"; }
+
   function applyFilter(rows) {
     var q = (searchBox.value || "").trim().toLowerCase();
+    var dField = filterDateField.value || "check_in";
+    var dFrom = filterDateFrom.value || "";
+    var dTo = filterDateTo.value || "";
+    var fStatus = filterStatus.value;
+    var fType = filterType.value;
+    var fBookedBy = filterBookedBy.value;
+    var fSource = filterSource.value;
+
     return rows.filter(function (r) {
       var matchesFilter = true;
       if (activeFilter === "today") matchesFilter = isToday(r.check_in);
       else if (activeFilter === "week") matchesFilter = isThisWeek(r.check_in);
       else if (activeFilter === "month") matchesFilter = isThisMonth(r.check_in);
-      else if (activeFilter === "unpaid") matchesFilter = r.status === "pending" || r.status === "pending_payment";
+      else if (activeFilter === "unpaid") matchesFilter = isUnpaidStatus(r.status);
       else if (activeFilter === "imported") matchesFilter = r.source === "sheet_import";
       if (!matchesFilter) return false;
+
+      if (dFrom || dTo) {
+        var raw = r[dField];
+        if (!raw) return false;
+        var d = dateOnly(raw);
+        if (dFrom && d < dateOnly(dFrom)) return false;
+        if (dTo && d > dateOnly(dTo)) return false;
+      }
+
+      if (fStatus && r.status !== fStatus) return false;
+      if (fType && r.stay_type !== fType) return false;
+      if (fBookedBy && r.booked_by !== fBookedBy) return false;
+      if (fSource && (r.source || "website") !== fSource) return false;
+
       if (!q) return true;
-      var hay = [r.guest_name, r.guest_email, r.guest_phone, r.notes, r.staff_notes, r.booked_by].join(" ").toLowerCase();
+      var hay = [r.guest_name, r.guest_email, r.guest_phone, r.notes, r.staff_notes, r.booked_by, r.order_code].join(" ").toLowerCase();
       return hay.indexOf(q) !== -1;
     });
   }
+
+  // ---------- sorting ----------
+  function sortValue(r, field) {
+    if (field === "party") return partyTotal(r);
+    if (field === "total_amount") return r.total_amount == null ? -Infinity : Number(r.total_amount);
+    if (field === "check_in" || field === "created_at") return r[field] ? new Date(r[field]).getTime() : -Infinity;
+    if (field === "stay_type") return (TYPE_LABELS[r.stay_type] || r.stay_type_label || r.stay_type || "").toLowerCase();
+    var v = r[field];
+    if (v === null || v === undefined) return "";
+    return String(v).toLowerCase();
+  }
+
+  function sortRows(rows) {
+    var field = sortField, dir = sortDir === "asc" ? 1 : -1;
+    var copy = rows.slice();
+    copy.sort(function (a, b) {
+      var va = sortValue(a, field), vb = sortValue(b, field);
+      if (va < vb) return -1 * dir;
+      if (va > vb) return 1 * dir;
+      return 0;
+    });
+    return copy;
+  }
+
+  document.querySelectorAll("th.sortable").forEach(function (th) {
+    if (th.getAttribute("data-sort") === sortField) {
+      th.classList.add("sort-active");
+      th.querySelector(".sort-arrow").innerHTML = sortDir === "asc" ? "&#9652;" : "&#9662;";
+    }
+    th.addEventListener("click", function () {
+      var field = th.getAttribute("data-sort");
+      if (sortField === field) {
+        sortDir = sortDir === "asc" ? "desc" : "asc";
+      } else {
+        sortField = field;
+        sortDir = field === "created_at" || field === "check_in" ? "desc" : "asc";
+      }
+      document.querySelectorAll("th.sortable").forEach(function (h) { h.classList.remove("sort-active"); });
+      th.classList.add("sort-active");
+      th.querySelector(".sort-arrow").innerHTML = sortDir === "asc" ? "&#9652;" : "&#9662;";
+      render();
+    });
+  });
 
   function peso(n) {
     if (n === null || n === undefined || n === "") return "—";
@@ -269,6 +372,22 @@
         setTimeout(function () { el.style.background = ""; }, 1500);
       }
     });
+  }
+
+  // ---------- summary stats (recomputed from whatever is currently filtered) ----------
+  function renderSummary(rows) {
+    var guests = 0, paidTotal = 0, paidCount = 0, unpaidTotal = 0, unpaidCount = 0;
+    rows.forEach(function (r) {
+      guests += partyTotal(r);
+      var amt = r.total_amount != null ? Number(r.total_amount) : 0;
+      if (isPaidStatus(r.status)) { paidTotal += amt; paidCount++; }
+      else if (isUnpaidStatus(r.status)) { unpaidTotal += amt; unpaidCount++; }
+    });
+    summaryBar.innerHTML =
+      '<div class="summary-tile"><div class="summary-label">Bookings Shown</div><div class="summary-value">' + rows.length + '</div></div>' +
+      '<div class="summary-tile"><div class="summary-label">Total Guests</div><div class="summary-value">' + guests + '</div></div>' +
+      '<div class="summary-tile paid"><div class="summary-label">Total Paid</div><div class="summary-value">' + peso(paidTotal) + '</div><div class="summary-sub">' + paidCount + " confirmed/completed</div></div>" +
+      '<div class="summary-tile unpaid"><div class="summary-label">Total Unpaid</div><div class="summary-value">' + peso(unpaidTotal) + '</div><div class="summary-sub">' + unpaidCount + " pending</div></div>";
   }
 
   // A booking can include more than one cabana. Shows each as a small
@@ -419,10 +538,12 @@
   }
 
   function render() {
-    var rows = applyFilter(allRows);
+    var filtered = applyFilter(allRows);
+    renderSummary(filtered);
+    var rows = sortRows(filtered);
     countLine.textContent = rows.length + " of " + allRows.length + " bookings shown";
     if (!rows.length) {
-      bookingsBody.innerHTML = '<tr class="empty-row"><td colspan="15">No bookings match this view.</td></tr>';
+      bookingsBody.innerHTML = '<tr class="empty-row"><td colspan="16">No bookings match this view.</td></tr>';
       return;
     }
     bookingsBody.innerHTML = "";
@@ -488,6 +609,7 @@
         statusBadge.className = "status-badge status-" + next;
         statusBadge.textContent = STATUS_LABELS[next];
         updateField(r.id, "status", next, statusBadge);
+        renderSummary(applyFilter(allRows));
       });
       tdStatus.appendChild(statusBadge);
       tr.appendChild(tdStatus);
@@ -525,6 +647,18 @@
       tdReceived.textContent = fmtDateTime(r.created_at);
       tr.appendChild(tdReceived);
 
+      var tdLog = document.createElement("td");
+      var logBtnCell = document.createElement("button");
+      logBtnCell.type = "button";
+      logBtnCell.className = "log-btn";
+      logBtnCell.title = "View activity log for this booking";
+      logBtnCell.textContent = "🕘";
+      logBtnCell.addEventListener("click", function () {
+        openLogModal(r.id, (r.guest_name || "This booking") + (r.order_code ? " (" + r.order_code + ")" : ""));
+      });
+      tdLog.appendChild(logBtnCell);
+      tr.appendChild(tdLog);
+
       bookingsBody.appendChild(tr);
     });
   }
@@ -538,6 +672,23 @@
     render();
   });
   searchBox.addEventListener("input", render);
+  [filterDateField, filterDateFrom, filterDateTo, filterStatus, filterType, filterBookedBy, filterSource].forEach(function (el) {
+    el.addEventListener("change", render);
+  });
+  clearFiltersBtn.addEventListener("click", function () {
+    Array.prototype.forEach.call(filterPills.querySelectorAll(".pill"), function (p) { p.classList.remove("active"); });
+    filterPills.querySelector('.pill[data-filter="all"]').classList.add("active");
+    activeFilter = "all";
+    searchBox.value = "";
+    filterDateField.value = "check_in";
+    filterDateFrom.value = "";
+    filterDateTo.value = "";
+    filterStatus.value = "";
+    filterType.value = "";
+    filterBookedBy.value = "";
+    filterSource.value = "";
+    render();
+  });
 
   // ---------- add booking modal ----------
   var addBtn = document.getElementById("addBtn");
@@ -575,6 +726,11 @@
       guest_email: document.getElementById("addEmail").value || null,
       notes: document.getElementById("addNotes").value || null,
     };
+    // check_in/adults/etc. above are what the guest wants; created_at (the
+    // actual date/time this row was entered into the system) is left unset
+    // here on purpose — Postgres stamps it itself, off the server clock, the
+    // moment the row lands, and that's the "Date Entered" the table + CSV
+    // export and the activity log both key off of.
     sb.from("booking_requests").insert([payload]).select().then(function (res) {
       if (res.error) {
         alert("Couldn't save this booking: " + res.error.message);
@@ -593,8 +749,8 @@
 
   // ---------- CSV export (currently filtered/visible rows) ----------
   document.getElementById("exportBtn").addEventListener("click", function () {
-    var rows = applyFilter(allRows);
-    var headers = ["Order ID", "Guest", "Guest Names", "Phone", "Email", "Type", "Booked By", "Preferred Date", "Cabana(s)", "Adults", "Senior Citizens", "Kids 6-12", "Kids 0-5", "Pets", "Subtotal (People)", "Cabana Total", "Senior Discount", "Total", "Status", "Payment Proof", "Senior ID(s)", "Source", "How Heard", "Occasion", "Notes", "Staff Notes", "Received"];
+    var rows = sortRows(applyFilter(allRows));
+    var headers = ["Order ID", "Guest", "Guest Names", "Phone", "Email", "Type", "Booked By", "Preferred Date", "Cabana(s)", "Adults", "Senior Citizens", "Kids 6-12", "Kids 0-5", "Pets", "Subtotal (People)", "Cabana Total", "Senior Discount", "Total", "Status", "Payment Proof", "Senior ID(s)", "Source", "How Heard", "Occasion", "Notes", "Staff Notes", "Date Entered"];
     function csvCell(v) {
       v = v === null || v === undefined ? "" : String(v);
       return '"' + v.replace(/"/g, '""') + '"';
@@ -634,4 +790,132 @@
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
   });
+
+  // ---------- activity log modal ----------
+  var logBtn = document.getElementById("logBtn");
+  var logModalBackdrop = document.getElementById("logModalBackdrop");
+  var closeLogBtn = document.getElementById("closeLogBtn");
+  var logBody = document.getElementById("logBody");
+  var logStaffFilter = document.getElementById("logStaffFilter");
+  var logFrom = document.getElementById("logFrom");
+  var logTo = document.getElementById("logTo");
+  var logRefreshBtn = document.getElementById("logRefreshBtn");
+  var logBookingFilterEl = document.getElementById("logBookingFilter");
+  var currentLogBookingId = null;
+  var logOptionsPopulated = false;
+
+  function populateLogStaffOptions() {
+    if (logOptionsPopulated) return;
+    logOptionsPopulated = true;
+    Object.keys(STAFF_EMAIL_NAMES).sort(function (a, b) {
+      return STAFF_EMAIL_NAMES[a].localeCompare(STAFF_EMAIL_NAMES[b]);
+    }).forEach(function (email) {
+      var opt = document.createElement("option");
+      opt.value = email;
+      opt.textContent = STAFF_EMAIL_NAMES[email];
+      logStaffFilter.appendChild(opt);
+    });
+  }
+
+  function staffLabelForLogEmail(email) {
+    if (!email) return "—";
+    var name = staffNameForEmail(email);
+    return name || email;
+  }
+
+  function describeLogChanges(entry) {
+    if (entry.action === "insert") return "New booking created.";
+    if (entry.action === "delete") return "Booking deleted.";
+    if (entry.action === "cabana_added" || entry.action === "cabana_removed") {
+      var cid = entry.changes && entry.changes.cabana_id;
+      var label = cid && cabanasById[cid] ? cabanasById[cid].label : "a cabana";
+      return (entry.action === "cabana_added" ? "Added " : "Removed ") + label;
+    }
+    if (entry.action === "update" && entry.changes) {
+      var parts = [];
+      Object.keys(entry.changes).forEach(function (field) {
+        var c = entry.changes[field];
+        var oldV = c && c.old !== undefined && c.old !== null ? String(c.old) : "—";
+        var newV = c && c.new !== undefined && c.new !== null ? String(c.new) : "—";
+        parts.push("<b>" + field + "</b>: " + oldV + " → " + newV);
+      });
+      return parts.length ? parts.join("<br>") : "Minor update (no visible fields changed).";
+    }
+    return "—";
+  }
+
+  function loadLog() {
+    logBody.innerHTML = '<tr><td colspan="5" style="padding:24px;text-align:center;color:var(--ink-soft);">Loading…</td></tr>';
+    var query = sb.from("booking_audit_log").select("*").order("logged_at", { ascending: false }).limit(300);
+    if (currentLogBookingId) query = query.eq("booking_id", currentLogBookingId);
+    if (logStaffFilter.value) query = query.eq("changed_by_email", logStaffFilter.value);
+    if (logFrom.value) query = query.gte("logged_at", logFrom.value + "T00:00:00");
+    if (logTo.value) query = query.lte("logged_at", logTo.value + "T23:59:59");
+    query.then(function (res) {
+      if (res.error) {
+        logBody.innerHTML = '<tr><td colspan="5" style="padding:24px;text-align:center;color:var(--rose,#9c4a3f);">Couldn\'t load the log: ' + res.error.message + "</td></tr>";
+        return;
+      }
+      var entries = res.data || [];
+      if (!entries.length) {
+        logBody.innerHTML = '<tr><td colspan="5" style="padding:24px;text-align:center;color:var(--ink-soft);">No matching activity.</td></tr>';
+        return;
+      }
+      logBody.innerHTML = "";
+      entries.forEach(function (entry) {
+        var tr = document.createElement("tr");
+
+        var tdWhen = document.createElement("td");
+        tdWhen.textContent = fmtDateTime(entry.logged_at);
+        tr.appendChild(tdWhen);
+
+        var tdStaff = document.createElement("td");
+        tdStaff.textContent = staffLabelForLogEmail(entry.changed_by_email);
+        tr.appendChild(tdStaff);
+
+        var tdAction = document.createElement("td");
+        tdAction.textContent = LOG_ACTION_LABELS[entry.action] || entry.action;
+        tr.appendChild(tdAction);
+
+        var tdBooking = document.createElement("td");
+        tdBooking.textContent = (entry.guest_name || "—") + (entry.order_code ? " (" + entry.order_code + ")" : "");
+        tr.appendChild(tdBooking);
+
+        var tdWhat = document.createElement("td");
+        tdWhat.className = "log-change";
+        tdWhat.innerHTML = describeLogChanges(entry);
+        tr.appendChild(tdWhat);
+
+        logBody.appendChild(tr);
+      });
+    });
+  }
+
+  function openLogModal(bookingId, bookingLabel) {
+    populateLogStaffOptions();
+    currentLogBookingId = bookingId || null;
+    if (currentLogBookingId) {
+      logBookingFilterEl.style.display = "block";
+      logBookingFilterEl.innerHTML = "Showing history for <b>" + (bookingLabel || "this booking") + '</b> only — <a id="logShowAllLink">show all bookings</a>';
+      var link = document.getElementById("logShowAllLink");
+      if (link) link.addEventListener("click", function () {
+        currentLogBookingId = null;
+        logBookingFilterEl.style.display = "none";
+        loadLog();
+      });
+    } else {
+      logBookingFilterEl.style.display = "none";
+    }
+    logModalBackdrop.classList.add("open");
+    loadLog();
+  }
+  function closeLogModal() { logModalBackdrop.classList.remove("open"); }
+
+  logBtn.addEventListener("click", function () { openLogModal(null, null); });
+  closeLogBtn.addEventListener("click", closeLogModal);
+  logModalBackdrop.addEventListener("click", function (e) { if (e.target === logModalBackdrop) closeLogModal(); });
+  logRefreshBtn.addEventListener("click", loadLog);
+  logStaffFilter.addEventListener("change", loadLog);
+  logFrom.addEventListener("change", loadLog);
+  logTo.addEventListener("change", loadLog);
 })();
