@@ -399,6 +399,137 @@ create policy "Staff can view senior ID photos"
 
 **Corporate Outings keep their current manual "request a quote" flow** — no automatic pricing there, since those usually need a custom negotiated rate. Day Trip, Half-day, and Day Picnic all get the calculator.
 
+## 9. Activity log, date-range/status filters, sorting, and summary stats
+
+This adds a tamper-resistant activity log (since several staff now sign in with their own individual accounts, not one shared login), plus a filter row, sortable columns, and live summary stats on the dashboard. It also removes the old visual cabana map from the staff dashboard's Availability panel — that graphic still lives on the public booking page, but the dashboard now only shows the plain request table plus these controls.
+
+**Run this SQL** (SQL Editor → New query), in addition to everything above:
+
+```sql
+create table if not exists booking_audit_log (
+  id uuid primary key default gen_random_uuid(),
+  logged_at timestamptz not null default now(),
+  booking_id uuid,
+  order_code text,
+  guest_name text,
+  action text not null,
+  changed_by_id uuid,
+  changed_by_email text,
+  changes jsonb
+);
+
+create index if not exists idx_audit_log_booking on booking_audit_log(booking_id);
+create index if not exists idx_audit_log_logged_at on booking_audit_log(logged_at desc);
+create index if not exists idx_audit_log_email on booking_audit_log(changed_by_email);
+
+alter table booking_audit_log enable row level security;
+
+create policy "Authenticated staff can view audit log"
+  on booking_audit_log for select
+  to authenticated
+  using (true);
+
+-- Deliberately no insert/update/delete policy for anon or authenticated —
+-- the only writer is the trigger function below (running as its owner,
+-- which is exempt from RLS), so nobody can forge or erase log entries
+-- through the dashboard or the API, even with a valid staff login.
+
+create or replace function log_booking_change() returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_uid uuid;
+  v_email text;
+  v_changes jsonb;
+begin
+  begin v_uid := auth.uid(); exception when others then v_uid := null; end;
+  begin v_email := auth.jwt() ->> 'email'; exception when others then v_email := null; end;
+
+  if tg_op = 'INSERT' then
+    insert into booking_audit_log (booking_id, order_code, guest_name, action, changed_by_id, changed_by_email, changes)
+    values (new.id, new.order_code, new.guest_name, 'insert', v_uid, v_email, to_jsonb(new));
+    return new;
+
+  elsif tg_op = 'UPDATE' then
+    select jsonb_object_agg(t.key, jsonb_build_object('old', t.old_val, 'new', t.new_val))
+      into v_changes
+    from (
+      select e.key as key,
+             (to_jsonb(old) -> e.key) as old_val,
+             (to_jsonb(new) -> e.key) as new_val
+      from jsonb_each(to_jsonb(new)) as e(key, value)
+      where (to_jsonb(old) -> e.key) is distinct from (to_jsonb(new) -> e.key)
+    ) t;
+
+    if v_changes is null then
+      return new;
+    end if;
+
+    insert into booking_audit_log (booking_id, order_code, guest_name, action, changed_by_id, changed_by_email, changes)
+    values (new.id, new.order_code, new.guest_name, 'update', v_uid, v_email, v_changes);
+    return new;
+
+  elsif tg_op = 'DELETE' then
+    insert into booking_audit_log (booking_id, order_code, guest_name, action, changed_by_id, changed_by_email, changes)
+    values (old.id, old.order_code, old.guest_name, 'delete', v_uid, v_email, to_jsonb(old));
+    return old;
+  end if;
+
+  return null;
+end;
+$$;
+
+drop trigger if exists trg_log_booking_change on booking_requests;
+create trigger trg_log_booking_change
+  after insert or update or delete on booking_requests
+  for each row execute function log_booking_change();
+
+create or replace function log_cabana_change() returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_uid uuid;
+  v_email text;
+  v_booking_id uuid;
+  v_cabana_id uuid;
+  v_action text;
+begin
+  begin v_uid := auth.uid(); exception when others then v_uid := null; end;
+  begin v_email := auth.jwt() ->> 'email'; exception when others then v_email := null; end;
+
+  if tg_op = 'INSERT' then
+    v_booking_id := new.booking_id; v_cabana_id := new.cabana_id; v_action := 'cabana_added';
+  else
+    v_booking_id := old.booking_id; v_cabana_id := old.cabana_id; v_action := 'cabana_removed';
+  end if;
+
+  insert into booking_audit_log (booking_id, action, changed_by_id, changed_by_email, changes)
+  values (v_booking_id, v_action, v_uid, v_email, jsonb_build_object('cabana_id', v_cabana_id));
+
+  return coalesce(new, old);
+end;
+$$;
+
+drop trigger if exists trg_log_cabana_change on booking_cabanas;
+create trigger trg_log_cabana_change
+  after insert or delete on booking_cabanas
+  for each row execute function log_cabana_change();
+```
+
+**What this gets you:**
+
+- **Activity Log**: every insert, edit, or delete on `booking_requests` (status changes, staff notes, payment uploads, cabana assignments — everything) is written automatically to `booking_audit_log` by a database trigger, recording who did it (their login email, captured server-side — not something the browser can fake), when, and exactly which fields changed, old value → new value. Staff can view it (read-only) from the **Activity Log** button on the dashboard, or per-row via the small clock icon in the new **Log** column, which pre-filters to just that booking. Nobody — not even a signed-in staff member — has permission to edit or delete a log entry; only the trigger can write to that table.
+- **Date range search**: a "From" / "To" date filter that can apply to either the guest's preferred/check-in date or the date the row was entered into the system.
+- **Filters**: dropdowns for Status, Booking Type, Booked By (staff member), and Source, on top of the existing quick pills and free-text search — all combine together, and a **Clear Filters** button resets everything at once.
+- **Sorting**: click any underlined-on-hover column header (Order ID, Guest, Type, Booked By, Preferred Date, Party, Total, Status, Source, Date Entered) to sort by it; click again to reverse direction.
+- **Date Entered**: the old "Received" column is now labeled **Date Entered** — it's always the real server timestamp of when the row was created (Postgres' own clock, not a staff member's browser), so it's a reliable record of when data was actually entered, going forward.
+- **Summary stats**: a row of tiles above the table — Bookings Shown, Total Guests, Total Paid, Total Unpaid — recalculated live from whatever combination of filters is currently applied.
+- **Visual map removed from the dashboard**: the Cabana Availability panel (the illustrated seat-map) has been removed from the staff dashboard to keep it focused on the request table; the map still appears for guests on the public booking page. Assigning/removing a cabana from a booking is still done inline in the table's Cabana(s) column, unchanged.
+
 ## What's next: a Google Drive backup of payment screenshots
 
 Copying payment screenshots into your Google Drive is ready to turn on whenever you want — I can do it myself using my own connected Google Drive access, either on request ("back up this week's payment screenshots to Drive") or on a schedule. I'll just need the shared staff login (from step 4 in Section 4 above) so I can read the Storage bucket the same way the dashboard does. Just share those credentials with me whenever you're ready — no rush.
