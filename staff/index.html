@@ -46,12 +46,40 @@
   .btn-sm.ghost { background: var(--surface); color: var(--ink); border: 1px solid var(--line); }
   .btn-sm.ghost:hover { background: var(--sand-deep); }
 
-  .avail-panel { border: 1px solid var(--line); border-radius: 14px; background: var(--surface); padding: 22px 24px; margin-bottom: 20px; }
-  .avail-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; flex-wrap: wrap; gap: 10px; }
-  .avail-head h3 { font-family: var(--font-display); font-size: 1.05rem; margin: 0; }
-  .avail-head input[type="date"] { border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; font-family: var(--font-body); font-size: 0.88rem; background: var(--sand); }
-  #availMap .cabana-hotspot:not(:disabled):not(.is-held) { cursor: default; }
-  #availMap .cabana-hotspot:hover:not(:disabled) { background: rgba(255,255,255,0.22); }
+  /* ---------- filters ---------- */
+  .filters-row { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; margin: -6px 0 18px; padding: 14px 16px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
+  .filter-field { display: flex; flex-direction: column; gap: 4px; }
+  .filter-field label { font-size: 0.68rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--ink-soft); }
+  .filter-field select, .filter-field input[type="date"] { border: 1px solid var(--line); background: var(--sand); color: var(--ink); font-family: var(--font-body); font-size: 0.82rem; padding: 7px 10px; border-radius: 8px; }
+  .filter-sep { width: 1px; align-self: stretch; background: var(--line); margin: 0 2px; }
+
+  /* ---------- summary bar ---------- */
+  .summary-bar { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-bottom: 18px; }
+  .summary-tile { border: 1px solid var(--line); border-radius: 12px; background: var(--surface); padding: 14px 16px; }
+  .summary-tile .summary-label { font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--ink-soft); font-weight: 700; margin-bottom: 4px; }
+  .summary-tile .summary-value { font-family: var(--font-display); font-size: 1.3rem; font-weight: 600; }
+  .summary-tile .summary-sub { font-size: 0.72rem; color: var(--ink-soft); margin-top: 2px; }
+  .summary-tile.paid .summary-value { color: var(--lagoon-deep); }
+  .summary-tile.unpaid .summary-value { color: var(--rose, #9c4a3f); }
+
+  /* ---------- sortable headers ---------- */
+  th.sortable { cursor: pointer; user-select: none; }
+  th.sortable:hover { color: var(--ink); }
+  th.sortable .sort-arrow { display: inline-block; margin-left: 4px; opacity: 0.35; font-size: 0.7em; }
+  th.sortable.sort-active .sort-arrow { opacity: 1; }
+  .log-btn { border: 1px solid var(--line); background: var(--surface); color: var(--ink-soft); width: 26px; height: 26px; border-radius: 50%; cursor: pointer; font-size: 0.85rem; line-height: 1; }
+  .log-btn:hover { background: var(--sand-deep); color: var(--ink); }
+
+  /* ---------- activity log modal ---------- */
+  .modal.modal-wide { max-width: 900px; }
+  .log-filters { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; margin-bottom: 16px; }
+  .log-scroll { max-height: 55vh; overflow-y: auto; border: 1px solid var(--line); border-radius: 10px; }
+  table.log-table { width: 100%; border-collapse: collapse; min-width: 640px; }
+  table.log-table th { position: sticky; top: 0; background: var(--sand-deep); text-align: left; font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--ink-soft); padding: 10px 12px; border-bottom: 1px solid var(--line); }
+  table.log-table td { padding: 10px 12px; border-bottom: 1px solid var(--line); font-size: 0.82rem; vertical-align: top; }
+  .log-change b { color: var(--ink-soft); }
+  .log-booking-filter { font-size: 0.82rem; color: var(--ink-soft); margin-bottom: 12px; }
+  .log-booking-filter a { color: var(--lagoon-deep); cursor: pointer; }
 
   .count-line { font-size: 0.82rem; color: var(--ink-soft); margin-bottom: 12px; }
 
@@ -144,20 +172,51 @@
         <input class="search" id="searchBox" type="text" placeholder="Search guest, contact, notes&hellip;">
       </div>
       <div class="toolbar-right">
+        <button class="btn-sm ghost" id="logBtn">Activity Log</button>
         <button class="btn-sm ghost" id="exportBtn">Export CSV</button>
         <button class="btn-sm primary" id="addBtn">+ Add Booking</button>
       </div>
     </div>
 
-    <div class="avail-panel" id="availPanel">
-      <div class="avail-head">
-        <h3>Cabana Availability</h3>
-        <input type="date" id="availDate">
+    <div class="filters-row" id="filtersRow">
+      <div class="filter-field">
+        <label for="filterDateField">Date range applies to</label>
+        <select id="filterDateField">
+          <option value="check_in">Preferred / check-in date</option>
+          <option value="created_at">Date entered</option>
+        </select>
       </div>
-      <p class="field-hint" style="margin:0 0 14px;">A live view of who's holding which cabana on a given date &mdash; separate from the table below, which lists every request regardless of date.</p>
-      <div id="availStatus" class="cabana-map-status">Loading&hellip;</div>
-      <div id="availMap"></div>
+      <div class="filter-field">
+        <label for="filterDateFrom">From</label>
+        <input type="date" id="filterDateFrom">
+      </div>
+      <div class="filter-field">
+        <label for="filterDateTo">To</label>
+        <input type="date" id="filterDateTo">
+      </div>
+      <div class="filter-sep"></div>
+      <div class="filter-field">
+        <label for="filterStatus">Status</label>
+        <select id="filterStatus"><option value="">All statuses</option></select>
+      </div>
+      <div class="filter-field">
+        <label for="filterType">Type</label>
+        <select id="filterType"><option value="">All types</option></select>
+      </div>
+      <div class="filter-field">
+        <label for="filterBookedBy">Booked by</label>
+        <select id="filterBookedBy"><option value="">Anyone</option></select>
+      </div>
+      <div class="filter-field">
+        <label for="filterSource">Source</label>
+        <select id="filterSource"><option value="">All sources</option></select>
+      </div>
+      <div class="filter-field">
+        <button class="btn-sm ghost" id="clearFiltersBtn" type="button">Clear Filters</button>
+      </div>
     </div>
+
+    <div class="summary-bar" id="summaryBar"></div>
 
     <p class="count-line" id="countLine">Loading&hellip;</p>
 
@@ -165,25 +224,26 @@
       <table>
         <thead>
           <tr>
-            <th>Order ID</th>
-            <th>Guest</th>
+            <th class="sortable" data-sort="order_code">Order ID<span class="sort-arrow">&#9662;</span></th>
+            <th class="sortable" data-sort="guest_name">Guest<span class="sort-arrow">&#9662;</span></th>
             <th>Contact</th>
-            <th>Type</th>
-            <th>Booked By</th>
-            <th>Preferred Date</th>
+            <th class="sortable" data-sort="stay_type">Type<span class="sort-arrow">&#9662;</span></th>
+            <th class="sortable" data-sort="booked_by">Booked By<span class="sort-arrow">&#9662;</span></th>
+            <th class="sortable" data-sort="check_in">Preferred Date<span class="sort-arrow">&#9662;</span></th>
             <th>Cabana(s)</th>
-            <th>Party</th>
-            <th>Total</th>
-            <th>Status</th>
+            <th class="sortable" data-sort="party">Party<span class="sort-arrow">&#9662;</span></th>
+            <th class="sortable" data-sort="total_amount">Total<span class="sort-arrow">&#9662;</span></th>
+            <th class="sortable" data-sort="status">Status<span class="sort-arrow">&#9662;</span></th>
             <th>Payment</th>
-            <th>Source</th>
+            <th class="sortable" data-sort="source">Source<span class="sort-arrow">&#9662;</span></th>
             <th>Notes</th>
             <th>Staff Notes</th>
-            <th>Received</th>
+            <th class="sortable" data-sort="created_at">Date Entered<span class="sort-arrow">&#9662;</span></th>
+            <th>Log</th>
           </tr>
         </thead>
         <tbody id="bookingsBody">
-          <tr class="empty-row"><td colspan="15">Loading bookings&hellip;</td></tr>
+          <tr class="empty-row"><td colspan="16">Loading bookings&hellip;</td></tr>
         </tbody>
       </table>
     </div>
@@ -270,6 +330,43 @@
         <button type="submit" class="btn-sm primary">Save Booking</button>
       </div>
     </form>
+  </div>
+</div>
+
+<div class="modal-backdrop" id="logModalBackdrop">
+  <div class="modal modal-wide">
+    <h2>Activity Log</h2>
+    <p style="color:var(--ink-soft); font-size:0.85rem; margin:-10px 0 20px;">Every booking created, edited, or removed by a signed-in staff member is recorded here automatically &mdash; nobody, including staff, can edit or delete an entry once it's logged.</p>
+    <p id="logBookingFilter" class="log-booking-filter" style="display:none;"></p>
+    <div class="log-filters">
+      <div class="filter-field">
+        <label for="logStaffFilter">Staff</label>
+        <select id="logStaffFilter"><option value="">Anyone</option></select>
+      </div>
+      <div class="filter-field">
+        <label for="logFrom">From</label>
+        <input type="date" id="logFrom">
+      </div>
+      <div class="filter-field">
+        <label for="logTo">To</label>
+        <input type="date" id="logTo">
+      </div>
+      <div class="filter-field">
+        <button class="btn-sm ghost" type="button" id="logRefreshBtn">Refresh</button>
+      </div>
+    </div>
+    <div class="log-scroll">
+      <table class="log-table">
+        <thead>
+          <tr><th>When</th><th>Staff</th><th>Action</th><th>Booking</th><th>What changed</th></tr>
+        </thead>
+        <tbody id="logBody"><tr><td colspan="5" style="padding:24px;text-align:center;color:var(--ink-soft);">Loading&hellip;</td></tr></tbody>
+      </table>
+    </div>
+    <p class="field-hint" style="margin-top:12px;">Showing the most recent 300 entries matching these filters.</p>
+    <div class="modal-actions">
+      <button type="button" class="btn-sm ghost" id="closeLogBtn">Close</button>
+    </div>
   </div>
 </div>
 
