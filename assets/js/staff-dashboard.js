@@ -8,6 +8,32 @@
 
   var sb = window.supabase.createClient(cfg.url, cfg.anonKey);
 
+  // Maps each staff member's dashboard login email to their display name,
+  // so a booking they add through this dashboard can be attributed to them
+  // by name (same idea as the old sheet's "Booker" column) instead of a
+  // raw email address. Falls back to the email's first part for anyone
+  // signing in with an address not in this list.
+  var STAFF_EMAIL_NAMES = {
+    "oriel@virginbeachresort.com": "Oriel",
+    "chesca@virginbeachresort.com": "Chesca",
+    "shan@virginbeachresort.com": "Shan",
+    "reymer@virginbeachresort.com": "Reymer",
+    "camile@virginbeachresort.com": "Camile",
+    "jackie@virginbeachresort.com": "Jackie",
+    "jhoms@virginbeachresort.com": "Jhoms",
+    "carmela@virginbeachresort.com": "Carmela",
+    "sugar@virginbeachresort.com": "Sugar",
+    "harly@virginbeachresort.com": "Harly",
+    "bea@virginbeachresort.com": "Bea",
+    "aubrey@virginbeachresort.com": "Aubrey",
+    "marison@virginbeachresort.com": "Marison",
+    "sjc@virginbeachresort.com": "SJC",
+    "rm@virginbeachresort.com": "RM",
+    "gwen@virginbeachresort.com": "Gwen",
+    "msnikka@virginbeachresort.com": "Ms. Nikka",
+  };
+  var currentStaffName = null;
+
   var TYPE_LABELS = {
     day_trip: "Day Trip",
     half_day: "Half-Day Trip",
@@ -121,8 +147,21 @@
     logoutBtn.style.display = "none";
   }
 
+  function staffNameForEmail(email) {
+    if (!email) return null;
+    var lower = email.trim().toLowerCase();
+    if (STAFF_EMAIL_NAMES[lower]) return STAFF_EMAIL_NAMES[lower];
+    var local = lower.split("@")[0];
+    return local.charAt(0).toUpperCase() + local.slice(1);
+  }
+
   sb.auth.getSession().then(function (res) {
-    if (res.data.session) showDash(); else showLogin();
+    if (res.data.session) {
+      currentStaffName = staffNameForEmail(res.data.session.user && res.data.session.user.email);
+      showDash();
+    } else {
+      showLogin();
+    }
   });
 
   loginBtn.addEventListener("click", function () {
@@ -139,12 +178,16 @@
         loginError.style.display = "block";
         return;
       }
+      currentStaffName = staffNameForEmail(email);
       showDash();
     });
   });
 
   logoutBtn.addEventListener("click", function () {
-    sb.auth.signOut().then(showLogin);
+    sb.auth.signOut().then(function () {
+      currentStaffName = null;
+      showLogin();
+    });
   });
 
   function loadBookings() {
@@ -192,9 +235,10 @@
       else if (activeFilter === "week") matchesFilter = isThisWeek(r.check_in);
       else if (activeFilter === "month") matchesFilter = isThisMonth(r.check_in);
       else if (activeFilter === "unpaid") matchesFilter = r.status === "pending" || r.status === "pending_payment";
+      else if (activeFilter === "imported") matchesFilter = r.source === "sheet_import";
       if (!matchesFilter) return false;
       if (!q) return true;
-      var hay = [r.guest_name, r.guest_email, r.guest_phone, r.notes, r.staff_notes].join(" ").toLowerCase();
+      var hay = [r.guest_name, r.guest_email, r.guest_phone, r.notes, r.staff_notes, r.booked_by].join(" ").toLowerCase();
       return hay.indexOf(q) !== -1;
     });
   }
@@ -234,6 +278,20 @@
     td.innerHTML = "";
     td.className = "cabana-cell";
     var assignedIds = (r.booking_cabanas || []).map(function (bc) { return bc.cabana_id; });
+
+    // Imported 2026-sheet rows never had a literal cabana number recorded —
+    // only how many dining/lounge cabanas were used. Show that count as a
+    // plain note when there's no real cabana link to display instead.
+    if (!assignedIds.length && (r.legacy_dining_cabanas || r.legacy_lounge_cabanas)) {
+      var legacyNote = document.createElement("div");
+      legacyNote.className = "muted";
+      legacyNote.style.fontSize = "0.82rem";
+      var bits = [];
+      if (r.legacy_dining_cabanas) bits.push(r.legacy_dining_cabanas + " dining");
+      if (r.legacy_lounge_cabanas) bits.push(r.legacy_lounge_cabanas + " lounge");
+      legacyNote.textContent = bits.join(", ") + " (from 2026 sheet)";
+      td.appendChild(legacyNote);
+    }
 
     var chipWrap = document.createElement("div");
     chipWrap.className = "cabana-cell-chips";
@@ -364,7 +422,7 @@
     var rows = applyFilter(allRows);
     countLine.textContent = rows.length + " of " + allRows.length + " bookings shown";
     if (!rows.length) {
-      bookingsBody.innerHTML = '<tr class="empty-row"><td colspan="14">No bookings match this view.</td></tr>';
+      bookingsBody.innerHTML = '<tr class="empty-row"><td colspan="15">No bookings match this view.</td></tr>';
       return;
     }
     bookingsBody.innerHTML = "";
@@ -388,6 +446,11 @@
       var tdType = document.createElement("td");
       tdType.innerHTML = '<span class="type-badge">' + (TYPE_LABELS[r.stay_type] || r.stay_type_label || r.stay_type || "—") + "</span>";
       tr.appendChild(tdType);
+
+      var tdBookedBy = document.createElement("td");
+      tdBookedBy.className = "muted";
+      tdBookedBy.textContent = r.booked_by || "—";
+      tr.appendChild(tdBookedBy);
 
       var tdDate = document.createElement("td");
       tdDate.textContent = fmtDate(r.check_in);
@@ -506,6 +569,7 @@
       children_0_5: 0,
       senior_count: parseInt(document.getElementById("addSeniors").value || "0", 10),
       pet_count: parseInt(document.getElementById("addPets").value || "0", 10),
+      booked_by: currentStaffName,
       guest_name: document.getElementById("addName").value,
       guest_phone: document.getElementById("addPhone").value || null,
       guest_email: document.getElementById("addEmail").value || null,
@@ -530,7 +594,7 @@
   // ---------- CSV export (currently filtered/visible rows) ----------
   document.getElementById("exportBtn").addEventListener("click", function () {
     var rows = applyFilter(allRows);
-    var headers = ["Order ID", "Guest", "Guest Names", "Phone", "Email", "Type", "Preferred Date", "Cabana(s)", "Adults", "Senior Citizens", "Kids 6-12", "Kids 0-5", "Pets", "Subtotal (People)", "Cabana Total", "Senior Discount", "Total", "Status", "Payment Proof", "Senior ID(s)", "Source", "How Heard", "Occasion", "Notes", "Staff Notes", "Received"];
+    var headers = ["Order ID", "Guest", "Guest Names", "Phone", "Email", "Type", "Booked By", "Preferred Date", "Cabana(s)", "Adults", "Senior Citizens", "Kids 6-12", "Kids 0-5", "Pets", "Subtotal (People)", "Cabana Total", "Senior Discount", "Total", "Status", "Payment Proof", "Senior ID(s)", "Source", "How Heard", "Occasion", "Notes", "Staff Notes", "Received"];
     function csvCell(v) {
       v = v === null || v === undefined ? "" : String(v);
       return '"' + v.replace(/"/g, '""') + '"';
@@ -541,9 +605,15 @@
         .map(function (bc) { return cabanasById[bc.cabana_id] ? cabanasById[bc.cabana_id].label : ""; })
         .filter(Boolean)
         .join("; ");
+      if (!cabanaLabels && (r.legacy_dining_cabanas || r.legacy_lounge_cabanas)) {
+        var legacyBits = [];
+        if (r.legacy_dining_cabanas) legacyBits.push(r.legacy_dining_cabanas + " dining");
+        if (r.legacy_lounge_cabanas) legacyBits.push(r.legacy_lounge_cabanas + " lounge");
+        cabanaLabels = legacyBits.join(", ") + " (from 2026 sheet)";
+      }
       lines.push([
         r.order_code, r.guest_name, r.guest_names || "", r.guest_phone, r.guest_email,
-        TYPE_LABELS[r.stay_type] || r.stay_type, fmtDate(r.check_in), cabanaLabels,
+        TYPE_LABELS[r.stay_type] || r.stay_type, r.booked_by || "", fmtDate(r.check_in), cabanaLabels,
         r.adults, r.senior_count || 0, r.children_6_12, r.children_0_5, r.pet_count || 0,
         r.subtotal_people != null ? r.subtotal_people : "", r.cabana_total != null ? r.cabana_total : "",
         r.senior_discount != null ? r.senior_discount : "", r.total_amount != null ? r.total_amount : "",

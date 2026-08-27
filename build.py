@@ -51,9 +51,28 @@ def book_link(base, **params):
 BOOKING_TYPE_LABELS = [
     ("day_trip", "Day Trip (Full Day)"),
     ("half_day", "Half-Day Trip"),
-    ("flash_sale", "Flash Sale Day Trip"),
     ("all_inclusive_family", "All Inclusive — Family Package"),
     ("all_inclusive_barkada", "All Inclusive — Barkada Package"),
+]
+
+COUNTRIES = [
+    "Philippines", "Afghanistan", "Albania", "Algeria", "Andorra", "Angola", "Argentina", "Armenia",
+    "Australia", "Austria", "Azerbaijan", "Bahamas", "Bahrain", "Bangladesh", "Belarus", "Belgium",
+    "Belize", "Benin", "Bhutan", "Bolivia", "Bosnia and Herzegovina", "Botswana", "Brazil", "Brunei",
+    "Bulgaria", "Burkina Faso", "Burundi", "Cambodia", "Cameroon", "Canada", "Chile", "China",
+    "Colombia", "Costa Rica", "Croatia", "Cuba", "Cyprus", "Czechia", "Denmark", "Dominican Republic",
+    "Ecuador", "Egypt", "El Salvador", "Estonia", "Ethiopia", "Fiji", "Finland", "France", "Georgia",
+    "Germany", "Ghana", "Greece", "Guatemala", "Honduras", "Hong Kong", "Hungary", "Iceland", "India",
+    "Indonesia", "Iran", "Iraq", "Ireland", "Israel", "Italy", "Jamaica", "Japan", "Jordan",
+    "Kazakhstan", "Kenya", "Kuwait", "Laos", "Latvia", "Lebanon", "Libya", "Liechtenstein",
+    "Lithuania", "Luxembourg", "Macao", "Malaysia", "Maldives", "Malta", "Mexico", "Moldova",
+    "Monaco", "Mongolia", "Montenegro", "Morocco", "Myanmar", "Nepal", "Netherlands",
+    "New Zealand", "Nigeria", "North Korea", "North Macedonia", "Norway", "Oman", "Pakistan",
+    "Panama", "Papua New Guinea", "Paraguay", "Peru", "Poland", "Portugal", "Qatar", "Romania",
+    "Russia", "Rwanda", "Saudi Arabia", "Senegal", "Serbia", "Singapore", "Slovakia", "Slovenia",
+    "South Africa", "South Korea", "Spain", "Sri Lanka", "Sweden", "Switzerland", "Taiwan",
+    "Tajikistan", "Tanzania", "Thailand", "Tunisia", "Turkey", "Ukraine", "United Arab Emirates",
+    "United Kingdom", "United States", "Uruguay", "Uzbekistan", "Venezuela", "Vietnam", "Yemen",
 ]
 
 
@@ -80,6 +99,10 @@ def booking_form_section(default_type="day_trip"):
             {type_options}
       </select>
     </div>'''
+    )
+    country_options = "\n            ".join(
+        f'<option value="{c}"{" selected" if c == "Philippines" else ""}>{c}</option>'
+        for c in COUNTRIES
     )
     return f"""
 <div id="bookingFormWrap">
@@ -137,7 +160,11 @@ def booking_form_section(default_type="day_trip"):
     </div>
     <div class="row-2">
       <div><label for="guestEmail">Email</label><input id="guestEmail" type="email" required></div>
-      <div><label for="country">Country</label><input id="country" type="text"></div>
+      <div><label for="country">Country</label>
+        <select id="country">
+            {country_options}
+        </select>
+      </div>
     </div>
 
     <div id="billSummary" class="bill-summary" hidden></div>

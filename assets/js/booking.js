@@ -24,7 +24,6 @@
   var PRICING = {
     day_trip: { adult: 1250, child612: 825, child05: 0, pet: 750, dining: 1500, lounge: 2000 },
     half_day: { adult: 800, child612: 550, child05: 0, pet: 375, dining: 750, lounge: 1000 },
-    flash_sale: { adult: 995, child612: 645, child05: 0, pet: 750, dining: 1500, lounge: 2000 },
   };
   var PACKAGE_PRICING = {
     all_inclusive_family: { base: 5000, includedPax: 4, includedCabanas: 1, addlAdult: 1250, addlChild: 825, addlPet: 750, addlCabana: 1000 },
@@ -60,7 +59,6 @@
   var TYPE_NAMES = {
     day_trip: "Day Trip (Full Day)",
     half_day: "Half-Day Trip",
-    flash_sale: "Flash Sale Day Trip",
     all_inclusive_family: "All Inclusive — Family Package",
     all_inclusive_barkada: "All Inclusive — Barkada Package",
     corporate: "Corporate Outing",

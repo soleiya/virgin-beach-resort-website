@@ -76,20 +76,6 @@ day_body = """
       </div>
       <div class="card">
         <div class="card-body">
-          <h3>Flash Sale Day Trip</h3>
-          <p class="prose" style="margin:10px 0 16px; font-size:0.92rem;">Our discounted full-day rate, offered from time to time &mdash; ask our team if one's currently running.</p>
-          <div class="table-wrap">
-            <table class="rate-table">
-              <tbody>
-                <tr><td>Adults</td><td class="num">&#8369;995.00</td></tr>
-                <tr><td>Children (6&ndash;12)</td><td class="num">&#8369;645.00</td></tr>
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </div>
-      <div class="card">
-        <div class="card-body">
           <h3>All Inclusive &mdash; Family Package</h3>
           <p class="prose" style="margin:10px 0 16px; font-size:0.92rem;">A flat rate for up to 4 guests and 1 cabana &mdash; simple, all-in pricing for a small family outing.</p>
           <div class="table-wrap">

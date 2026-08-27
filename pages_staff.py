@@ -151,6 +151,7 @@ html = """<!doctype html>
         <button class="pill" data-filter="week">This Week</button>
         <button class="pill" data-filter="month">This Month</button>
         <button class="pill" data-filter="unpaid">Unpaid</button>
+        <button class="pill" data-filter="imported">Imported (2026 Sheet)</button>
         <input class="search" id="searchBox" type="text" placeholder="Search guest, contact, notes&hellip;">
       </div>
       <div class="toolbar-right">
@@ -179,6 +180,7 @@ html = """<!doctype html>
             <th>Guest</th>
             <th>Contact</th>
             <th>Type</th>
+            <th>Booked By</th>
             <th>Preferred Date</th>
             <th>Cabana(s)</th>
             <th>Party</th>
@@ -192,7 +194,7 @@ html = """<!doctype html>
           </tr>
         </thead>
         <tbody id="bookingsBody">
-          <tr class="empty-row"><td colspan="14">Loading bookings&hellip;</td></tr>
+          <tr class="empty-row"><td colspan="15">Loading bookings&hellip;</td></tr>
         </tbody>
       </table>
     </div>
