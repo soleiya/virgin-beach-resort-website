@@ -1,23 +1,31 @@
 // Supabase Edge Function: send-booking-email
 //
 // Triggered by a Database Webhook on INSERT to booking_requests. Sends the
-// guest a confirmation email (via Resend) containing their Order ID, which
-// they'll need later on pay/index.html to upload a payment screenshot — and
-// CCs the shared reservations@virginbeachresort.com inbox on every one, so
-// the team sees new requests land in the same place they already check.
+// guest a confirmation email containing their Order ID, which they'll need
+// later on pay/index.html to upload a payment screenshot — sent straight
+// through your Google Workspace account (reservations@virginbeachresort.com)
+// via SMTP, no third-party email service needed. It CCs that same inbox on
+// every one, so the team sees new requests land in the same place they
+// already check.
 //
 // Setup (see SETUP-BOOKING.md section 7 for the full walkthrough):
-//   1. Create this function in your Supabase project (dashboard Edge
+//   1. In the Google Account for reservations@virginbeachresort.com, turn on
+//      2-Step Verification (myaccount.google.com → Security), then create
+//      an App Password (Security → 2-Step Verification → App passwords —
+//      name it anything, e.g. "Booking emails"). Copy the 16-character
+//      password it gives you.
+//   2. Create this function in your Supabase project (dashboard Edge
 //      Functions editor, or `supabase functions new send-booking-email`
 //      then paste this file in).
-//   2. Set secrets on the function: RESEND_API_KEY and WEBHOOK_SECRET
-//      (any random string you make up — it just has to match what you put
-//      in the Database Webhook's custom header in step 4). Optionally also
-//      TEST_MODE=true while you're doing test bookings — see below.
-//   3. Deploy with JWT verification OFF (dashboard toggle, or
+//   3. Set secrets on the function: SMTP_PASSWORD (the App Password from
+//      step 1) and WEBHOOK_SECRET (any random string you make up — it just
+//      has to match what you put in the Database Webhook's custom header in
+//      step 4). Optionally also TEST_MODE=true while you're doing test
+//      bookings — see below.
+//   4. Deploy with JWT verification OFF (dashboard toggle, or
 //      `supabase functions deploy send-booking-email --no-verify-jwt`) —
 //      this function checks its own shared secret instead.
-//   4. Create the Database Webhook (Database → Webhooks) on
+//   5. Create the Database Webhook (Database → Webhooks) on
 //      booking_requests, event: Insert, pointing at this function's URL,
 //      with a header  x-webhook-secret: <the same random string>.
 //
@@ -27,7 +35,10 @@
 // anything else) once you're done testing to go back to normal subjects —
 // no redeploy needed either way, since it's read fresh on every request.
 
-const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY");
+import { SMTPClient } from "https://deno.land/x/denomailer@1.6.0/mod.ts";
+
+const SMTP_USER = "reservations@virginbeachresort.com";
+const SMTP_PASSWORD = Deno.env.get("SMTP_PASSWORD");
 const WEBHOOK_SECRET = Deno.env.get("WEBHOOK_SECRET");
 const TEST_MODE = Deno.env.get("TEST_MODE") === "true";
 const FROM_ADDRESS = "Virgin Beach Resort <reservations@virginbeachresort.com>";
@@ -48,8 +59,8 @@ Deno.serve(async (req) => {
   if (!WEBHOOK_SECRET || req.headers.get("x-webhook-secret") !== WEBHOOK_SECRET) {
     return new Response("Unauthorized", { status: 401 });
   }
-  if (!RESEND_API_KEY) {
-    return new Response("RESEND_API_KEY not configured", { status: 500 });
+  if (!SMTP_PASSWORD) {
+    return new Response("SMTP_PASSWORD not configured", { status: 500 });
   }
 
   let payload: any;
@@ -94,24 +105,30 @@ Deno.serve(async (req) => {
   const subjectPrefix = TEST_MODE ? "[TEST] " : "";
   const subject = `${subjectPrefix}Your booking request — Order ${record.order_code || ""}`;
 
-  const res = await fetch("https://api.resend.com/emails", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${RESEND_API_KEY}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
+  try {
+    const client = new SMTPClient({
+      connection: {
+        hostname: "smtp.gmail.com",
+        port: 465,
+        tls: true,
+        auth: {
+          username: SMTP_USER,
+          password: SMTP_PASSWORD,
+        },
+      },
+    });
+
+    await client.send({
       from: FROM_ADDRESS,
-      to: [record.guest_email],
-      cc: [STAFF_EMAIL],
+      to: record.guest_email,
+      cc: STAFF_EMAIL,
       subject,
       html,
-    }),
-  });
+    });
 
-  if (!res.ok) {
-    const text = await res.text();
-    console.error("Resend error:", res.status, text);
+    await client.close();
+  } catch (err) {
+    console.error("SMTP send error:", err);
     return new Response("Email send failed", { status: 502 });
   }
 
