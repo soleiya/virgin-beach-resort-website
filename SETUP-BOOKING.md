@@ -273,7 +273,7 @@ This setup intentionally does **not** take payment online — no card fields, no
 
 ## 7. Set up automatic "here's your Order ID" confirmation emails
 
-This sends every guest an email the moment they submit a request, containing their Order ID — the same thing `pay/index.html` asks for. It needs a real email-sending service (not something Supabase does on its own), so there are a few one-time setup steps outside of SQL. The code is already written — `supabase-functions/send-booking-email/index.ts` (included alongside this file) — you're just connecting it.
+This sends every guest an email the moment they submit a request, containing their Order ID — the same thing `pay/index.html` asks for — and CCs `reservations@virginbeachresort.com` on every one, so the team sees new requests land in the same shared inbox they already check. It needs a real email-sending service (not something Supabase does on its own), so there are a few one-time setup steps outside of SQL. The code is already written — `supabase-functions/send-booking-email/index.ts` (included alongside this file) — you're just connecting it.
 
 **A. Sign up for Resend and verify your domain**
 
@@ -288,9 +288,10 @@ This sends every guest an email the moment they submit a request, containing the
 2. Name it exactly `send-booking-email`.
 3. Paste in the full contents of `supabase-functions/send-booking-email/index.ts`.
 4. Turn **off** "Enforce JWT verification" for this function (there's a toggle when creating/editing it) — the function checks its own secret instead (see below), since the trigger calling it won't have a user login.
-5. Under the function's **Secrets** (or Project Settings → Edge Functions → Secrets), add two:
+5. Under the function's **Secrets** (or Project Settings → Edge Functions → Secrets), add:
    - `RESEND_API_KEY` — the key you copied from Resend.
    - `WEBHOOK_SECRET` — make up any random string, e.g. `vbr-hook-8f3k2p91` — just remember it for the next step.
+   - `TEST_MODE` (optional) — set this to exactly `true` while you're doing test bookings and every subject line gets a `[TEST]` prefix, plus an orange banner in the email body, so nobody mistakes a test for a real guest. Delete the secret (or change its value to anything else) once you're done testing — takes effect immediately, no redeploy needed.
 6. Deploy the function.
 
 **C. Wire it up with a Database Webhook**
@@ -301,7 +302,7 @@ This sends every guest an email the moment they submit a request, containing the
 4. Add a custom HTTP header: `x-webhook-secret` → the same random string you set as `WEBHOOK_SECRET` above.
 5. Save it.
 
-That's it — every new row in `booking_requests` now triggers an email to the guest with their Order ID. Test it by submitting a real request through the website with your own email address.
+That's it — every new row in `booking_requests` now triggers an email to the guest with their Order ID, CC'd to `reservations@virginbeachresort.com`. Set the `TEST_MODE` secret to `true` first and submit a request with your own email address to confirm everything works before turning it on for real guests — then remove that secret to go live.
 
 ## 8. Multiple cabanas, automatic pricing, guest names, and the senior discount
 
