@@ -147,8 +147,8 @@ body = f"""
       <p class="prose" style="max-width:44ch;">Turn your most meaningful events into moments that everyone will remember.</p>
     </div>
     <div class="grid-2">
-      <div class="feature-media wide"><img src="assets/images/celebrate.jpg" alt="A beachside celebration set up at night with string lanterns and a banquet table"></div>
-      <div class="feature-media wide"><img src="assets/images/fire-tree-and-coastline.jpg" alt="Wide aerial view of the shoreline suited for a beach ceremony"></div>
+      <div class="feature-media wide"><img src="assets/images/wedding-ceremony-beachfront-guests.jpg" alt="Wedding party and guests gathered on the beach around a bamboo ceremony arch"></div>
+      <div class="feature-media wide"><img src="assets/images/wedding-reception-pavilion-lanterns.jpg" alt="Reception pavilion at night draped in fabric with hanging lanterns and long banquet tables"></div>
     </div>
     <p class="prose mt-lg" style="color:rgba(238,231,214,0.85);">Tie the knot on a picturesque beach as the sound of waves become the perfect tune to the exact moment
     you and your loved one become one.</p>
@@ -158,7 +158,7 @@ body = f"""
         <p style="margin-top:10px; color:rgba(238,231,214,0.78);">Make special moments even more memorable with a private dinner by the beach. Whether it's in
         celebration of an event or each other, we are sure to make this dinner a memorable one.</p>
       </div>
-      <div class="feature-media"><img src="assets/images/spa-towels-detail.jpg" alt="A quiet, candlelit table set for a private dinner"></div>
+      <div class="feature-media"><img src="assets/images/private-dinner-beachside-lanterns.jpg" alt="A beachside private dinner table set at night, lit by hanging lanterns beside the shore"></div>
     </div>
   </div>
 </section>
@@ -168,7 +168,7 @@ body = f"""
     <span class="eyebrow">Soft Opening</span>
     <h2>We are happy to announce we are now accepting bookings during our soft opening.</h2>
     <p class="prose mx-auto" style="margin-top:18px;">While we work on getting our website up and running, please direct all inquiries to our email address:
-    <a class="text-link" href="mailto:virginbeachresortreservations@gmail.com">virginbeachresortreservations@gmail.com</a></p>
+    <a class="text-link" href="mailto:reservations@virginbeachresort.com">reservations@virginbeachresort.com</a></p>
     <p class="prose mx-auto" style="margin-top:10px;">Thank you and we look forward to your visit! &mdash; <strong>Virgin Beach Resort Management</strong></p>
     <a class="btn btn-primary mt-lg" href="{CLOUDBEDS_URL}">Book Now</a>
   </div>
