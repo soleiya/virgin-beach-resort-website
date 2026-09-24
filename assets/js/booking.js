@@ -467,26 +467,13 @@
     uploadSeniorIds(seniorFiles)
       .then(function (paths) {
         payload.senior_id_paths = paths.length ? paths : null;
-        return fetch(cfg.url.replace(/\/$/, "") + "/rest/v1/booking_requests", {
-          method: "POST",
-          headers: {
-            apikey: cfg.anonKey,
-            Authorization: "Bearer " + cfg.anonKey,
-            "Content-Type": "application/json",
-            Prefer: "return=representation",
-          },
-          body: JSON.stringify(payload),
-        });
+        var cabanaIds = selectedCabanas.length ? selectedCabanas.map(function (c) { return c.id; }) : null;
+        return sb.rpc("submit_booking_request", { payload: payload, cabana_ids: cabanaIds });
       })
       .then(function (res) {
-        if (!res.ok) throw new Error("Request failed: " + res.status);
-        return res.json();
-      })
-      .then(function (rows) {
+        if (res.error) throw res.error;
+        var rows = res.data;
         var row = Array.isArray(rows) ? rows[0] : rows;
-        return attachCabanas(row.id).then(function () { return row; });
-      })
-      .then(function (row) {
         showSuccess(payload, false, row && row.order_code);
       })
       .catch(function () {
