@@ -271,38 +271,52 @@ The booking form still works without any of the above — it just falls back to 
 
 This setup intentionally does **not** take payment online — no card fields, no payment gateway. Guests still pay you directly (bank transfer, GCash, etc.) exactly as before; the only thing that changed is that now a screenshot of that payment can be attached to the right booking, by the guest themselves or by staff, and that flips the status forward automatically. Nothing is charged, verified, or moved by the website — a human on your team still glances at every screenshot before treating a booking as paid. If you ever want guests to pay online (card, GCash, PayMongo, etc.) and have that update the status automatically without a human checking a screenshot, that's a separate, bigger project — happy to help if you want it later.
 
-## 7. Set up automatic "here's your Order ID" confirmation emails
+## 7. Automatic booking emails from reservations@virginbeachresort.com
 
-This sends every guest an email the moment they submit a request, containing their Order ID — the same thing `pay/index.html` asks for — and CCs `reservations@virginbeachresort.com` on every one, so the team sees new requests land in the same shared inbox they already check. It needs a real email-sending service (not something Supabase does on its own), so there are a few one-time setup steps outside of SQL. The code is already written — `supabase-functions/send-booking-email/index.ts` (included alongside this file) — you're just connecting it.
+Every Day Trip request from the website now sends email straight from the reservations@ Google Workspace mailbox, so the whole transaction lives in that one inbox:
 
-**A. Sign up for Resend and verify your domain**
+| When | Guest receives | reservations@ receives |
+|---|---|---|
+| Guest submits the form | Quotation (same breakdown as the printed one, incl. VAT / service charge), the 3 bank accounts, a pay-by date, next steps, policies, and the Reservations Agreement PDF attached | "New Day Trip Booking from …" alert: full details, clickable phone/email, flags (trip within 7 days, seniors, pets, capacity, price mismatch), follow-up checklist, dashboard link |
+| Guest uploads a payment screenshot on /pay | "We received your proof — verifying now" | "Payment proof — please verify", screenshot attached |
+| Staff set the booking to **Confirmed** | Confirmation + arrival guide | — |
 
-1. Go to **resend.com** and create a free account (100 emails/day, 3,000/month free — plenty for this).
-2. In Resend, go to **Domains → Add Domain** and enter `virginbeachresort.com`.
-3. Resend will show you 2–3 DNS records (usually TXT/CNAME for SPF and DKIM). Add those at wherever `virginbeachresort.com`'s DNS is managed. This can take a few minutes to a few hours to verify — Resend's dashboard will show "Verified" once it's done.
-4. Go to **API Keys** in Resend and create one. Copy it — you'll paste it into Supabase next.
+Guest emails share one subject line, so Gmail keeps them in a single thread — and because they're sent *from* reservations@, the guest's replies (proof of payment, signed agreement, questions) land in that same thread. Staff alerts share their own internal thread per Order ID. Search Gmail for the Order ID (e.g. `VBR-1042`) to see everything for a booking.
 
-**B. Create the Edge Function in Supabase**
+Staff-added bookings (Messenger, phone, walk-in) do **not** email automatically. Corporate requests get an acknowledgement only (no bank details) since they need a tailored quote.
 
-1. In your Supabase project, go to **Edge Functions** in the left sidebar → **Create a new function**.
-2. Name it exactly `send-booking-email`.
-3. Paste in the full contents of `supabase-functions/send-booking-email/index.ts`.
-4. Turn **off** "Enforce JWT verification" for this function (there's a toggle when creating/editing it) — the function checks its own secret instead (see below), since the trigger calling it won't have a user login.
-5. Under the function's **Secrets** (or Project Settings → Edge Functions → Secrets), add:
-   - `RESEND_API_KEY` — the key you copied from Resend.
-   - `WEBHOOK_SECRET` — make up any random string, e.g. `vbr-hook-8f3k2p91` — just remember it for the next step.
-   - `TEST_MODE` (optional) — set this to exactly `true` while you're doing test bookings and every subject line gets a `[TEST]` prefix, plus an orange banner in the email body, so nobody mistakes a test for a real guest. Delete the secret (or change its value to anything else) once you're done testing — takes effect immediately, no redeploy needed.
-6. Deploy the function.
+**A. Create an App Password for reservations@** (5 min)
 
-**C. Wire it up with a Database Webhook**
+1. Sign in to https://myaccount.google.com as **reservations@virginbeachresort.com**.
+2. **Security → 2-Step Verification** — turn it on if it isn't already. (If the option is greyed out, your Workspace admin must allow 2-Step Verification and App Passwords in the Google Admin console.)
+3. Go to https://myaccount.google.com/apppasswords, name it "Website booking emails", and copy the 16-character password.
 
-1. In Supabase, go to **Database → Webhooks → Create a new webhook**.
-2. Table: `booking_requests`. Events: **Insert** only.
-3. Type: **Supabase Edge Functions** (or "HTTP Request" pointing at the function's URL, shown on the function's page — looks like `https://<your-project-ref>.functions.supabase.co/send-booking-email`).
-4. Add a custom HTTP header: `x-webhook-secret` → the same random string you set as `WEBHOOK_SECRET` above.
-5. Save it.
+**B. Deploy the Edge Function**
 
-That's it — every new row in `booking_requests` now triggers an email to the guest with their Order ID, CC'd to `reservations@virginbeachresort.com`. Set the `TEST_MODE` secret to `true` first and submit a request with your own email address to confirm everything works before turning it on for real guests — then remove that secret to go live.
+1. Supabase → **Edge Functions → Deploy a new function → Via editor**. Name it exactly `send-booking-email`.
+2. Paste in the full contents of `supabase-functions/send-booking-email/index.ts` and deploy.
+3. Open the function's **Details** and turn **off** "Verify JWT with legacy secret" / "Enforce JWT verification" (the function checks its own secret).
+4. **Edge Functions → Secrets**, add:
+   - `SMTP_PASSWORD` — the App Password from step A (no spaces).
+   - `WEBHOOK_SECRET` — any long random string (e.g. from a password generator). Keep it for step C.
+   - `TEST_MODE` = `true` while you test (adds "[TEST]" to subjects and a banner). Delete it to go live.
+   - Optional: `STAFF_EMAILS` (comma-separated, default reservations@), `PAYMENT_DEADLINE_HOURS` (default 24, matching what staff give guests today), `PROOF_CC_EMAILS` (e.g. accounting.ar@virginbeachresort.com, copied on payment-proof alerts), `POOL_NOTICE` (auto = Jun–Nov rainy-season pool note; on / off), `SITE_URL` (once the site moves to virginbeachresort.com).
+
+**C. Connect the database**
+
+1. **SQL Editor → New query**, run this one line with the same random string as `WEBHOOK_SECRET`:
+   `select vault.create_secret('YOUR-RANDOM-STRING', 'booking_email_webhook_secret');`
+2. New query: paste and run all of `supabase-functions/booking-email-trigger.sql`.
+3. If you created a **Database Webhook** for this function earlier (Database → Webhooks), delete it — the SQL trigger replaces it.
+
+**D. Test**
+
+1. With `TEST_MODE=true`, submit a Day Trip request on the website using your own email.
+2. You should get the quotation; reservations@ should get the "[TEST] New Day Trip Booking from …" alert, and the quotation should be in reservations@ **Sent**.
+3. Upload a screenshot on /pay, then set the booking to Confirmed in the dashboard — check both follow-up emails arrive in the same threads.
+4. Nothing arrived? Run `select created_at, kind, recipient, status, error from booking_email_log order by created_at desc limit 20;` — the `error` column says why (a wrong App Password shows as an authentication error). Also check Edge Functions → send-booking-email → Logs.
+
+Rates used in the emailed quotation are in the `PRICING` / `PACKAGE_PRICING` blocks at the top of the function and must match `assets/js/booking.js`; bank accounts are in `BANKS`. The server recalculates every bill itself — if it ever disagrees with what the website showed the guest, the staff alert flags it in red.
 
 ## 8. Multiple cabanas, automatic pricing, guest names, and the senior discount
 

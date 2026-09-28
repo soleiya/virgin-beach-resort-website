@@ -131,7 +131,7 @@ def booking_form_section(default_type="day_trip"):
     </div>
 
     <div>
-      <label for="seniorCount">How many are Senior Citizens?</label>
+      <label for="seniorCount">How many are Senior Citizens or PWDs?</label>
       <input id="seniorCount" type="number" min="0" value="0">
       <p class="field-hint">Included in your Adults count above &mdash; each gets 20% off their own share.</p>
     </div>
@@ -142,10 +142,10 @@ def booking_form_section(default_type="day_trip"):
     </div>
     <div id="packageNote" class="field-hint" hidden></div>
     <div id="seniorIdWrap" hidden>
-      <label for="seniorIdFiles">Senior Citizen ID photo(s)</label>
+      <label for="seniorIdFiles">Senior Citizen / PWD ID photo(s)</label>
       <input id="seniorIdFiles" type="file" accept="image/*" multiple>
       <p class="field-hint">One photo per senior citizen (or one photo with all IDs) &mdash; needed before we can apply the discount.</p>
-      <p class="field-hint" id="seniorIdError" style="color:var(--rose,#9c4a3f);" hidden>Please attach at least one senior citizen ID photo.</p>
+      <p class="field-hint" id="seniorIdError" style="color:var(--rose,#9c4a3f);" hidden>Please attach at least one Senior Citizen or PWD ID photo.</p>
     </div>
 
     <div>
@@ -200,7 +200,7 @@ def booking_form_section(default_type="day_trip"):
     </label>
 
     <button class="btn btn-primary" type="submit" id="submitBtn">Send Request</button>
-    <p class="field-hint">This secures your request &mdash; it isn't confirmed until our team follows up with availability and payment details.</p>
+    <p class="field-hint">You'll get your quotation and bank details by email right away &mdash; your booking is confirmed once payment is verified.</p>
   </form>
 </div>
 <div id="bookingStatus" class="form-status" hidden></div>
