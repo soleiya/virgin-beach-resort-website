@@ -769,7 +769,7 @@ async function proofAttachment(path: string | null) {
 
 async function onInsert(r: Any) {
   const c = cfg();
-  if (!c.autoSources.includes(String(r.source || "website"))) return { skipped: "source " + r.source };
+  if (!autoEmail(r, c)) return { skipped: "source " + r.source };
   const cabanas = await loadCabanas(r);
   const q = buildQuote(r, cabanas);
   let guest: { ok: boolean; error?: string } = { ok: false, error: "no guest email on booking" };
@@ -786,8 +786,15 @@ async function onInsert(r: Any) {
   return { guest, staff };
 }
 
+// Staff-added bookings (phone, Messenger, email, walk-in) are handled by hand,
+// as before — only bookings from the sources in AUTO_EMAIL_SOURCES get emails.
+function autoEmail(r: Any, c: ReturnType<typeof cfg>) {
+  return c.autoSources.includes(String(r.source || "website"));
+}
+
 async function onProof(r: Any) {
   const c = cfg();
+  if (!autoEmail(r, c)) return { skipped: "source " + r.source };
   if (r.status === "confirmed" || String(r.payment_screenshot_path || "").startsWith("staff/")) {
     return { skipped: "uploaded by staff" };
   }
@@ -807,6 +814,7 @@ async function onProof(r: Any) {
 
 async function onConfirmed(r: Any) {
   const c = cfg();
+  if (!autoEmail(r, c)) return { skipped: "source " + r.source };
   if (!r.guest_email) return { skipped: "no guest email" };
   const cabanas = await loadCabanas(r);
   const q = buildQuote(r, cabanas);
