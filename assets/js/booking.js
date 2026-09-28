@@ -190,7 +190,13 @@
     var pets = parseInt((petCountEl && petCountEl.value) || "0", 10) || 0;
     var regularAdults = adults - seniors;
     var totalGuests = adults + kids612 + kids05;
-    var cabanaTotal = selectedCabanas.reduce(function (sum, c) { return sum + (Number(c.price) || 0); }, 0);
+    // Half-day has its own (lower) cabana rates; full day uses the cabanas table price.
+    var cabanaPrice = function (c) {
+      var r = PRICING[type];
+      if (type === "half_day" && r) return String(c.cabana_type || "").indexOf("lounge") === 0 ? r.lounge : r.dining;
+      return Number(c.price) || 0;
+    };
+    var cabanaTotal = selectedCabanas.reduce(function (sum, c) { return sum + cabanaPrice(c); }, 0);
     var totalCapacity = selectedCabanas.reduce(function (sum, c) { return sum + (Number(c.capacity) || 0); }, 0);
 
     if (isPackageType(type)) {
@@ -220,7 +226,7 @@
       type: type, adults: adults, kids612: kids612, kids05: kids05, seniors: seniors, pets: pets,
       regularAdults: regularAdults, rate: rate, seniorRate: seniorRate, subtotalPeople: subtotalPeople,
       petCost: petCost, seniorDiscount: seniorDiscount, cabanaTotal: cabanaTotal, totalCapacity: totalCapacity,
-      totalGuests: totalGuests, isPackage: false,
+      totalGuests: totalGuests, isPackage: false, cabanaPrice: cabanaPrice,
       total: subtotalPeople + petCost + cabanaTotal,
     };
   }
@@ -293,7 +299,7 @@
     }
     if (!bill.isPackage) {
       selectedCabanas.forEach(function (c) {
-        lines.push('<div class="bill-row"><span>' + c.label + "</span><span>" + peso(c.price) + "</span></div>");
+        lines.push('<div class="bill-row"><span>' + c.label + "</span><span>" + peso(bill.cabanaPrice(c)) + "</span></div>");
       });
     }
 
@@ -395,12 +401,15 @@
       ? "<p>Your email app should have opened with the request pre-filled — just hit send.</p>"
       : "";
     var orderLine = orderCode
-      ? "<p>Your Order ID is <strong>" + orderCode + "</strong> — you'll need it if you upload a payment screenshot later. We've also sent it to " + payload.guest_email + ".</p>"
+      ? "<p>Your Order ID is <strong>" + orderCode + "</strong>.</p>"
       : "";
-    statusEl.innerHTML =
-      "<h3>Request received.</h3><p>Thank you, " + firstName +
-      " — our reservations team will confirm availability, then follow up with payment details, at " +
-      payload.guest_email + " or " + payload.guest_phone + " within 24 hours.</p>" + orderLine + extra;
+    var body = viaEmail
+      ? " — our reservations team will follow up with your quotation and payment details at " +
+        payload.guest_email + " or " + payload.guest_phone + ".</p>"
+      : " — we've just emailed your quotation, bank details and next steps to <strong>" + payload.guest_email +
+        "</strong>. Your cabana is on hold; the booking is confirmed once payment is verified. " +
+        "Can't find the email? Check your Spam or Promotions folder, or call us at +63 917 792 0712.</p>";
+    statusEl.innerHTML = "<h3>Request received.</h3><p>Thank you, " + firstName + body + orderLine + extra;
   }
 
   function showError(payload, bill) {

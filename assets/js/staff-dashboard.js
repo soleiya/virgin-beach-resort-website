@@ -71,6 +71,9 @@
   var bookingsBody = document.getElementById("bookingsBody");
   var countLine = document.getElementById("countLine");
   var searchBox = document.getElementById("searchBox");
+  // Links in the staff alert emails open the dashboard pre-filtered: ?q=VBR-1042
+  var deepLinkQ = new URLSearchParams(location.search).get("q");
+  if (deepLinkQ && searchBox) searchBox.value = deepLinkQ;
   var filterPills = document.getElementById("filterPills");
   var summaryBar = document.getElementById("summaryBar");
 

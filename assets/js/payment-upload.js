@@ -12,6 +12,11 @@
   var fileInput = document.getElementById("payFile");
   var preview = document.getElementById("payPreview");
 
+  // Links in the quotation email pre-fill the Order ID and email.
+  var qs = new URLSearchParams(location.search);
+  if (qs.get("order")) form.querySelector("#orderCode").value = qs.get("order");
+  if (qs.get("email")) form.querySelector("#payEmail").value = qs.get("email");
+
   fileInput.addEventListener("change", function () {
     var file = fileInput.files && fileInput.files[0];
     if (!file) {
@@ -74,7 +79,7 @@
           showResult(
             "<h3>Thank you!</h3><p>Your payment screenshot for order <strong>" +
               orderCode +
-              "</strong> has been received. Our reservations team will confirm within 24 hours.</p>",
+              "</strong> has been received. We've emailed you an acknowledgement, and our reservations team will send your confirmation once it's verified (office hours 9:00 AM–6:00 PM daily).</p>",
             true
           );
         } else {
