@@ -9,6 +9,17 @@ import os
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
 
+
+def v(rel):
+    """Cache-busting version for an asset: a short hash of its contents.
+    GitHub Pages lets browsers cache JS/CSS for a while, so without this staff
+    keep running the old dashboard after an update. Re-run this script after
+    editing any of these files and the ?v= changes automatically."""
+    import hashlib
+    with open(os.path.join(ROOT, rel), "rb") as fh:
+        return hashlib.sha1(fh.read()).hexdigest()[:10]
+
+
 html = """<!doctype html>
 <html lang="en">
 <head>
@@ -19,7 +30,7 @@ html = """<!doctype html>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400..600;1,9..144,400..600&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="../assets/css/style.css">
+<link rel="stylesheet" href="../assets/css/style.css?v=__V_CSS__">
 <style>
   body { background: var(--sand); min-height: 100vh; }
   .dash-wrap { max-width: 1280px; margin: 0 auto; padding: 28px 20px 80px; }
@@ -418,12 +429,17 @@ html = """<!doctype html>
 </div>
 
 <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
-<script src="../assets/js/booking-config.js"></script>
-<script src="../assets/js/cabana-map.js"></script>
-<script src="../assets/js/staff-dashboard.js"></script>
+<script src="../assets/js/booking-config.js?v=__V_CFG__"></script>
+<script src="../assets/js/cabana-map.js?v=__V_MAP__"></script>
+<script src="../assets/js/staff-dashboard.js?v=__V_DASH__"></script>
 </body>
 </html>
 """
+
+html = (html.replace("__V_CSS__", v("assets/css/style.css"))
+            .replace("__V_CFG__", v("assets/js/booking-config.js"))
+            .replace("__V_MAP__", v("assets/js/cabana-map.js"))
+            .replace("__V_DASH__", v("assets/js/staff-dashboard.js")))
 
 os.makedirs(os.path.join(ROOT, "staff"), exist_ok=True)
 with open(os.path.join(ROOT, "staff", "index.html"), "w", encoding="utf-8") as f:
