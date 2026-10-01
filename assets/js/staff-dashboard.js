@@ -91,20 +91,14 @@
   var sortField = "created_at";
   var sortDir = "desc";
   var cabanasById = {};
-  var addCabanaSelect = document.getElementById("addCabana");
+  var cabanasList = [];
 
   function loadCabanaOptions() {
     if (!window.VBRCabanaMap) return Promise.resolve([]);
     return window.VBRCabanaMap.loadCabanas(sb).then(function (cabanas) {
       cabanasById = {};
+      cabanasList = cabanas;
       cabanas.forEach(function (c) { cabanasById[c.id] = c; });
-      if (addCabanaSelect) {
-        var opts = ['<option value="">Not assigned yet</option>'];
-        cabanas.forEach(function (c) {
-          opts.push('<option value="' + c.id + '">' + c.label + "</option>");
-        });
-        addCabanaSelect.innerHTML = opts.join("");
-      }
       return cabanas;
     });
   }
@@ -651,6 +645,15 @@
       tr.appendChild(tdReceived);
 
       var tdLog = document.createElement("td");
+      var actions = document.createElement("div");
+      actions.className = "row-actions";
+      var editBtnCell = document.createElement("button");
+      editBtnCell.type = "button";
+      editBtnCell.className = "log-btn";
+      editBtnCell.title = "Edit this booking";
+      editBtnCell.textContent = "✎";
+      editBtnCell.addEventListener("click", function () { openModal(r); });
+      actions.appendChild(editBtnCell);
       var logBtnCell = document.createElement("button");
       logBtnCell.type = "button";
       logBtnCell.className = "log-btn";
@@ -659,7 +662,8 @@
       logBtnCell.addEventListener("click", function () {
         openLogModal(r.id, (r.guest_name || "This booking") + (r.order_code ? " (" + r.order_code + ")" : ""));
       });
-      tdLog.appendChild(logBtnCell);
+      actions.appendChild(logBtnCell);
+      tdLog.appendChild(actions);
       tr.appendChild(tdLog);
 
       bookingsBody.appendChild(tr);
@@ -693,59 +697,258 @@
     render();
   });
 
-  // ---------- add booking modal ----------
+  // ---------- add / edit booking modal ----------
+  // One form does both: "+ Add Booking" opens it blank, the ✎ button on a
+  // row opens it pre-filled. Edits only send the fields that actually
+  // changed, so the activity log (log_booking_change trigger) shows a clean
+  // "field: old → new" line per change, attributed to whoever is signed in.
   var addBtn = document.getElementById("addBtn");
   var addModalBackdrop = document.getElementById("addModalBackdrop");
   var addForm = document.getElementById("addForm");
   var cancelAddBtn = document.getElementById("cancelAddBtn");
+  var modalTitle = document.getElementById("bookingModalTitle");
+  var modalSub = document.getElementById("bookingModalSub");
+  var saveBookingBtn = document.getElementById("saveBookingBtn");
+  var addError = document.getElementById("addError");
+  var addDateEl = document.getElementById("addDate");
+  var addMapEl = document.getElementById("addCabanaMap");
+  var addMapStatus = document.getElementById("addMapStatus");
+  var addSelectedEl = document.getElementById("addCabanaSelected");
+  var staffNotesField = document.getElementById("addStaffNotesField");
 
-  function openModal() { addModalBackdrop.classList.add("open"); }
-  function closeModal() { addModalBackdrop.classList.remove("open"); addForm.reset(); }
+  var editingRow = null;      // null = adding a new booking
+  var modalCabanaIds = [];    // cabana ids currently picked on the map
 
-  addBtn.addEventListener("click", openModal);
+  function $(id) { return document.getElementById(id); }
+  function intVal(id) { return parseInt($(id).value || "0", 10) || 0; }
+
+  // Which cabanas are already taken on a date, worked out from the bookings
+  // already loaded in the dashboard (staff can see every booking, so this
+  // also says who has it). The booking being edited never blocks itself.
+  function holdsForDate(dateStr) {
+    var held = new Set(), info = {};
+    if (!dateStr) return { held: held, info: info };
+    allRows.forEach(function (r) {
+      if (r.check_in !== dateStr || r.status === "declined") return;
+      if (editingRow && r.id === editingRow.id) return;
+      (r.booking_cabanas || []).forEach(function (bc) {
+        held.add(bc.cabana_id);
+        info[bc.cabana_id] = "booked by " + (r.guest_name || "a guest") + (r.order_code ? " (" + r.order_code + ")" : "");
+      });
+    });
+    return { held: held, info: info };
+  }
+
+  function renderModalSelected() {
+    addSelectedEl.innerHTML = "";
+    if (!modalCabanaIds.length) {
+      addSelectedEl.innerHTML = '<span class="muted">No cabana picked yet — tap one on the map (optional).</span>';
+      return;
+    }
+    var label = document.createElement("strong");
+    label.textContent = "Selected (" + modalCabanaIds.length + "):";
+    addSelectedEl.appendChild(label);
+    modalCabanaIds.forEach(function (id) {
+      var c = cabanasById[id];
+      var chip = document.createElement("span");
+      chip.className = "cabana-mini-chip";
+      chip.textContent = c ? c.label.replace(/^Section /, "") : "Unknown cabana";
+      var rm = document.createElement("button");
+      rm.type = "button";
+      rm.className = "cabana-mini-remove";
+      rm.textContent = "×";
+      rm.addEventListener("click", function () {
+        modalCabanaIds = modalCabanaIds.filter(function (x) { return x !== id; });
+        renderModalMap();
+      });
+      chip.appendChild(rm);
+      addSelectedEl.appendChild(chip);
+    });
+  }
+
+  function renderModalMap() {
+    if (!window.VBRCabanaMap || !cabanasList.length) {
+      addMapStatus.textContent = "The cabana map couldn't load — cabanas can still be added from the table afterwards.";
+      addMapEl.innerHTML = "";
+      renderModalSelected();
+      return;
+    }
+    var dateStr = addDateEl.value;
+    var h = holdsForDate(dateStr);
+    // If the date changed and a picked cabana is now taken, drop it.
+    var dropped = modalCabanaIds.filter(function (id) { return h.held.has(id); });
+    if (dropped.length) modalCabanaIds = modalCabanaIds.filter(function (id) { return !h.held.has(id); });
+    addMapStatus.textContent = dateStr
+      ? (dropped.length
+          ? dropped.length + " picked cabana(s) are already booked on this date and were removed — pick another."
+          : "Showing availability for " + fmtDate(dateStr) + ". Hover a taken cabana to see who has it.")
+      : "Pick a preferred date to see which cabanas are free that day.";
+    window.VBRCabanaMap.render(addMapEl, {
+      cabanas: cabanasList,
+      heldSet: h.held,
+      heldInfo: h.info,
+      selectedIds: modalCabanaIds,
+      crop: { top: 0.33, bottom: 0.56 },
+      onSelect: function (c) {
+        var i = modalCabanaIds.indexOf(c.id);
+        if (i >= 0) modalCabanaIds.splice(i, 1); else modalCabanaIds.push(c.id);
+        renderModalMap();
+      },
+    });
+    renderModalSelected();
+  }
+
+  function openModal(row) {
+    addForm.reset();
+    addError.style.display = "none";
+    editingRow = row && row.id ? row : null;
+    if (editingRow) {
+      var r = editingRow;
+      modalTitle.textContent = "Edit Booking" + (r.order_code ? " · " + r.order_code : "");
+      modalSub.textContent = "Changes are saved to the activity log under your name.";
+      saveBookingBtn.textContent = "Save Changes";
+      staffNotesField.style.display = "block";
+      $("addChannel").value = r.source || "other";
+      $("addType").value = r.stay_type || "day_trip";
+      $("addStatus").value = r.status || "pending";
+      $("addName").value = r.guest_name || "";
+      $("addBookedBy").value = r.booked_by || "";
+      $("addPhone").value = r.guest_phone || "";
+      $("addEmail").value = r.guest_email || "";
+      addDateEl.value = r.check_in || "";
+      $("addAdults").value = r.adults || 0;
+      $("addKids").value = r.children_6_12 || 0;
+      $("addSeniors").value = r.senior_count || 0;
+      $("addPets").value = r.pet_count || 0;
+      $("addTotal").value = r.total_amount != null ? r.total_amount : "";
+      $("addNotes").value = r.notes || "";
+      $("addStaffNotes").value = r.staff_notes || "";
+      modalCabanaIds = (r.booking_cabanas || []).map(function (bc) { return bc.cabana_id; });
+    } else {
+      modalTitle.textContent = "Add a Booking";
+      modalSub.textContent = "For a request that came in outside the website — Messenger, phone, walk-in, etc.";
+      saveBookingBtn.textContent = "Save Booking";
+      staffNotesField.style.display = "none";
+      $("addStatus").value = "pending";
+      $("addBookedBy").value = currentStaffName || "";
+      modalCabanaIds = [];
+    }
+    renderModalMap();
+    addModalBackdrop.classList.add("open");
+  }
+  function closeModal() {
+    addModalBackdrop.classList.remove("open");
+    addForm.reset();
+    editingRow = null;
+    modalCabanaIds = [];
+  }
+
+  addBtn.addEventListener("click", function () { openModal(null); });
   cancelAddBtn.addEventListener("click", closeModal);
   addModalBackdrop.addEventListener("click", function (e) { if (e.target === addModalBackdrop) closeModal(); });
+  addDateEl.addEventListener("change", renderModalMap);
+
+  function formValues() {
+    var type = $("addType").value;
+    var totalRaw = $("addTotal").value;
+    return {
+      source: $("addChannel").value,
+      stay_type: type,
+      stay_type_label: TYPE_LABELS[type],
+      status: $("addStatus").value,
+      guest_name: $("addName").value.trim(),
+      booked_by: $("addBookedBy").value.trim() || null,
+      guest_phone: $("addPhone").value.trim() || null,
+      guest_email: $("addEmail").value.trim() || null,
+      check_in: addDateEl.value || null,
+      adults: intVal("addAdults"),
+      children_6_12: intVal("addKids"),
+      senior_count: intVal("addSeniors"),
+      pet_count: intVal("addPets"),
+      total_amount: totalRaw === "" ? null : Number(totalRaw),
+      notes: $("addNotes").value.trim() || null,
+      staff_notes: $("addStaffNotes").value.trim() || null,
+    };
+  }
+
+  function showFormError(msg) {
+    addError.textContent = msg;
+    addError.style.display = "block";
+    saveBookingBtn.disabled = false;
+  }
+
+  function sameValue(a, b) {
+    if ((a === null || a === undefined || a === "") && (b === null || b === undefined || b === "")) return true;
+    if (typeof a === "number" || typeof b === "number") return Number(a) === Number(b);
+    return String(a) === String(b);
+  }
+
+  function syncCabanas(bookingId, before, after) {
+    var toAdd = after.filter(function (id) { return before.indexOf(id) === -1; });
+    var toRemove = before.filter(function (id) { return after.indexOf(id) === -1; });
+    var jobs = [];
+    if (toAdd.length) {
+      jobs.push(sb.from("booking_cabanas").insert(toAdd.map(function (id) { return { booking_id: bookingId, cabana_id: id }; })));
+    }
+    if (toRemove.length) {
+      jobs.push(sb.from("booking_cabanas").delete().eq("booking_id", bookingId).in("cabana_id", toRemove));
+    }
+    return Promise.all(jobs).then(function (results) {
+      var err = results.filter(function (r) { return r && r.error; })[0];
+      if (err) throw err.error;
+    });
+  }
 
   addForm.addEventListener("submit", function (e) {
     e.preventDefault();
-    var type = document.getElementById("addType").value;
-    var cabanaIds = addCabanaSelect
-      ? Array.prototype.filter.call(addCabanaSelect.options, function (o) { return o.selected && o.value; }).map(function (o) { return o.value; })
-      : [];
-    var payload = {
-      status: "pending",
-      source: document.getElementById("addChannel").value,
-      stay_type: type,
-      stay_type_label: TYPE_LABELS[type],
-      check_in: document.getElementById("addDate").value || null,
-      adults: parseInt(document.getElementById("addAdults").value || "0", 10),
-      children_6_12: parseInt(document.getElementById("addKids").value || "0", 10),
-      children_0_5: 0,
-      senior_count: parseInt(document.getElementById("addSeniors").value || "0", 10),
-      pet_count: parseInt(document.getElementById("addPets").value || "0", 10),
-      booked_by: currentStaffName,
-      guest_name: document.getElementById("addName").value,
-      guest_phone: document.getElementById("addPhone").value || null,
-      guest_email: document.getElementById("addEmail").value || null,
-      notes: document.getElementById("addNotes").value || null,
-    };
-    // check_in/adults/etc. above are what the guest wants; created_at (the
-    // actual date/time this row was entered into the system) is left unset
-    // here on purpose — Postgres stamps it itself, off the server clock, the
-    // moment the row lands, and that's the "Date Entered" the table + CSV
-    // export and the activity log both key off of.
-    sb.from("booking_requests").insert([payload]).select().then(function (res) {
-      if (res.error) {
-        alert("Couldn't save this booking: " + res.error.message);
-        return;
-      }
-      var row = res.data && res.data[0];
-      var attach = row && cabanaIds.length
-        ? sb.from("booking_cabanas").insert(cabanaIds.map(function (id) { return { booking_id: row.id, cabana_id: id }; }))
+    addError.style.display = "none";
+    var vals = formValues();
+    if (!vals.guest_name) return showFormError("Guest name is required.");
+    if (vals.senior_count > vals.adults) return showFormError("Senior citizens are counted within adults — senior count can't be more than adults.");
+    saveBookingBtn.disabled = true;
+
+    if (editingRow) {
+      var r = editingRow;
+      var patch = {};
+      Object.keys(vals).forEach(function (k) {
+        if (k === "stay_type_label") return; // only follows a real type change (below)
+        if (!sameValue(vals[k], r[k])) patch[k] = vals[k];
+      });
+      if (patch.stay_type) patch.stay_type_label = vals.stay_type_label;
+      var beforeCabanas = (r.booking_cabanas || []).map(function (bc) { return bc.cabana_id; });
+      var afterCabanas = modalCabanaIds.slice();
+      var save = Object.keys(patch).length
+        ? sb.from("booking_requests").update(patch).eq("id", r.id).then(function (res) { if (res.error) throw res.error; })
         : Promise.resolve();
-      Promise.resolve(attach).then(function () {
+      save
+        .then(function () { return syncCabanas(r.id, beforeCabanas, afterCabanas); })
+        .then(function () {
+          saveBookingBtn.disabled = false;
+          closeModal();
+          loadBookings();
+        })
+        .catch(function (err) { showFormError("Couldn't save the changes: " + (err && err.message ? err.message : err)); });
+      return;
+    }
+
+    // New booking. created_at (the "Date Entered") is left for Postgres to
+    // stamp off the server clock; order_code comes from trg_set_order_code.
+    var payload = Object.assign({}, vals, { children_0_5: 0 });
+    if (!payload.staff_notes) delete payload.staff_notes;
+    var cabanaIds = modalCabanaIds.slice();
+    sb.from("booking_requests").insert([payload]).select().then(function (res) {
+      if (res.error) return showFormError("Couldn't save this booking: " + res.error.message);
+      var row = res.data && res.data[0];
+      var attach = row && cabanaIds.length ? syncCabanas(row.id, [], cabanaIds) : Promise.resolve();
+      attach.then(function () {
+        saveBookingBtn.disabled = false;
         closeModal();
         loadBookings();
+      }, function (err) {
+        saveBookingBtn.disabled = false;
+        closeModal();
+        loadBookings();
+        alert("Booking saved, but the cabana(s) couldn't be attached: " + (err && err.message ? err.message : err));
       });
     });
   });

@@ -13,7 +13,9 @@
   // just repositioned to match the resort's updated map artwork.
   var CABANA_MAP_LAYOUT = [{"section":"A","cabana_type":"dining_cabana","number":1,"left":63.942,"top":51.827,"width":3.125,"height":2.5},{"section":"A","cabana_type":"dining_cabana","number":2,"left":73.438,"top":51.827,"width":3.125,"height":2.5},{"section":"A","cabana_type":"dining_cabana","number":3,"left":83.053,"top":51.827,"width":3.005,"height":2.5},{"section":"A","cabana_type":"dining_cabana","number":4,"left":59.255,"top":45.962,"width":3.245,"height":2.692},{"section":"A","cabana_type":"dining_cabana","number":5,"left":64.062,"top":45.769,"width":2.885,"height":2.885},{"section":"A","cabana_type":"dining_cabana","number":6,"left":68.99,"top":46.058,"width":3.365,"height":2.596},{"section":"A","cabana_type":"dining_cabana","number":7,"left":73.918,"top":45.962,"width":3.365,"height":2.692},{"section":"A","cabana_type":"dining_cabana","number":8,"left":78.726,"top":45.962,"width":3.245,"height":2.692},{"section":"A","cabana_type":"dining_cabana","number":9,"left":87.981,"top":46.154,"width":3.125,"height":2.5},{"section":"A","cabana_type":"dining_cabana","number":10,"left":64.183,"top":40.096,"width":3.125,"height":2.404},{"section":"A","cabana_type":"dining_cabana","number":11,"left":68.87,"top":40.096,"width":3.365,"height":2.5},{"section":"A","cabana_type":"dining_cabana","number":12,"left":73.918,"top":40.096,"width":3.245,"height":2.404},{"section":"A","cabana_type":"dining_cabana","number":14,"left":78.726,"top":40.0,"width":3.245,"height":2.404},{"section":"A","cabana_type":"dining_cabana","number":15,"left":83.173,"top":40.096,"width":3.245,"height":2.404},{"section":"A","cabana_type":"dining_cabana","number":16,"left":87.861,"top":40.096,"width":3.486,"height":2.5},{"section":"A","cabana_type":"dining_cabana","number":17,"left":69.231,"top":35.577,"width":2.885,"height":2.404},{"section":"A","cabana_type":"dining_cabana","number":18,"left":73.918,"top":35.577,"width":3.245,"height":2.404},{"section":"A","cabana_type":"dining_cabana","number":19,"left":78.846,"top":35.577,"width":3.125,"height":2.404},{"section":"A","cabana_type":"dining_cabana","number":20,"left":83.413,"top":35.577,"width":3.245,"height":2.404},{"section":"A","cabana_type":"dining_cabana","number":21,"left":87.74,"top":35.577,"width":3.606,"height":2.404},{"section":"A","cabana_type":"dining_cabana","number":22,"left":59.135,"top":40.096,"width":3.005,"height":2.404},{"section":"A","cabana_type":"lounge_cabana","number":1,"left":59.255,"top":51.827,"width":3.125,"height":2.5},{"section":"A","cabana_type":"lounge_cabana","number":2,"left":68.75,"top":51.827,"width":3.125,"height":2.5},{"section":"A","cabana_type":"lounge_cabana","number":3,"left":78.365,"top":51.827,"width":3.125,"height":2.5},{"section":"A","cabana_type":"lounge_cabana","number":4,"left":87.74,"top":51.827,"width":2.885,"height":2.5},{"section":"A","cabana_type":"lounge_cabana","number":5,"left":83.413,"top":46.058,"width":2.885,"height":2.5},{"section":"B","cabana_type":"dining_cabana","number":2,"left":12.62,"top":51.827,"width":3.125,"height":2.5},{"section":"B","cabana_type":"dining_cabana","number":3,"left":17.188,"top":51.827,"width":3.125,"height":2.5},{"section":"B","cabana_type":"dining_cabana","number":4,"left":21.635,"top":51.827,"width":2.885,"height":2.5},{"section":"B","cabana_type":"dining_cabana","number":6,"left":42.788,"top":51.827,"width":3.365,"height":2.596},{"section":"B","cabana_type":"dining_cabana","number":7,"left":6.01,"top":46.154,"width":3.125,"height":2.5},{"section":"B","cabana_type":"dining_cabana","number":8,"left":10.577,"top":46.154,"width":3.125,"height":2.596},{"section":"B","cabana_type":"dining_cabana","number":9,"left":15.024,"top":45.865,"width":3.245,"height":2.788},{"section":"B","cabana_type":"dining_cabana","number":10,"left":19.712,"top":45.962,"width":3.245,"height":2.692},{"section":"B","cabana_type":"dining_cabana","number":11,"left":24.279,"top":45.962,"width":3.365,"height":2.692},{"section":"B","cabana_type":"dining_cabana","number":12,"left":28.966,"top":45.962,"width":3.245,"height":2.692},{"section":"B","cabana_type":"dining_cabana","number":14,"left":33.293,"top":45.962,"width":3.486,"height":2.596},{"section":"B","cabana_type":"dining_cabana","number":15,"left":37.74,"top":45.962,"width":3.125,"height":2.692},{"section":"B","cabana_type":"dining_cabana","number":16,"left":42.668,"top":45.962,"width":3.245,"height":2.596},{"section":"B","cabana_type":"dining_cabana","number":17,"left":5.889,"top":40.0,"width":3.365,"height":2.596},{"section":"B","cabana_type":"dining_cabana","number":18,"left":10.457,"top":40.0,"width":3.245,"height":2.5},{"section":"B","cabana_type":"dining_cabana","number":19,"left":14.904,"top":40.096,"width":3.245,"height":2.5},{"section":"B","cabana_type":"dining_cabana","number":20,"left":19.471,"top":40.0,"width":3.606,"height":2.596},{"section":"B","cabana_type":"dining_cabana","number":21,"left":24.279,"top":40.0,"width":3.486,"height":2.5},{"section":"B","cabana_type":"dining_cabana","number":22,"left":28.846,"top":40.0,"width":3.486,"height":2.404},{"section":"B","cabana_type":"dining_cabana","number":23,"left":33.293,"top":40.0,"width":3.365,"height":2.5},{"section":"B","cabana_type":"dining_cabana","number":24,"left":37.74,"top":40.0,"width":3.365,"height":2.5},{"section":"B","cabana_type":"dining_cabana","number":25,"left":42.668,"top":40.0,"width":3.245,"height":2.5},{"section":"B","cabana_type":"lounge_cabana","number":1,"left":8.053,"top":51.827,"width":3.125,"height":2.692}];
 
-  var MAP_IMAGE_SRC_DEFAULT = "../assets/images/cabana-map-bg.jpg";
+  // v2: lounge tiles recolored amber, dining tiles teal, so the two types are easy
+  // to tell apart at a glance (the original artwork had them nearly the same).
+  var MAP_IMAGE_SRC_DEFAULT = "../assets/images/cabana-map-bg-v2.jpg";
 
   var TYPE_LABELS = {
     dining_cabana: "Dining Cabana",
@@ -65,7 +67,10 @@
     return null;
   }
 
-  // opts: { cabanas, heldSet, heldInfo, selectedIds, onSelect(cabana), imageSrc }
+  // opts: { cabanas, heldSet, heldInfo, selectedIds, onSelect(cabana), imageSrc, crop }
+  // crop (optional): { top, bottom } as fractions of the image height — shows
+  // only that horizontal band (e.g. just the cabana rows) instead of the
+  // whole illustrated map. Used by the staff booking form to save space.
   // heldInfo (optional): { [cabana_id]: "extra text for the tile's tooltip" }
   // — used by the staff dashboard to show who's holding a cabana; the public
   // booking page omits it and gets the generic "already booked" tooltip.
@@ -86,13 +91,27 @@
 
     var stage = document.createElement("div");
     stage.className = "cabana-map-stage";
+    var layer = stage; // where the image + hotspots go
+    if (opts.crop) {
+      // The image is 832x1040 (ratio 1.25). The outer box keeps the band's
+      // aspect ratio; the inner layer is the full map, shifted up.
+      var band = opts.crop.bottom - opts.crop.top;
+      stage.style.paddingTop = (band * 1.25 * 100) + "%";
+      layer = document.createElement("div");
+      layer.className = "cabana-map-layer";
+      layer.style.position = "absolute";
+      layer.style.left = "0";
+      layer.style.width = "100%";
+      layer.style.top = (-(opts.crop.top / band) * 100) + "%";
+      stage.appendChild(layer);
+    }
 
     var img = document.createElement("img");
     img.className = "cabana-map-bg";
     img.src = imageSrc;
     img.alt = "Map of Section A and Section B cabanas at Virgin Beach Resort's Day Trip Area";
     img.draggable = false;
-    stage.appendChild(img);
+    layer.appendChild(img);
 
     var skipped = 0;
     cabanas.forEach(function (c) {
@@ -119,7 +138,7 @@
       tile.addEventListener("click", function () {
         onSelect(c);
       });
-      stage.appendChild(tile);
+      layer.appendChild(tile);
     });
 
     container.appendChild(stage);

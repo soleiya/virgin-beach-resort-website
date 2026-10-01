@@ -143,6 +143,13 @@ html = """<!doctype html>
   .modal-row.three { grid-template-columns: 1fr 1fr 1fr; }
   .modal-field { margin-bottom: 14px; }
   .modal-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px; }
+  .modal.modal-booking { max-width: 860px; }
+  .modal-map-status { font-size: 0.82rem; color: var(--ink-soft); margin: 0 0 10px; }
+  .modal-map-selected { margin-top: 12px; font-size: 0.85rem; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+  .modal-map-selected .cabana-mini-chip { background: var(--lagoon-tint); }
+  .modal .cabana-legend { margin-top: 12px; }
+  .modal-error { color: var(--rose, #9c4a3f); font-size: 0.85rem; display: none; margin: 0; }
+  .row-actions { display: flex; gap: 6px; }
   @media (max-width: 560px) { .modal-row, .modal-row.three { grid-template-columns: 1fr; } }
 </style>
 </head>
@@ -250,7 +257,7 @@ html = """<!doctype html>
             <th>Notes</th>
             <th>Staff Notes</th>
             <th class="sortable" data-sort="created_at">Date Entered<span class="sort-arrow">&#9662;</span></th>
-            <th>Log</th>
+            <th>Actions</th>
           </tr>
         </thead>
         <tbody id="bookingsBody">
@@ -262,11 +269,11 @@ html = """<!doctype html>
 </div>
 
 <div class="modal-backdrop" id="addModalBackdrop">
-  <div class="modal">
-    <h2>Add a Booking</h2>
-    <p style="color:var(--ink-soft); font-size:0.85rem; margin:-10px 0 20px;">For a request that came in outside the website — Messenger, phone, walk-in, etc.</p>
+  <div class="modal modal-booking">
+    <h2 id="bookingModalTitle">Add a Booking</h2>
+    <p id="bookingModalSub" style="color:var(--ink-soft); font-size:0.85rem; margin:-10px 0 20px;">For a request that came in outside the website — Messenger, phone, walk-in, etc.</p>
     <form id="addForm">
-      <div class="modal-row">
+      <div class="modal-row three">
         <div class="modal-field" style="margin-bottom:0;">
           <label for="addChannel">Came in via</label>
           <select id="addChannel">
@@ -274,6 +281,8 @@ html = """<!doctype html>
             <option value="phone">Phone Call</option>
             <option value="email">Email</option>
             <option value="walk_in">Walk-in</option>
+            <option value="website">Website</option>
+            <option value="sheet_import">Imported (2026 Sheet)</option>
             <option value="other">Other</option>
           </select>
         </div>
@@ -286,17 +295,29 @@ html = """<!doctype html>
             <option value="all_inclusive_family">All Inclusive — Family Package</option>
             <option value="all_inclusive_barkada">All Inclusive — Barkada Package</option>
             <option value="corporate">Corporate Outing</option>
+            <option value="other">Other / Add-on</option>
+          </select>
+        </div>
+        <div class="modal-field" style="margin-bottom:0;">
+          <label for="addStatus">Status</label>
+          <select id="addStatus">
+            <option value="pending">Pending</option>
+            <option value="pending_payment">Pending Payment</option>
+            <option value="confirmed">Confirmed</option>
+            <option value="declined">Declined</option>
+            <option value="completed">Completed</option>
           </select>
         </div>
       </div>
-      <div class="modal-field">
-        <label for="addName">Guest Name</label>
-        <input id="addName" type="text" required>
-      </div>
-      <div class="modal-field">
-        <label for="addCabana">Cabana(s) (optional)</label>
-        <select id="addCabana" multiple size="4"><option value="">Not assigned yet</option></select>
-        <p class="field-hint">Ctrl/Cmd-click (or tap each) to select more than one.</p>
+      <div class="modal-row">
+        <div class="modal-field" style="margin-bottom:0;">
+          <label for="addName">Guest Name</label>
+          <input id="addName" type="text" required>
+        </div>
+        <div class="modal-field" style="margin-bottom:0;">
+          <label for="addBookedBy">Booked By</label>
+          <input id="addBookedBy" type="text" placeholder="Staff name">
+        </div>
       </div>
       <div class="modal-row">
         <div class="modal-field" style="margin-bottom:0;">
@@ -318,27 +339,42 @@ html = """<!doctype html>
           <input id="addAdults" type="number" min="0" value="1">
         </div>
         <div class="modal-field" style="margin-bottom:0;">
-          <label for="addKids">Kids</label>
+          <label for="addKids">Kids 6&ndash;12</label>
           <input id="addKids" type="number" min="0" value="0">
         </div>
       </div>
-      <div class="modal-row">
+      <div class="modal-row three">
         <div class="modal-field" style="margin-bottom:0;">
-          <label for="addSeniors">Senior Citizens</label>
+          <label for="addSeniors">Senior Citizens / PWD</label>
           <input id="addSeniors" type="number" min="0" value="0">
         </div>
         <div class="modal-field" style="margin-bottom:0;">
           <label for="addPets">Pets</label>
           <input id="addPets" type="number" min="0" value="0">
         </div>
+        <div class="modal-field" style="margin-bottom:0;">
+          <label for="addTotal">Total (&#8369;)</label>
+          <input id="addTotal" type="number" min="0" step="0.01" placeholder="Optional">
+        </div>
+      </div>
+      <div class="modal-field">
+        <label>Cabana(s)</label>
+        <p class="modal-map-status" id="addMapStatus">Pick a preferred date to see which cabanas are free that day.</p>
+        <div id="addCabanaMap"></div>
+        <div class="modal-map-selected" id="addCabanaSelected"></div>
       </div>
       <div class="modal-field">
         <label for="addNotes">Notes</label>
         <textarea id="addNotes" rows="3" placeholder="Anything from the conversation worth keeping"></textarea>
       </div>
+      <div class="modal-field" id="addStaffNotesField">
+        <label for="addStaffNotes">Staff Notes</label>
+        <textarea id="addStaffNotes" rows="2"></textarea>
+      </div>
+      <p class="modal-error" id="addError"></p>
       <div class="modal-actions">
         <button type="button" class="btn-sm ghost" id="cancelAddBtn">Cancel</button>
-        <button type="submit" class="btn-sm primary">Save Booking</button>
+        <button type="submit" class="btn-sm primary" id="saveBookingBtn">Save Booking</button>
       </div>
     </form>
   </div>
