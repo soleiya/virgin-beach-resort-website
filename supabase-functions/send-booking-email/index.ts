@@ -20,6 +20,12 @@
 //   Staff set the booking to Confirmed in the dashboard
 //     → GUEST:  "Your Day Trip is confirmed" + arrival guide
 //
+//   Staff edit a booking in the dashboard (✎) and leave "Email the guest"
+//   ticked — sent via notify_booking_change(), see booking-change-email.sql
+//     → GUEST:  "Changes to your reservation" — each changed detail shown as
+//               before → now, plus the full updated reservation  (kind: guest_changed:<id>)
+//     Sent for any source, as long as the booking has a valid guest email.
+//
 // Guest emails all share one subject line so Gmail keeps them in ONE thread
 // (the guest's replies land in that same thread in reservations@). Staff
 // alerts likewise share their own internal thread per Order ID.
@@ -615,6 +621,34 @@ ${signature(c)}`;
   };
 }
 
+export type Change = { label: string; before: string; after: string };
+
+export function guestChangedEmail(r: Any, cabanas: Any[], changes: Change[], c: ReturnType<typeof cfg>, threadRecord: Any) {
+  const first = esc(String(r.guest_name || "there").trim().split(/\s+/)[0]);
+  const td = `padding:8px 8px;border-bottom:1px solid ${C.line};font-size:13.5px;vertical-align:top;`;
+  const rows = changes.map((ch) =>
+    `<tr><td style="${td}color:${C.soft};width:28%;">${esc(ch.label)}</td><td style="${td}color:${C.soft};text-decoration:line-through;">${esc(ch.before || "—")}</td><td style="${td}font-weight:bold;color:${C.deep};">${esc(ch.after || "—")}</td></tr>`
+  ).join("");
+  const table = `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;">
+<tr style="color:${C.soft};font-size:11.5px;text-transform:uppercase;letter-spacing:.06em;"><td style="padding:6px 8px;">Detail</td><td style="padding:6px 8px;">Original</td><td style="padding:6px 8px;">Updated</td></tr>
+${rows}</table>`;
+  const body = `${p(`Hi ${first},`)}
+${p(`We've made the following ${changes.length === 1 ? "change" : "changes"} to your reservation <strong>${esc(r.order_code || "")}</strong>:`)}
+${table}
+${h2("Your updated reservation")}${kv([
+    ...reservationRows(r, cabanas),
+    ...(r.total_amount !== null && r.total_amount !== undefined ? [["Total", `<strong>${esc(peso(Number(r.total_amount)))}</strong>`] as [string, string]] : []),
+  ])}
+${p("If anything here doesn't look right, or you didn't ask for this change, simply reply to this email and we'll sort it out.", "margin-top:16px;")}
+${signature(c)}`;
+  return {
+    // Same subject as the guest's existing thread (built from the ORIGINAL
+    // date if the date itself changed), so it lands in that conversation.
+    subject: "Re: " + guestSubject(threadRecord, c),
+    html: shell({ preheader: `Updated: ${changes.map((ch) => ch.label).join(", ")} · ${r.order_code}`, body, c }),
+  };
+}
+
 // ---------- database (service role, PostgREST) -------------------------------
 
 async function db(path: string, init: RequestInit = {}) {
@@ -822,6 +856,23 @@ async function onConfirmed(r: Any) {
   return await send({ booking: r, kind: "guest_confirmed", to: r.guest_email, subject: g.subject, html: g.html, thread: "guest" });
 }
 
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+
+async function onChanged(r: Any, payload: Any) {
+  const c = cfg();
+  if (!r.guest_email || !EMAIL_RE.test(String(r.guest_email).trim())) return { skipped: "no valid guest email" };
+  const raw = Array.isArray(payload.changes) ? payload.changes.slice(0, 30) : [];
+  const changes: Change[] = raw
+    .map((x: Any) => ({ label: String(x?.label ?? "").slice(0, 80), before: String(x?.before ?? "").slice(0, 300), after: String(x?.after ?? "").slice(0, 300) }))
+    .filter((x: Change) => x.label);
+  if (!changes.length) return { skipped: "no changes" };
+  const cabanas = await loadCabanas(r);
+  const threadRecord = { ...r, check_in: payload.old_check_in || r.check_in };
+  const g = guestChangedEmail(r, cabanas, changes, c, threadRecord);
+  const kind = `guest_changed:${String(payload.change_id || Date.now())}`;
+  return await send({ booking: r, kind, to: String(r.guest_email).trim(), subject: g.subject, html: g.html, thread: "guest" });
+}
+
 export async function handle(req: Request): Promise<Response> {
   const c = cfg();
   if (req.method !== "POST") return new Response("Method not allowed", { status: 405 });
@@ -847,6 +898,7 @@ export async function handle(req: Request): Promise<Response> {
 
   try {
     if (payload.type === "INSERT") out.insert = await onInsert(r);
+    if (payload.type === "CHANGE") out.changed = await onChanged(r, payload);
     if (payload.type === "UPDATE") {
       if (payload.record.payment_uploaded_at && payload.record.payment_uploaded_at !== old.payment_uploaded_at) {
         out.proof = await onProof(r);

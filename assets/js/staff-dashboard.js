@@ -88,8 +88,11 @@
 
   var allRows = [];
   var activeFilter = "all";
-  var sortField = "created_at";
-  var sortDir = "desc";
+  // Default view: today's bookings first, then upcoming dates (soonest first),
+  // then past dates (most recent first). Click "Preferred Date" to cycle
+  // through Today-first → oldest-first → newest-first.
+  var sortField = "today_first";
+  var sortDir = "asc";
   var cabanasById = {};
   var cabanasList = [];
 
@@ -311,7 +314,28 @@
     return String(v).toLowerCase();
   }
 
+  function todayStr() {
+    var t = new Date();
+    return t.getFullYear() + "-" + String(t.getMonth() + 1).padStart(2, "0") + "-" + String(t.getDate()).padStart(2, "0");
+  }
+  function sortTodayFirst(rows) {
+    var today = todayStr();
+    function group(r) {
+      if (!r.check_in) return 3;
+      if (r.check_in === today) return 0;
+      return r.check_in > today ? 1 : 2;
+    }
+    return rows.slice().sort(function (a, b) {
+      var ga = group(a), gb = group(b);
+      if (ga !== gb) return ga - gb;
+      if (ga === 1 && a.check_in !== b.check_in) return a.check_in < b.check_in ? -1 : 1;  // upcoming: soonest first
+      if (ga === 2 && a.check_in !== b.check_in) return a.check_in > b.check_in ? -1 : 1;  // past: most recent first
+      return (b.created_at || "") < (a.created_at || "") ? -1 : (b.created_at || "") > (a.created_at || "") ? 1 : 0;
+    });
+  }
+
   function sortRows(rows) {
+    if (sortField === "today_first") return sortTodayFirst(rows);
     var field = sortField, dir = sortDir === "asc" ? 1 : -1;
     var copy = rows.slice();
     copy.sort(function (a, b) {
@@ -323,22 +347,34 @@
     return copy;
   }
 
+  function arrowFor(field) {
+    if (field === "today_first") return "&#9733;"; // ★ = today first
+    return sortDir === "asc" ? "&#9652;" : "&#9662;";
+  }
   document.querySelectorAll("th.sortable").forEach(function (th) {
-    if (th.getAttribute("data-sort") === sortField) {
+    var thField = th.getAttribute("data-sort");
+    if (thField === sortField || (thField === "check_in" && sortField === "today_first")) {
       th.classList.add("sort-active");
-      th.querySelector(".sort-arrow").innerHTML = sortDir === "asc" ? "&#9652;" : "&#9662;";
+      th.querySelector(".sort-arrow").innerHTML = arrowFor(sortField);
+      if (sortField === "today_first") th.title = "Sorted: today first, then upcoming, then past. Click to change.";
     }
     th.addEventListener("click", function () {
-      var field = th.getAttribute("data-sort");
-      if (sortField === field) {
+      var field = thField;
+      if (field === "check_in") {
+        // cycle: today-first → oldest first → newest first → today-first
+        if (sortField === "today_first") { sortField = "check_in"; sortDir = "asc"; }
+        else if (sortField === "check_in" && sortDir === "asc") { sortDir = "desc"; }
+        else { sortField = "today_first"; sortDir = "asc"; }
+      } else if (sortField === field) {
         sortDir = sortDir === "asc" ? "desc" : "asc";
       } else {
         sortField = field;
-        sortDir = field === "created_at" || field === "check_in" ? "desc" : "asc";
+        sortDir = field === "created_at" ? "desc" : "asc";
       }
-      document.querySelectorAll("th.sortable").forEach(function (h) { h.classList.remove("sort-active"); });
+      document.querySelectorAll("th.sortable").forEach(function (h) { h.classList.remove("sort-active"); h.title = ""; });
       th.classList.add("sort-active");
-      th.querySelector(".sort-arrow").innerHTML = sortDir === "asc" ? "&#9652;" : "&#9662;";
+      th.querySelector(".sort-arrow").innerHTML = arrowFor(sortField);
+      if (sortField === "today_first") th.title = "Sorted: today first, then upcoming, then past. Click to change.";
       render();
     });
   });
@@ -387,17 +423,19 @@
       '<div class="summary-tile unpaid"><div class="summary-label">Total Unpaid</div><div class="summary-value">' + peso(unpaidTotal) + '</div><div class="summary-sub">' + unpaidCount + " pending</div></div>";
   }
 
-  // A booking can include more than one cabana. Shows each as a small
-  // removable chip plus a dropdown to add another — every change writes
-  // straight to the booking_cabanas join table.
+  // Display only — cabanas are added/removed in the ✎ edit form (on the map).
+  function cabanaLabelsFor(r) {
+    return (r.booking_cabanas || []).map(function (bc) {
+      var c = cabanasById[bc.cabana_id];
+      return c ? c.label : "Unknown cabana";
+    });
+  }
   function renderCabanaCell(td, r) {
     td.innerHTML = "";
     td.className = "cabana-cell";
     var assignedIds = (r.booking_cabanas || []).map(function (bc) { return bc.cabana_id; });
-
     // Imported 2026-sheet rows never had a literal cabana number recorded —
-    // only how many dining/lounge cabanas were used. Show that count as a
-    // plain note when there's no real cabana link to display instead.
+    // only how many dining/lounge cabanas were used.
     if (!assignedIds.length && (r.legacy_dining_cabanas || r.legacy_lounge_cabanas)) {
       var legacyNote = document.createElement("div");
       legacyNote.className = "muted";
@@ -407,131 +445,50 @@
       if (r.legacy_lounge_cabanas) bits.push(r.legacy_lounge_cabanas + " lounge");
       legacyNote.textContent = bits.join(", ") + " (from 2026 sheet)";
       td.appendChild(legacyNote);
+      return;
     }
-
+    if (!assignedIds.length) { td.innerHTML = '<span class="muted">—</span>'; return; }
     var chipWrap = document.createElement("div");
     chipWrap.className = "cabana-cell-chips";
     assignedIds.forEach(function (id) {
       var c = cabanasById[id];
       var chip = document.createElement("span");
       chip.className = "cabana-mini-chip";
+      chip.style.paddingRight = "10px";
       chip.textContent = c ? c.label.replace(/^Section /, "") : "Unknown cabana";
-      var rm = document.createElement("button");
-      rm.type = "button";
-      rm.className = "cabana-mini-remove";
-      rm.textContent = "×";
-      rm.setAttribute("aria-label", "Remove " + (c ? c.label : "cabana"));
-      rm.addEventListener("click", function () {
-        sb.from("booking_cabanas").delete().eq("booking_id", r.id).eq("cabana_id", id).then(function (res) {
-          if (res.error) { alert("Couldn't remove cabana: " + res.error.message); return; }
-          r.booking_cabanas = (r.booking_cabanas || []).filter(function (bc) { return bc.cabana_id !== id; });
-          renderCabanaCell(td, r);
-        });
-      });
-      chip.appendChild(rm);
       chipWrap.appendChild(chip);
     });
     td.appendChild(chipWrap);
-
-    if (Object.keys(cabanasById).length) {
-      var addSelect = document.createElement("select");
-      addSelect.className = "cabana-add-select";
-      var opts = ['<option value="">+ add cabana</option>'];
-      Object.keys(cabanasById).forEach(function (id) {
-        if (assignedIds.indexOf(id) === -1) {
-          opts.push('<option value="' + id + '">' + cabanasById[id].label + "</option>");
-        }
-      });
-      addSelect.innerHTML = opts.join("");
-      addSelect.addEventListener("change", function () {
-        var val = addSelect.value;
-        if (!val) return;
-        sb.from("booking_cabanas").insert([{ booking_id: r.id, cabana_id: val }]).then(function (res) {
-          if (res.error) { alert("Couldn't add cabana: " + res.error.message); return; }
-          r.booking_cabanas = (r.booking_cabanas || []).concat([{ cabana_id: val }]);
-          renderCabanaCell(td, r);
-        });
-      });
-      td.appendChild(addSelect);
-    }
   }
 
+  function openSignedUrl(bucket, path) {
+    sb.storage.from(bucket).createSignedUrl(path, 3600).then(function (res) {
+      if (res.data && res.data.signedUrl) window.open(res.data.signedUrl, "_blank");
+      else alert("Couldn't open the file" + (res.error ? ": " + res.error.message : "."));
+    });
+  }
+  function proofLinks(r) {
+    var links = [];
+    if (r.payment_screenshot_path) links.push({ text: "View payment proof", bucket: "payment-proofs", path: r.payment_screenshot_path });
+    (r.senior_id_paths || []).forEach(function (path, i, all) {
+      links.push({ text: "View senior ID" + (all.length > 1 ? " " + (i + 1) : ""), bucket: "senior-ids", path: path });
+    });
+    return links;
+  }
+  // Display only — payment proofs are uploaded from the ✎ edit form.
   function renderPayCell(td, r) {
     td.innerHTML = "";
-    if (r.payment_screenshot_path) {
-      var viewLink = document.createElement("a");
-      viewLink.className = "pay-link";
-      viewLink.href = "#";
-      viewLink.textContent = "View screenshot";
-      viewLink.addEventListener("click", function (e) {
-        e.preventDefault();
-        sb.storage.from("payment-proofs").createSignedUrl(r.payment_screenshot_path, 3600).then(function (res) {
-          if (res.data && res.data.signedUrl) window.open(res.data.signedUrl, "_blank");
-        });
-      });
-      td.appendChild(viewLink);
+    var links = proofLinks(r);
+    if (!links.length) { td.innerHTML = '<span class="muted">—</span>'; return; }
+    links.forEach(function (l) {
+      var a = document.createElement("a");
+      a.className = "pay-link";
+      a.href = "#";
+      a.textContent = l.text;
+      a.addEventListener("click", function (e) { e.preventDefault(); openSignedUrl(l.bucket, l.path); });
+      td.appendChild(a);
       td.appendChild(document.createElement("br"));
-    }
-    if (r.senior_id_paths && r.senior_id_paths.length) {
-      r.senior_id_paths.forEach(function (path, i) {
-        var idLink = document.createElement("a");
-        idLink.className = "pay-link";
-        idLink.href = "#";
-        idLink.textContent = "View senior ID" + (r.senior_id_paths.length > 1 ? " " + (i + 1) : "");
-        idLink.addEventListener("click", function (e) {
-          e.preventDefault();
-          sb.storage.from("senior-ids").createSignedUrl(path, 3600).then(function (res) {
-            if (res.data && res.data.signedUrl) window.open(res.data.signedUrl, "_blank");
-          });
-        });
-        td.appendChild(idLink);
-        td.appendChild(document.createElement("br"));
-      });
-    }
-    var uploadBtn = document.createElement("button");
-    uploadBtn.type = "button";
-    uploadBtn.className = "pay-upload-btn";
-    uploadBtn.textContent = r.payment_screenshot_path ? "Replace" : "Mark Paid (Upload)";
-    var fileInput = document.createElement("input");
-    fileInput.type = "file";
-    fileInput.accept = "image/*";
-    fileInput.style.display = "none";
-    uploadBtn.addEventListener("click", function () { fileInput.click(); });
-    fileInput.addEventListener("change", function () {
-      var file = fileInput.files && fileInput.files[0];
-      if (!file) return;
-      var status = document.createElement("span");
-      status.className = "pay-uploading";
-      status.textContent = "Uploading…";
-      td.innerHTML = "";
-      td.appendChild(status);
-      var ext = (file.name.split(".").pop() || "jpg").toLowerCase().replace(/[^a-z0-9]/g, "") || "jpg";
-      var path = "staff/" + r.id + "-" + Date.now() + "." + ext;
-      sb.storage
-        .from("payment-proofs")
-        .upload(path, file, { contentType: file.type || "image/jpeg" })
-        .then(function (res) {
-          if (res.error) throw res.error;
-          var patch = {
-            payment_screenshot_path: path,
-            payment_uploaded_at: new Date().toISOString(),
-          };
-          if (r.status === "pending" || r.status === "pending_payment") patch.status = "confirmed";
-          return sb.from("booking_requests").update(patch).eq("id", r.id).then(function (res2) {
-            if (res2.error) throw res2.error;
-            Object.assign(r, patch);
-          });
-        })
-        .then(function () {
-          render();
-        })
-        .catch(function () {
-          status.textContent = "Upload failed — try again.";
-          setTimeout(function () { renderPayCell(td, r); }, 1500);
-        });
     });
-    td.appendChild(uploadBtn);
-    td.appendChild(fileInput);
   }
 
   function render() {
@@ -597,17 +554,9 @@
 
       var tdStatus = document.createElement("td");
       var statusBadge = document.createElement("span");
-      statusBadge.className = "status-badge status-" + r.status;
+      statusBadge.className = "status-badge readonly status-" + r.status;
       statusBadge.textContent = STATUS_LABELS[r.status] || r.status;
-      statusBadge.addEventListener("click", function () {
-        var idx = STATUS_ORDER.indexOf(r.status);
-        var next = STATUS_ORDER[(idx + 1) % STATUS_ORDER.length];
-        r.status = next;
-        statusBadge.className = "status-badge status-" + next;
-        statusBadge.textContent = STATUS_LABELS[next];
-        updateField(r.id, "status", next, statusBadge);
-        renderSummary(applyFilter(allRows));
-      });
+      statusBadge.title = "Change the status with ✎ Edit";
       tdStatus.appendChild(statusBadge);
       tr.appendChild(tdStatus);
 
@@ -715,6 +664,75 @@
   var addMapStatus = document.getElementById("addMapStatus");
   var addSelectedEl = document.getElementById("addCabanaSelected");
   var staffNotesField = document.getElementById("addStaffNotesField");
+  var paymentField = document.getElementById("addPaymentField");
+  var payExistingEl = document.getElementById("addPayExisting");
+  var payFileEl = document.getElementById("addPayFile");
+  var notifyWrap = document.getElementById("addNotifyWrap");
+  var notifyEl = document.getElementById("addNotify");
+  var notifyText = document.getElementById("addNotifyText");
+  var EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+
+  // Guest-facing details that go into the "changes to your reservation"
+  // email. Status, staff notes, booked-by and source are internal and left out.
+  var GUEST_FIELDS = [
+    ["stay_type", "Booking", function (v) { return FULL_TYPE_NAMES[v] || TYPE_LABELS[v] || v || ""; }],
+    ["check_in", "Date", function (v) { return v ? fmtDateLong(v) : "To be confirmed"; }],
+    ["adults", "Adults", String],
+    ["senior_count", "Senior citizens / PWD", String],
+    ["children_6_12", "Kids (6–12)", String],
+    ["pet_count", "Pets", String],
+    ["total_amount", "Total", function (v) { return v === null || v === undefined || v === "" ? "" : peso(v); }],
+    ["guest_name", "Name", String],
+    ["guest_phone", "Phone", String],
+    ["guest_email", "Email", String],
+    ["notes", "Notes", String],
+  ];
+  var FULL_TYPE_NAMES = {
+    day_trip: "Day Trip (Full Day)", half_day: "Half-Day Trip", flash_sale: "Flash Sale Day Trip",
+    all_inclusive_family: "All Inclusive — Family Package", all_inclusive_barkada: "All Inclusive — Barkada Package",
+    corporate: "Corporate Outing", other: "Other / Add-on",
+  };
+  function fmtDateLong(s) {
+    var d = new Date(s + "T00:00:00");
+    return d.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", year: "numeric" });
+  }
+  function cabanaListText(ids) {
+    var labels = ids.map(function (id) { return cabanasById[id] ? cabanasById[id].label : "Unknown cabana"; });
+    labels.sort(function (a, b) { return a.localeCompare(b, undefined, { numeric: true }); });
+    return labels.length ? labels.join(", ") : "None";
+  }
+
+  function updateNotifyState() {
+    if (!editingRow) { notifyWrap.style.display = "none"; return; }
+    notifyWrap.style.display = "flex";
+    var email = $("addEmail").value.trim();
+    var ok = EMAIL_RE.test(email);
+    notifyEl.disabled = !ok;
+    if (!ok) notifyEl.checked = false;
+    notifyWrap.classList.toggle("is-disabled", !ok);
+    notifyText.textContent = ok
+      ? "Email the guest (" + email + ") a summary of these changes"
+      : "No guest email on this booking — the guest won't be emailed";
+  }
+
+  function renderPayExisting(r) {
+    payExistingEl.innerHTML = "";
+    var links = r ? proofLinks(r) : [];
+    if (!links.length) { payExistingEl.innerHTML = '<span class="muted">No payment proof uploaded yet.</span>'; return; }
+    links.forEach(function (l) {
+      var a = document.createElement("a");
+      a.href = "#";
+      a.textContent = l.text;
+      a.addEventListener("click", function (e) { e.preventDefault(); openSignedUrl(l.bucket, l.path); });
+      payExistingEl.appendChild(a);
+    });
+    if (r.payment_uploaded_at) {
+      var when = document.createElement("span");
+      when.className = "muted";
+      when.textContent = "uploaded " + fmtDateTime(r.payment_uploaded_at);
+      payExistingEl.appendChild(when);
+    }
+  }
 
   var editingRow = null;      // null = adding a new booking
   var modalCabanaIds = [];    // cabana ids currently picked on the map
@@ -808,6 +826,9 @@
       modalSub.textContent = "Changes are saved to the activity log under your name.";
       saveBookingBtn.textContent = "Save Changes";
       staffNotesField.style.display = "block";
+      paymentField.style.display = "block";
+      notifyEl.checked = true;
+      renderPayExisting(r);
       $("addChannel").value = r.source || "other";
       $("addType").value = r.stay_type || "day_trip";
       $("addStatus").value = r.status || "pending";
@@ -829,11 +850,13 @@
       modalSub.textContent = "For a request that came in outside the website — Messenger, phone, walk-in, etc.";
       saveBookingBtn.textContent = "Save Booking";
       staffNotesField.style.display = "none";
+      paymentField.style.display = "none";
       $("addStatus").value = "pending";
       $("addBookedBy").value = currentStaffName || "";
       modalCabanaIds = [];
     }
     renderModalMap();
+    updateNotifyState();
     addModalBackdrop.classList.add("open");
   }
   function closeModal() {
@@ -847,6 +870,7 @@
   cancelAddBtn.addEventListener("click", closeModal);
   addModalBackdrop.addEventListener("click", function (e) { if (e.target === addModalBackdrop) closeModal(); });
   addDateEl.addEventListener("change", renderModalMap);
+  document.getElementById("addEmail").addEventListener("input", updateNotifyState);
 
   function formValues() {
     var type = $("addType").value;
@@ -899,6 +923,32 @@
     });
   }
 
+  // Staff-uploaded proofs go under staff/ — the email function treats those as
+  // already verified (no "please verify" alert to the team).
+  function uploadProof(r, file) {
+    var ext = (file.name.split(".").pop() || "jpg").toLowerCase().replace(/[^a-z0-9]/g, "") || "jpg";
+    var path = "staff/" + r.id + "-" + Date.now() + "." + ext;
+    return sb.storage.from("payment-proofs").upload(path, file, { contentType: file.type || "image/jpeg" }).then(function (res) {
+      if (res.error) throw res.error;
+      return path;
+    });
+  }
+
+  function guestChanges(r, patch, beforeCabanas, afterCabanas) {
+    var out = [];
+    GUEST_FIELDS.forEach(function (f) {
+      var key = f[0];
+      if (!(key in patch)) return;
+      var fmt = f[2];
+      var before = r[key] === null || r[key] === undefined ? "" : fmt(r[key]);
+      var after = patch[key] === null || patch[key] === undefined ? "" : fmt(patch[key]);
+      if (before !== after) out.push({ label: f[1], before: before || "—", after: after || "—" });
+    });
+    var b = cabanaListText(beforeCabanas), a = cabanaListText(afterCabanas);
+    if (b !== a) out.push({ label: "Cabana(s)", before: b, after: a });
+    return out;
+  }
+
   addForm.addEventListener("submit", function (e) {
     e.preventDefault();
     addError.style.display = "none";
@@ -917,17 +967,42 @@
       if (patch.stay_type) patch.stay_type_label = vals.stay_type_label;
       var beforeCabanas = (r.booking_cabanas || []).map(function (bc) { return bc.cabana_id; });
       var afterCabanas = modalCabanaIds.slice();
-      var save = Object.keys(patch).length
-        ? sb.from("booking_requests").update(patch).eq("id", r.id).then(function (res) { if (res.error) throw res.error; })
-        : Promise.resolve();
-      save
+      var changes = guestChanges(r, patch, beforeCabanas, afterCabanas);
+      var notify = notifyEl.checked && !notifyEl.disabled && changes.length > 0;
+      var file = payFileEl.files && payFileEl.files[0];
+      saveBookingBtn.textContent = "Saving…";
+
+      var upload = file ? uploadProof(r, file) : Promise.resolve(null);
+      upload
+        .then(function (path) {
+          if (path) {
+            patch.payment_screenshot_path = path;
+            patch.payment_uploaded_at = new Date().toISOString();
+            var st = patch.status || r.status;
+            if (st === "pending" || st === "pending_payment") patch.status = "confirmed";
+          }
+          if (!Object.keys(patch).length) return;
+          return sb.from("booking_requests").update(patch).eq("id", r.id).then(function (res) { if (res.error) throw res.error; });
+        })
         .then(function () { return syncCabanas(r.id, beforeCabanas, afterCabanas); })
         .then(function () {
+          if (!notify) return null;
+          return sb.rpc("notify_booking_change", {
+            p_booking_id: r.id,
+            p_changes: changes,
+            p_old_check_in: "check_in" in patch ? r.check_in : null,
+          }).then(function (res) { return res.error ? res.error : null; });
+        })
+        .then(function (notifyErr) {
           saveBookingBtn.disabled = false;
           closeModal();
           loadBookings();
+          if (notifyErr) alert("Changes saved, but the guest email couldn't be queued: " + notifyErr.message);
         })
-        .catch(function (err) { showFormError("Couldn't save the changes: " + (err && err.message ? err.message : err)); });
+        .catch(function (err) {
+          saveBookingBtn.textContent = "Save Changes";
+          showFormError("Couldn't save the changes: " + (err && err.message ? err.message : err));
+        });
       return;
     }
 
