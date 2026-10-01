@@ -47,11 +47,26 @@
     website: "Website", messenger: "Messenger", phone: "Phone", email: "Email", walk_in: "Walk-in", other: "Other",
     sheet_import: "Imported (2026 Sheet)",
   };
-  var STATUS_ORDER = ["pending", "pending_payment", "confirmed", "declined", "completed"];
+  var STATUS_ORDER = ["pending", "pending_payment", "confirmed", "declined", "completed", "expired"];
   var STATUS_LABELS = {
     pending: "Pending", pending_payment: "Pending Payment", confirmed: "Confirmed",
-    declined: "Declined", completed: "Completed",
+    declined: "Declined", completed: "Completed", expired: "Expired",
   };
+  // Bookings that no longer hold their cabana(s).
+  function releasesCabanas(status) { return status === "declined" || status === "expired"; }
+
+  // Same rule as booking_deadlines() in supabase-functions/booking-v3.sql:
+  // pay within 24h (reminder + 12h extension → 36h), never past 8:00 AM on
+  // the trip date. Booked on/after 8:00 AM of the trip date = pay on arrival.
+  function paymentDeadlines(r) {
+    if (!r.created_at) return null;
+    var created = new Date(r.created_at).getTime();
+    var trip8 = r.check_in ? new Date(r.check_in + "T08:00:00+08:00").getTime() : null;
+    if (trip8 !== null && trip8 <= created) return null;
+    var first = created + 24 * 3600e3, fin = created + 36 * 3600e3;
+    if (trip8 !== null && trip8 < fin) fin = trip8;
+    return { first: Math.min(first, fin), final: fin };
+  }
   // Actions the booking_audit_log trigger can record — see the SQL that
   // created log_booking_change() / log_cabana_change() for exactly how
   // and when each one is written.
@@ -227,7 +242,7 @@
 
   function loadBookings() {
     countLine.textContent = "Loading…";
-    loadBookingsPage(0, []).then(function (rows) {
+    return loadBookingsPage(0, []).then(function (rows) {
       allRows = rows;
       populateBookedByOptions();
       render();
@@ -473,6 +488,9 @@
     (r.senior_id_paths || []).forEach(function (path, i, all) {
       links.push({ text: "View senior ID" + (all.length > 1 ? " " + (i + 1) : ""), bucket: "senior-ids", path: path });
     });
+    (r.pet_vaccination_paths || []).forEach(function (path, i, all) {
+      links.push({ text: "View pet vaccination card" + (all.length > 1 ? " " + (i + 1) : ""), bucket: "pet-vaccinations", path: path });
+    });
     return links;
   }
   // Display only — payment proofs are uploaded from the ✎ edit form.
@@ -558,6 +576,27 @@
       statusBadge.textContent = STATUS_LABELS[r.status] || r.status;
       statusBadge.title = "Change the status with ✎ Edit";
       tdStatus.appendChild(statusBadge);
+      if ((r.status === "pending" || r.status === "pending_payment") && !r.payment_uploaded_at) {
+        var dl = paymentDeadlines(r);
+        var pb = document.createElement("span");
+        pb.className = "payby";
+        if (!dl) pb.textContent = "pay on arrival";
+        else {
+          var nowMs = Date.now();
+          var target = nowMs < dl.first ? dl.first : dl.final;
+          pb.textContent = nowMs >= dl.final
+            ? "past deadline — expiring"
+            : (nowMs < dl.first ? "pay by " : "extended to ") + fmtDateTime(new Date(target).toISOString());
+          if (nowMs >= dl.first) pb.classList.add("overdue");
+          pb.title = "Reminder + 12h extension at " + fmtDateTime(new Date(dl.first).toISOString()) + "; expires at " + fmtDateTime(new Date(dl.final).toISOString()) + " if still unpaid.";
+        }
+        tdStatus.appendChild(pb);
+      } else if (r.status === "expired" && r.expired_at) {
+        var ex = document.createElement("span");
+        ex.className = "payby";
+        ex.textContent = "unpaid · released " + fmtDateTime(r.expired_at);
+        tdStatus.appendChild(ex);
+      }
       tr.appendChild(tdStatus);
 
       var tdPay = document.createElement("td");
@@ -747,7 +786,7 @@
     var held = new Set(), info = {};
     if (!dateStr) return { held: held, info: info };
     allRows.forEach(function (r) {
-      if (r.check_in !== dateStr || r.status === "declined") return;
+      if (r.check_in !== dateStr || releasesCabanas(r.status)) return;
       if (editingRow && r.id === editingRow.id) return;
       (r.booking_cabanas || []).forEach(function (bc) {
         held.add(bc.cabana_id);
@@ -1027,6 +1066,152 @@
       });
     });
   });
+
+  // ---------- Cabana Map planner ----------
+  // A whole-day view of every cabana. Click a booked cabana to pick it up,
+  // then a free one to move that party there, or another booked one to swap
+  // the two parties. Each affected guest gets the "changes to your
+  // reservation" email (if they have an email and the box is ticked).
+  var plannerBackdrop = $("plannerBackdrop");
+  var plannerDateEl = $("plannerDate");
+  var plannerMapEl = $("plannerMap");
+  var plannerStatus = $("plannerStatus");
+  var plannerConfirm = $("plannerConfirm");
+  var plannerList = $("plannerList");
+  var plannerSource = null;   // { cabanaId, row }
+  var plannerPending = null;  // { from, to, row, other }
+
+  function plannerHolds(dateStr) {
+    var byCabana = {};
+    allRows.forEach(function (r) {
+      if (r.check_in !== dateStr || releasesCabanas(r.status)) return;
+      (r.booking_cabanas || []).forEach(function (bc) { byCabana[bc.cabana_id] = r; });
+    });
+    return byCabana;
+  }
+  function cabLabel(id) { return cabanasById[id] ? cabanasById[id].label.replace(/^Section /, "Sec. ") : "cabana"; }
+  function partySize(r) { return (r.adults || 0) + (r.children_6_12 || 0) + (r.children_0_5 || 0); }
+
+  function renderPlanner() {
+    var dateStr = plannerDateEl.value;
+    var holds = plannerHolds(dateStr);
+    var heldSet = new Set(Object.keys(holds));
+    var info = {};
+    Object.keys(holds).forEach(function (id) {
+      var r = holds[id];
+      info[id] = (r.guest_name || "Guest") + (r.order_code ? " (" + r.order_code + ")" : "") + " · " + partySize(r) + " pax";
+    });
+    if (plannerPending) {
+      plannerStatus.className = "planner-status is-pending";
+      plannerStatus.textContent = plannerPending.other
+        ? "Swap: " + plannerPending.row.guest_name + " → " + cabLabel(plannerPending.to) + ", and " + plannerPending.other.guest_name + " → " + cabLabel(plannerPending.from) + "?"
+        : "Move " + plannerPending.row.guest_name + " from " + cabLabel(plannerPending.from) + " to " + cabLabel(plannerPending.to) + "?";
+      plannerConfirm.classList.add("open");
+    } else {
+      plannerConfirm.classList.remove("open");
+      plannerStatus.className = "planner-status";
+      plannerStatus.textContent = plannerSource
+        ? "Picked up " + cabLabel(plannerSource.cabanaId) + " (" + plannerSource.row.guest_name + "). Click a free cabana to move it there, another booked cabana to swap, or the same one to put it back."
+        : (heldSet.size ? heldSet.size + " cabana(s) booked on " + fmtDate(dateStr) + ". Hover to see who has each; click one to move it." : "No cabanas booked on " + fmtDate(dateStr) + ".");
+    }
+    window.VBRCabanaMap.render(plannerMapEl, {
+      cabanas: cabanasList,
+      heldSet: heldSet,
+      heldInfo: info,
+      clickableHeld: true,
+      highlightId: plannerPending ? plannerPending.to : (plannerSource ? plannerSource.cabanaId : null),
+      selectedLabel: "Picked up / moving to",
+      crop: { top: 0.33, bottom: 0.56 },
+      onSelect: function (c) {
+        if (plannerPending) return;
+        var holder = holds[c.id];
+        if (!plannerSource) {
+          if (holder) plannerSource = { cabanaId: c.id, row: holder };
+        } else if (c.id === plannerSource.cabanaId) {
+          plannerSource = null;
+        } else {
+          plannerPending = { from: plannerSource.cabanaId, to: c.id, row: plannerSource.row, other: holder && holder.id !== plannerSource.row.id ? holder : null };
+          if (holder && holder.id === plannerSource.row.id) { plannerPending = null; plannerStatus.textContent = "That cabana already belongs to the same booking."; return; }
+        }
+        renderPlanner();
+      },
+    });
+    // the day's bookings
+    var dayRows = allRows.filter(function (r) { return r.check_in === dateStr && !releasesCabanas(r.status); })
+      .sort(function (a, b) { return partySize(b) - partySize(a); });
+    plannerList.innerHTML = dayRows.length ? "" : '<tr><td colspan="5" class="muted">No active bookings on this date.</td></tr>';
+    dayRows.forEach(function (r) {
+      var tr = document.createElement("tr");
+      if (plannerSource && plannerSource.row.id === r.id) tr.className = "is-source";
+      var cabs = (r.booking_cabanas || []).map(function (bc) { return cabLabel(bc.cabana_id); }).join(", ");
+      if (!cabs && (r.legacy_dining_cabanas || r.legacy_lounge_cabanas)) cabs = (r.legacy_dining_cabanas || 0) + " dining, " + (r.legacy_lounge_cabanas || 0) + " lounge (no numbers)";
+      [r.guest_name || "—", r.order_code || "—", partySize(r) + " pax", cabs || "— not assigned", STATUS_LABELS[r.status] || r.status].forEach(function (t) {
+        var td = document.createElement("td"); td.textContent = t; tr.appendChild(td);
+      });
+      plannerList.appendChild(tr);
+    });
+  }
+
+  function emailMove(r, beforeIds, afterIds) {
+    if (!$("plannerNotify").checked || !EMAIL_RE.test(String(r.guest_email || "").trim())) return Promise.resolve();
+    var changes = [{ label: "Cabana(s)", before: cabanaListText(beforeIds), after: cabanaListText(afterIds) }];
+    return sb.rpc("notify_booking_change", { p_booking_id: r.id, p_changes: changes, p_old_check_in: null });
+  }
+
+  function applyPlannerMove() {
+    var m = plannerPending;
+    if (!m) return;
+    var btn = $("plannerConfirmBtn");
+    btn.disabled = true;
+    var aBefore = (m.row.booking_cabanas || []).map(function (bc) { return bc.cabana_id; });
+    var aAfter = aBefore.map(function (id) { return id === m.from ? m.to : id; });
+    var bBefore = null, bAfter = null;
+    if (m.other) {
+      bBefore = (m.other.booking_cabanas || []).map(function (bc) { return bc.cabana_id; });
+      bAfter = bBefore.map(function (id) { return id === m.to ? m.from : id; });
+    }
+    // For a swap, free cabana B first so the two moves can't collide.
+    var run = m.other
+      ? sb.from("booking_cabanas").delete().eq("booking_id", m.other.id).eq("cabana_id", m.to)
+          .then(function (res) { if (res.error) throw res.error; return syncCabanas(m.row.id, aBefore, aAfter); })
+          .then(function () { return sb.from("booking_cabanas").insert([{ booking_id: m.other.id, cabana_id: m.from }]); })
+          .then(function (res) { if (res && res.error) throw res.error; })
+      : syncCabanas(m.row.id, aBefore, aAfter);
+    run
+      .then(function () {
+        return Promise.all([emailMove(m.row, aBefore, aAfter), m.other ? emailMove(m.other, bBefore, bAfter) : null]);
+      })
+      .then(function () { plannerPending = null; plannerSource = null; return loadBookings(); })
+      .then(function () { btn.disabled = false; renderPlanner(); })
+      .catch(function (err) {
+        btn.disabled = false;
+        plannerPending = null;
+        plannerStatus.textContent = "Couldn't move the cabana: " + (err && err.message ? err.message : err);
+        loadBookings().then(renderPlanner);
+      });
+  }
+
+  function shiftPlannerDate(days) {
+    var d = new Date((plannerDateEl.value || todayStr()) + "T00:00:00");
+    d.setDate(d.getDate() + days);
+    plannerDateEl.value = d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+    plannerSource = null; plannerPending = null;
+    renderPlanner();
+  }
+  $("plannerBtn").addEventListener("click", function () {
+    if (!plannerDateEl.value) plannerDateEl.value = todayStr();
+    plannerSource = null; plannerPending = null;
+    plannerBackdrop.classList.add("open");
+    renderPlanner();
+  });
+  $("closePlannerBtn").addEventListener("click", function () { plannerBackdrop.classList.remove("open"); });
+  plannerBackdrop.addEventListener("click", function (e) { if (e.target === plannerBackdrop) plannerBackdrop.classList.remove("open"); });
+  plannerDateEl.addEventListener("change", function () { plannerSource = null; plannerPending = null; renderPlanner(); });
+  $("plannerPrev").addEventListener("click", function () { shiftPlannerDate(-1); });
+  $("plannerNext").addEventListener("click", function () { shiftPlannerDate(1); });
+  $("plannerToday").addEventListener("click", function () { plannerDateEl.value = todayStr(); plannerSource = null; plannerPending = null; renderPlanner(); });
+  $("plannerConfirmBtn").addEventListener("click", applyPlannerMove);
+  $("plannerCancelBtn").addEventListener("click", function () { plannerPending = null; renderPlanner(); });
 
   // ---------- CSV export (currently filtered/visible rows) ----------
   document.getElementById("exportBtn").addEventListener("click", function () {

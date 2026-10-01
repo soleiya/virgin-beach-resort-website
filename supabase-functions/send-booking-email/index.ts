@@ -20,6 +20,11 @@
 //   Staff set the booking to Confirmed in the dashboard
 //     → GUEST:  "Your Day Trip is confirmed" + arrival guide
 //
+//   Still unpaid 24 hours after booking (process_booking_deadlines cron job)
+//     → GUEST:  "12-hour extension" payment reminder  (kind: payment_reminder)
+//     After 36 hours (or 8:00 AM on the trip date, whichever is first) the
+//     booking is set to Expired and its cabanas are released.
+//
 //   Staff edit a booking in the dashboard (✎) and leave "Email the guest"
 //   ticked — sent via notify_booking_change(), see booking-change-email.sql
 //     → GUEST:  "Changes to your reservation" — each changed detail shown as
@@ -177,19 +182,30 @@ function daysUntil(checkIn: string | null, now: Date): number | null {
   return Math.round((trip - today) / 86400000);
 }
 
-// Pay-by: N hours after the request, but never later than 12:00 NN the day
-// before the trip. For same-/next-day trips we just say "before arrival".
-export function paymentDeadline(record: Any, hours: number): { date: Date | null; label: string } {
+// Payment deadlines — must match booking_deadlines() in booking-v3.sql:
+//   first deadline = booked + 24h; final = booked + 36h (one 12-hour
+//   extension, announced by the reminder email); but never later than
+//   8:00 AM on the trip date. Bookings made on/after 8:00 AM of the trip date
+//   (same-day walk-ins) are paid on arrival.
+function trip8(checkIn: string | null): Date | null {
+  return checkIn ? new Date(checkIn + "T08:00:00+08:00") : null;
+}
+export function paymentDeadline(record: Any, hours = 24): { date: Date | null; label: string } {
   const created = new Date(record.created_at || Date.now());
+  const t8 = trip8(record.check_in);
+  if (t8 && t8.getTime() <= created.getTime()) return { date: null, label: "upon arrival at the resort" };
   let deadline = new Date(created.getTime() + hours * 3600_000);
-  if (record.check_in) {
-    const dayBeforeNoon = new Date(new Date(record.check_in + "T12:00:00+08:00").getTime() - 86400_000);
-    if (dayBeforeNoon < deadline) deadline = dayBeforeNoon;
-  }
-  if (deadline.getTime() - created.getTime() < 2 * 3600_000) {
-    return { date: null, label: "as soon as possible, before your arrival" };
-  }
+  if (t8 && t8 < deadline) deadline = t8;
   return { date: deadline, label: fmtDateTime(deadline) };
+}
+export function finalDeadline(record: Any): { date: Date | null; label: string; isTripMorning: boolean } {
+  const created = new Date(record.created_at || Date.now());
+  const t8 = trip8(record.check_in);
+  if (t8 && t8.getTime() <= created.getTime()) return { date: null, label: "upon arrival at the resort", isTripMorning: false };
+  let d = new Date(created.getTime() + 36 * 3600_000);
+  let isTripMorning = false;
+  if (t8 && t8 < d) { d = t8; isTripMorning = true; }
+  return { date: d, label: fmtDateTime(d), isTripMorning };
 }
 
 // ---------- quotation --------------------------------------------------------
@@ -379,6 +395,12 @@ function reservationRows(r: Any, cabanas: Any[]): [string, string][] {
   return rows;
 }
 
+export const PREFERRED_CABANA_NOTE =
+  "Cabana numbers are preferred cabanas. To make sure every group has its own space, the resort may move your party to a comparable cabana if a large group books in — we'll always let you know.";
+function cabanaNote(cabanas: Any[]) {
+  return cabanas.length ? p(esc(PREFERRED_CABANA_NOTE), `font-size:12.5px;color:${C.soft};margin-top:8px;`) : "";
+}
+
 function policiesBlock() {
   const td = `padding:7px 8px;border-bottom:1px solid ${C.line};font-size:13px;vertical-align:top;`;
   return `${h2("Cancellation &amp; postponement")}
@@ -469,14 +491,16 @@ ${signature(c)}`;
 
   const body = `${p(`Hi ${first},`)}
 ${p(`Thank you for choosing Virgin Beach Resort! We've received your <strong>${esc(r.stay_type_label || TYPE_NAMES[r.stay_type])}</strong> request for <strong>${esc(fmtDate(r.check_in))}</strong>${cabanas.length ? ` and are holding ${cabanas.length === 1 ? "your cabana" : "your cabanas"} for you` : ""}.`)}
-${p(`<strong>Full payment is required by ${esc(dl.label)}</strong> to secure the reservation. Booking will be automatically canceled if payment is not made.`)}
+${p(dl.date
+    ? `<strong>Full payment is required by ${esc(dl.label)}</strong> to secure the reservation. Unpaid bookings are automatically canceled and the cabana(s) released.`
+    : `<strong>Payment is settled upon arrival at the resort.</strong>`)}
 ${poolNotice(c, r.check_in)}
 ${statusBox([
     ["Order ID", esc(r.order_code || "—")],
     ["Amount due", esc(peso(q.total))],
     ["Please pay by", esc(dl.label)],
   ])}
-${h2("Your reservation")}${kv(reservationRows(r, cabanas))}
+${h2("Your reservation")}${kv(reservationRows(r, cabanas))}${cabanaNote(cabanas)}
 ${h2("Quotation")}${quoteTable(q)}
 ${h2("How to pay")}
 ${p(`<strong>Option 1 — Bank deposit or online transfer</strong> (InstaPay / PESONet) to any of these accounts. Please put <strong>${esc(r.order_code)}</strong> and your name in the reference / remarks.`)}
@@ -485,6 +509,7 @@ ${p(`<strong>Option 2 — Credit/debit card or e-wallet.</strong> Reply to this 
 ${h2("After you pay")}
 <ol style="margin:0 0 12px;padding-left:20px;font-size:14px;">
 <li style="margin:0 0 8px;"><strong>Send us your proof of payment</strong> — upload the screenshot or transaction slip using the button below, or simply reply to this email with it attached.</li>
+${int(r.pet_count) ? `<li style="margin:0 0 8px;"><strong>Bringing your pet${int(r.pet_count) > 1 ? "s" : ""}:</strong> please bring the vaccination card${int(r.pet_count) > 1 ? "s" : ""} you uploaded (we'll check ${int(r.pet_count) > 1 ? "them" : "it"} at check-in), a leash, food and water bowls. The Pet Policy you agreed to applies during your visit.</li>` : ""}
 <li style="margin:0 0 8px;"><strong>Reply with the signed Reservations Agreement</strong> (attached as a PDF — a photo of the signed last page is fine) and a photo of <strong>one (1) valid ID</strong>${int(r.senior_count) ? " (we already have the Senior Citizen/PWD ID you uploaded)" : ""}.</li>
 <li style="margin:0 0 8px;"><strong>We'll email your confirmation</strong> as soon as the payment is verified (during office hours, 9:00 AM–6:00 PM daily).</li>
 </ol>
@@ -513,7 +538,10 @@ export function staffNewEmail(r: Any, cabanas: Any[], q: Quote | null, c: Return
   else if (d !== null && d <= 7) flag(`Trip is <strong>${d <= 0 ? "today or past" : `in ${plural(d, "day")}`}</strong> — inside the 7-day non-refundable window. Follow up by phone.`, "red");
   else if (d !== null && d <= 14) flag(`Trip is in ${plural(d, "day")} — inside the 14-day (50% forfeit) window.`);
   if (int(r.senior_count)) flag(`${plural(int(r.senior_count), "senior citizen/PWD", "senior citizens/PWDs")} — ${Array.isArray(r.senior_id_paths) ? plural(r.senior_id_paths.length, "ID photo") : "no ID photo"} uploaded. Verify in the dashboard and at check-in.`);
-  if (int(r.pet_count)) flag(`${plural(int(r.pet_count), "pet")} — guest must sign the Pet Policy Agreement.`);
+  if (int(r.pet_count)) {
+    const cards = Array.isArray(r.pet_vaccination_paths) ? r.pet_vaccination_paths.length : 0;
+    flag(`${plural(int(r.pet_count), "pet")} — ${cards ? plural(cards, "vaccination card") + " uploaded" : "NO vaccination card uploaded"}${r.pet_policy_agreed_at ? ", Pet Policy agreed online" : ""}. Check the card(s) in the dashboard and at check-in.`);
+  }
   const cap = cabanas.reduce((s, x) => s + (Number(x.capacity) || 0), 0);
   const party = int(r.adults) + int(r.children_6_12) + int(r.children_0_5);
   if (cabanas.length && cap < party) flag(`Party of ${party} but cabana capacity is ${cap}.`);
@@ -551,7 +579,7 @@ ${h2("Follow-up checklist")}
 <li>Watch the guest thread (search the Order ID) for proof of payment, the signed agreement and one valid ID. Website uploads also alert this inbox.</li>
 <li>Guest asks for card / e-wallet? Create a Xendit invoice for <strong>${q ? esc(peso(q.total)) : "the quoted amount"}</strong> with description <strong>Booking# ${esc(r.order_code)}</strong>, and reply in the guest's thread with the link and the same pay-by time.</li>
 <li>Verify the deposit against the bank statement, then set the booking to <strong>Confirmed</strong> in the dashboard — the guest gets the confirmation email automatically.</li>
-<li>No payment by ${esc(dl.label)}? Call or message the guest, then set to <strong>Declined</strong> to release the cabana(s).</li>
+<li>No payment by ${esc(dl.label)}? The guest automatically gets a 12-hour extension reminder; if still unpaid at ${esc(finalDeadline(r).label)} the booking turns <strong>Expired</strong> and the cabana(s) are released. Nothing to do unless the guest calls.</li>
 </ol>
 ${button(dash, "Open in staff dashboard")}${button(gmail, "Find guest thread in Gmail")}`;
 
@@ -608,7 +636,7 @@ ${statusBox([
 ${h2("Your reservation")}${kv([
     ...reservationRows(r, cabanas).slice(1),
     ...(q ? [["Amount paid", `<strong>${esc(peso(q.total))}</strong>`] as [string, string]] : []),
-  ])}
+  ])}${cabanaNote(cabanas)}
 ${p(`Kindly present this confirmation, your proof of payment, and one (1) valid ID upon check-in at the Resort. Check-in is from <strong>${t.in}</strong>; check-out is at <strong>${t.out}</strong>. Lunch is served from 12:00 NN to 2:00 PM only.`, "margin-top:14px;")}
 ${p("If you haven't sent it yet, please reply with a signed copy of the Reservations Agreement. Once you receive this email, we'd appreciate a quick reply to acknowledge it.", `font-size:13.5px;color:${C.soft};`)}
 ${button(map, "Directions to the resort")}
@@ -618,6 +646,31 @@ ${signature(c)}`;
   return {
     subject: "Re: " + guestSubject(r, c),
     html: shell({ preheader: `Confirmed: ${fmtDate(r.check_in, "short")} · ${r.order_code}`, body, c }),
+  };
+}
+
+export function guestReminderEmail(r: Any, cabanas: Any[], q: Quote | null, c: ReturnType<typeof cfg>) {
+  const first = esc(String(r.guest_name || "there").trim().split(/\s+/)[0]);
+  const fin = finalDeadline(r);
+  const payUrl = `${c.site}/pay/index.html?order=${encodeURIComponent(r.order_code || "")}&email=${encodeURIComponent(r.guest_email || "")}`;
+  const body = `${p(`Hi ${first},`)}
+${p(`We haven't received payment yet for your reservation <strong>${esc(r.order_code || "")}</strong> on <strong>${esc(fmtDate(r.check_in))}</strong>, and the 24-hour payment window has passed.`)}
+${p(fin.isTripMorning
+    ? `We're holding your booking${cabanas.length ? " and cabana(s)" : ""} until <strong>${esc(fin.label)}</strong> — the morning of your visit. If payment isn't settled by then, the booking will be canceled and the cabana(s) released to other guests.`
+    : `As a courtesy, we've <strong>extended your hold by 12 hours, until ${esc(fin.label)}</strong>. If payment isn't settled by then, the booking will be canceled and the cabana(s) released to other guests.`)}
+${statusBox([
+    ["Order ID", esc(r.order_code || "—")],
+    ["Amount due", q ? esc(peso(q.total)) : "See quotation"],
+    ["Final deadline", esc(fin.label)],
+  ])}
+${p("Already paid? Just upload your proof of payment (or reply to this email with it) and we'll take it from here.")}
+${button(payUrl, "Upload proof of payment")}
+${h2("Bank details")}${bankTable()}
+${p(`Please put <strong>${esc(r.order_code)}</strong> and your name in the reference / remarks. Prefer card or e-wallet? Reply to this email and we'll send a secure Xendit link.`, "margin-top:12px;")}
+${signature(c)}`;
+  return {
+    subject: "Re: " + guestSubject(r, c),
+    html: shell({ preheader: `Payment reminder — ${r.order_code} held until ${fin.label}`, body, c }),
   };
 }
 
@@ -858,6 +911,17 @@ async function onConfirmed(r: Any) {
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 
+async function onReminder(r: Any) {
+  const c = cfg();
+  if (!autoEmail(r, c)) return { skipped: "source " + r.source };
+  if (!["pending", "pending_payment"].includes(r.status) || r.payment_uploaded_at) return { skipped: "no longer unpaid" };
+  if (!r.guest_email || !EMAIL_RE.test(String(r.guest_email).trim())) return { skipped: "no valid guest email" };
+  const cabanas = await loadCabanas(r);
+  const q = buildQuote(r, cabanas);
+  const g = guestReminderEmail(r, cabanas, q, c);
+  return await send({ booking: r, kind: "payment_reminder", to: String(r.guest_email).trim(), subject: g.subject, html: g.html, thread: "guest" });
+}
+
 async function onChanged(r: Any, payload: Any) {
   const c = cfg();
   if (!r.guest_email || !EMAIL_RE.test(String(r.guest_email).trim())) return { skipped: "no valid guest email" };
@@ -899,6 +963,7 @@ export async function handle(req: Request): Promise<Response> {
   try {
     if (payload.type === "INSERT") out.insert = await onInsert(r);
     if (payload.type === "CHANGE") out.changed = await onChanged(r, payload);
+    if (payload.type === "REMINDER") out.reminder = await onReminder(r);
     if (payload.type === "UPDATE") {
       if (payload.record.payment_uploaded_at && payload.record.payment_uploaded_at !== old.payment_uploaded_at) {
         out.proof = await onProof(r);

@@ -71,6 +71,8 @@
   // crop (optional): { top, bottom } as fractions of the image height — shows
   // only that horizontal band (e.g. just the cabana rows) instead of the
   // whole illustrated map. Used by the staff booking form to save space.
+  // clickableHeld (optional): held tiles stay clickable (staff Cabana Map
+  // planner, for moving a party). highlightId: one tile drawn as "picked up".
   // heldInfo (optional): { [cabana_id]: "extra text for the tile's tooltip" }
   // — used by the staff dashboard to show who's holding a cabana; the public
   // booking page omits it and gets the generic "already booked" tooltip.
@@ -121,7 +123,7 @@
         return;
       }
       var isHeld = heldSet.has(c.id);
-      var isSelected = selectedIds.has(c.id);
+      var isSelected = selectedIds.has(c.id) || (opts.highlightId && opts.highlightId === c.id);
       var tile = document.createElement("button");
       tile.type = "button";
       tile.className =
@@ -132,7 +134,7 @@
       tile.style.height = layout.height + "%";
       var heldNote = isHeld ? (heldInfo && heldInfo[c.id] ? heldInfo[c.id] : "already booked for this date") : null;
       tile.title = c.label + (isHeld ? " — " + heldNote : " — available");
-      tile.disabled = isHeld;
+      tile.disabled = isHeld && !opts.clickableHeld;
       tile.setAttribute("aria-pressed", isSelected ? "true" : "false");
       tile.setAttribute("aria-label", c.label);
       tile.addEventListener("click", function () {
@@ -149,7 +151,7 @@
       '<span><i class="cabana-swatch cabana-dining_cabana"></i> Dining Cabana</span>' +
       '<span><i class="cabana-swatch cabana-lounge_cabana"></i> Lounge Cabana</span>' +
       '<span><i class="cabana-swatch is-held"></i> Already booked</span>' +
-      '<span><i class="cabana-swatch is-selected"></i> Your selection</span>';
+      '<span><i class="cabana-swatch is-selected"></i> ' + (opts.selectedLabel || "Your selection") + '</span>';
     container.appendChild(legend);
 
     if (skipped && global.console) {

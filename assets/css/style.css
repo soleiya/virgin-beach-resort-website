@@ -528,6 +528,12 @@ form.inquiry .field-hint { font-size: 0.8rem; color: var(--ink-soft); margin-top
 .cabana-swatch.cabana-lounge_cabana { background: #d68634; }
 .cabana-swatch.is-held { background: rgba(18,32,29,0.58); position: relative; }
 .cabana-swatch.is-selected { background: rgba(255,255,255,0.18); border: 2px solid var(--ink); }
+.cabana-fineprint { font-size: 0.78rem; margin-top: -2px; }
+.pet-policy { margin: 10px 0; border: 1px solid var(--line); border-radius: 8px; padding: 10px 14px; background: var(--surface); }
+.pet-policy summary { cursor: pointer; font-weight: 700; font-size: 0.88rem; color: var(--lagoon-deep); }
+.pet-policy ol { margin: 10px 0 4px; padding-left: 20px; font-size: 0.8rem; line-height: 1.5; color: var(--ink-soft); max-height: 260px; overflow-y: auto; }
+.pet-agree { display: flex; align-items: flex-start; gap: 8px; font-size: 0.85rem; }
+.pet-agree input { margin-top: 3px; width: auto; }
 .cabana-map-status { color: var(--ink-soft); font-size: 0.9rem; margin-bottom: 14px; }
 
 .cabana-selected-note { margin-top: 18px; padding: 14px 16px; border-radius: 8px; background: var(--lagoon-tint); font-size: 0.88rem; line-height: 2.2; }

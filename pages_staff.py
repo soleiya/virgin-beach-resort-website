@@ -126,6 +126,20 @@ html = """<!doctype html>
   .status-confirmed { background: var(--lagoon-tint); color: var(--lagoon-deep); }
   .status-declined { background: var(--rose-tint, #f3e0dc); color: var(--rose, #9c4a3f); }
   .status-completed { background: var(--sand-deep); color: var(--ink-soft); }
+  .status-expired { background: #ece7e1; color: #7a6f66; text-decoration: line-through; text-decoration-thickness: 1px; }
+  .payby { display: block; font-size: 0.72rem; margin-top: 5px; color: var(--ink-soft); white-space: nowrap; }
+  .payby.overdue { color: var(--rose, #9c4a3f); font-weight: 700; }
+  /* ---------- cabana map planner ---------- */
+  .modal.modal-planner { max-width: 1120px; }
+  .planner-bar { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; margin-bottom: 12px; }
+  .planner-status { font-size: 0.88rem; padding: 10px 14px; border-radius: 10px; background: var(--lagoon-tint); margin-bottom: 12px; min-height: 20px; }
+  .planner-status.is-pending { background: #fdf0dc; }
+  .planner-confirm { display: none; gap: 8px; margin-top: 8px; }
+  .planner-confirm.open { display: flex; }
+  .planner-list { margin-top: 16px; max-height: 260px; overflow-y: auto; border: 1px solid var(--line); border-radius: 10px; }
+  .planner-list table { min-width: 0; }
+  .planner-list td, .planner-list th { padding: 8px 12px; font-size: 0.8rem; }
+  .planner-list tr.is-source td { background: var(--lagoon-tint); }
 
   .empty-row td { text-align: center; padding: 48px 20px; color: var(--ink-soft); }
   .order-code { font-family: var(--font-body); font-weight: 700; font-size: 0.78rem; color: var(--ink-soft); white-space: nowrap; }
@@ -208,6 +222,7 @@ html = """<!doctype html>
         <input class="search" id="searchBox" type="text" placeholder="Search guest, contact, notes&hellip;">
       </div>
       <div class="toolbar-right">
+        <button class="btn-sm ghost" id="plannerBtn">Cabana Map</button>
         <button class="btn-sm ghost" id="logBtn">Activity Log</button>
         <button class="btn-sm ghost" id="exportBtn">Export CSV</button>
         <button class="btn-sm primary" id="addBtn">+ Add Booking</button>
@@ -324,6 +339,7 @@ html = """<!doctype html>
             <option value="confirmed">Confirmed</option>
             <option value="declined">Declined</option>
             <option value="completed">Completed</option>
+            <option value="expired">Expired (unpaid)</option>
           </select>
         </div>
       </div>
@@ -402,6 +418,38 @@ html = """<!doctype html>
         <button type="submit" class="btn-sm primary" id="saveBookingBtn">Save Booking</button>
       </div>
     </form>
+  </div>
+</div>
+
+<div class="modal-backdrop" id="plannerBackdrop">
+  <div class="modal modal-planner">
+    <h2>Cabana Map</h2>
+    <p style="color:var(--ink-soft); font-size:0.85rem; margin:-10px 0 16px;">See every cabana for a day and move parties around &mdash; e.g. to keep a large group together. Click a booked cabana to pick it up, then click a free cabana to move it there (or another booked cabana to swap the two).</p>
+    <div class="planner-bar">
+      <div class="filter-field">
+        <label for="plannerDate">Date</label>
+        <input type="date" id="plannerDate">
+      </div>
+      <button class="btn-sm ghost" type="button" id="plannerPrev">&larr; Prev day</button>
+      <button class="btn-sm ghost" type="button" id="plannerToday">Today</button>
+      <button class="btn-sm ghost" type="button" id="plannerNext">Next day &rarr;</button>
+      <label class="modal-check" style="margin-left:auto;"><input type="checkbox" id="plannerNotify" checked> Email guests whose cabana is moved</label>
+    </div>
+    <div class="planner-status" id="plannerStatus"></div>
+    <div class="planner-confirm" id="plannerConfirm">
+      <button class="btn-sm primary" type="button" id="plannerConfirmBtn">Confirm move</button>
+      <button class="btn-sm ghost" type="button" id="plannerCancelBtn">Cancel</button>
+    </div>
+    <div id="plannerMap"></div>
+    <div class="planner-list">
+      <table>
+        <thead><tr><th>Guest</th><th>Order</th><th>Party</th><th>Cabana(s)</th><th>Status</th></tr></thead>
+        <tbody id="plannerList"></tbody>
+      </table>
+    </div>
+    <div class="modal-actions">
+      <button type="button" class="btn-sm ghost" id="closePlannerBtn">Close</button>
+    </div>
   </div>
 </div>
 

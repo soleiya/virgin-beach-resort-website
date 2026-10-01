@@ -45,6 +45,11 @@
   var seniorIdWrap = document.getElementById("seniorIdWrap");
   var seniorIdFilesEl = document.getElementById("seniorIdFiles");
   var seniorIdError = document.getElementById("seniorIdError");
+  var petWrap = document.getElementById("petWrap");
+  var petVaxFilesEl = document.getElementById("petVaxFiles");
+  var petPolicyAgreeEl = document.getElementById("petPolicyAgree");
+  var petError = document.getElementById("petError");
+  var MAX_PETS = 2;
   var packageNoteEl = document.getElementById("packageNote");
   var billSummaryEl = document.getElementById("billSummary");
   var submitBtn = form.querySelector("#submitBtn");
@@ -321,14 +326,63 @@
   [adultsEl, kids612El, kids05El, seniorCountEl, petCountEl].forEach(function (el) {
     if (el) el.addEventListener("input", renderBill);
   });
+  function refreshPets() {
+    if (!petCountEl || !petWrap) return;
+    var n = parseInt(petCountEl.value || "0", 10) || 0;
+    if (n > MAX_PETS) { petCountEl.value = MAX_PETS; n = MAX_PETS; }
+    if (n < 0) { petCountEl.value = 0; n = 0; }
+    petWrap.hidden = n === 0;
+  }
+  if (petCountEl) {
+    petCountEl.addEventListener("input", refreshPets);
+    petCountEl.addEventListener("change", function () { refreshPets(); renderBill(); });
+  }
+  refreshPets();
+
+  // ---------- Half-Day = same-day walk-ins only ----------
+  // The Half-Day option is only offered when the preferred date is TODAY
+  // (Philippine time). Picking Half-Day with no date fills in today; moving
+  // the date off today switches the booking back to a full Day Trip.
+  function todayManila() {
+    return new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Manila" });
+  }
+  var halfDayOpt = stayTypeEl.querySelector('option[value="half_day"]');
+  var halfDayNote = document.createElement("p");
+  halfDayNote.className = "field-hint";
+  halfDayNote.hidden = true;
+  if (stayTypeEl.parentNode) stayTypeEl.parentNode.appendChild(halfDayNote);
+  function refreshHalfDay(fromTypeChange) {
+    if (!halfDayOpt) return;
+    var today = todayManila();
+    if (fromTypeChange && stayTypeEl.value === "half_day" && !checkInEl.value) checkInEl.value = today;
+    var isToday = checkInEl.value === today;
+    halfDayOpt.hidden = !isToday;
+    halfDayOpt.disabled = !isToday;
+    if (!isToday && stayTypeEl.value === "half_day") {
+      stayTypeEl.value = "day_trip";
+      halfDayNote.textContent = "Half-Day Trips are for same-day walk-ins only, so we've switched you to a full Day Trip for that date.";
+      halfDayNote.hidden = false;
+    } else if (isToday) {
+      halfDayNote.textContent = "Visiting today? A Half-Day Trip (1:00 PM – 5:00 PM) is available for same-day walk-ins.";
+      halfDayNote.hidden = false;
+    } else {
+      halfDayNote.hidden = true;
+    }
+  }
+  checkInEl.min = todayManila();
 
   // Pre-fill from query string, e.g. book/index.html?type=corporate
   var qType = params.get("type");
   if (qType && TYPE_NAMES[qType]) stayTypeEl.value = qType;
   checkInLabel.textContent = "Preferred Date";
+  refreshHalfDay(true);
 
-  stayTypeEl.addEventListener("change", refreshCabanaStep);
+  stayTypeEl.addEventListener("change", function () {
+    refreshHalfDay(true);
+    refreshCabanaStep();
+  });
   checkInEl.addEventListener("change", function () {
+    refreshHalfDay(false);
     clearSelection();
     refreshCabanaStep();
   });
@@ -436,6 +490,18 @@
     return Promise.all(uploads);
   }
 
+  function uploadPetCards(files) {
+    if (!sb || !files || !files.length) return Promise.resolve([]);
+    return Promise.all(files.map(function (file, i) {
+      var ext = (file.name.split(".").pop() || "jpg").toLowerCase().replace(/[^a-z0-9]/g, "") || "jpg";
+      var path = "guest/" + Date.now() + "-" + i + "." + ext;
+      return sb.storage.from("pet-vaccinations").upload(path, file, { contentType: file.type || "image/jpeg" }).then(function (res) {
+        if (res.error) throw res.error;
+        return path;
+      });
+    }));
+  }
+
   function attachCabanas(bookingId) {
     if (!sb || !selectedCabanas.length) return Promise.resolve();
     var rows = selectedCabanas.map(function (c) { return { booking_id: bookingId, cabana_id: c.id }; });
@@ -458,6 +524,20 @@
     }
     if (seniorIdError) seniorIdError.hidden = true;
 
+    if (bill.pets > 0) {
+      var petFiles = petVaxFilesEl && petVaxFilesEl.files ? petVaxFilesEl.files.length : 0;
+      var msg = null;
+      if (bill.pets > MAX_PETS) msg = "A maximum of two pets are permitted per reservation.";
+      else if (!petFiles) msg = "Please attach a photo of your pet's vaccination card" + (bill.pets > 1 ? "s" : "") + ".";
+      else if (!petPolicyAgreeEl || !petPolicyAgreeEl.checked) msg = "Please read and agree to the Pet Policy.";
+      if (msg) {
+        if (petError) { petError.textContent = msg; petError.hidden = false; }
+        (petFiles ? petPolicyAgreeEl : petVaxFilesEl).focus();
+        return;
+      }
+    }
+    if (petError) petError.hidden = true;
+
     var payload = buildPayload(bill);
 
     // Not connected yet — fall back straight to a pre-filled email so no
@@ -473,9 +553,14 @@
 
     var seniorFiles = seniorIdFilesEl && seniorIdFilesEl.files ? Array.prototype.slice.call(seniorIdFilesEl.files) : [];
 
-    uploadSeniorIds(seniorFiles)
-      .then(function (paths) {
+    var petCardFiles = bill.pets > 0 && petVaxFilesEl && petVaxFilesEl.files ? Array.prototype.slice.call(petVaxFilesEl.files) : [];
+
+    Promise.all([uploadSeniorIds(seniorFiles), uploadPetCards(petCardFiles)])
+      .then(function (all) {
+        var paths = all[0], petPaths = all[1];
         payload.senior_id_paths = paths.length ? paths : null;
+        payload.pet_vaccination_paths = petPaths.length ? petPaths : null;
+        payload.pet_policy_agreed = bill.pets > 0 && !!(petPolicyAgreeEl && petPolicyAgreeEl.checked);
         var cabanaIds = selectedCabanas.length ? selectedCabanas.map(function (c) { return c.id; }) : null;
         return sb.rpc("submit_booking_request", { payload: payload, cabana_ids: cabanaIds });
       })
