@@ -58,9 +58,7 @@ def book_link(base, **params):
 
 BOOKING_TYPE_LABELS = [
     ("day_trip", "Day Trip (Full Day)"),
-    ("half_day", "Half-Day Trip (same-day walk-in only)"),
-    ("all_inclusive_family", "All Inclusive — Family Package"),
-    ("all_inclusive_barkada", "All Inclusive — Barkada Package"),
+    ("half_day", "Half-Day Trip (1:00 PM – 5:00 PM)"),
 ]
 
 COUNTRIES = [
@@ -128,8 +126,8 @@ def booking_form_section(default_type="day_trip"):
     stay_type_field = (
         f'<select id="stayType" hidden>{type_options}</select>'
         if len(BOOKING_TYPE_LABELS) == 1 else
-        f'''<div>
-      <label for="stayType">What are you booking?</label>
+        f'''<div id="stayTypeField">
+      <label for="stayType">Full Day or Half Day?</label>
       <select id="stayType">
             {type_options}
       </select>
@@ -142,12 +140,12 @@ def booking_form_section(default_type="day_trip"):
     return f"""
 <div id="bookingFormWrap">
   <form class="inquiry" id="bookingForm">
-    {stay_type_field}
-
     <div>
       <label for="checkIn" id="checkInLabel">Preferred Date</label>
       <input id="checkIn" type="date" required>
     </div>
+
+    {stay_type_field}
 
     <div id="cabanaStep" hidden>
       <label id="cabanaStepLabel">Choose your cabana(s)</label>

@@ -64,8 +64,6 @@
   var TYPE_NAMES = {
     day_trip: "Day Trip (Full Day)",
     half_day: "Half-Day Trip",
-    all_inclusive_family: "All Inclusive — Family Package",
-    all_inclusive_barkada: "All Inclusive — Barkada Package",
     corporate: "Corporate Outing",
   };
 
@@ -340,49 +338,44 @@
   refreshPets();
 
   // ---------- Half-Day = same-day walk-ins only ----------
-  // The Half-Day option is only offered when the preferred date is TODAY
-  // (Philippine time). Picking Half-Day with no date fills in today; moving
-  // the date off today switches the booking back to a full Day Trip.
+  // The guest picks the date FIRST. The "Full Day or Half Day?" question only
+  // appears when that date is TODAY (Philippine time); for any other date the
+  // booking is a full Day Trip and the Half-Day option isn't in the list at
+  // all (removed from the DOM — some browsers, e.g. Safari, ignore "hidden"
+  // on <option>). The server enforces the same rule.
   function todayManila() {
     return new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Manila" });
   }
+  var stayTypeField = document.getElementById("stayTypeField");
   var halfDayOpt = stayTypeEl.querySelector('option[value="half_day"]');
   var halfDayNote = document.createElement("p");
   halfDayNote.className = "field-hint";
-  halfDayNote.hidden = true;
-  if (stayTypeEl.parentNode) stayTypeEl.parentNode.appendChild(halfDayNote);
-  function refreshHalfDay(fromTypeChange) {
+  halfDayNote.textContent = "Visiting today? Same-day walk-ins can choose a Half-Day Trip (1:00 PM – 5:00 PM).";
+  if (stayTypeField) stayTypeField.appendChild(halfDayNote);
+  function refreshHalfDay() {
     if (!halfDayOpt) return;
-    var today = todayManila();
-    if (fromTypeChange && stayTypeEl.value === "half_day" && !checkInEl.value) checkInEl.value = today;
-    var isToday = checkInEl.value === today;
-    halfDayOpt.hidden = !isToday;
-    halfDayOpt.disabled = !isToday;
-    if (!isToday && stayTypeEl.value === "half_day") {
-      stayTypeEl.value = "day_trip";
-      halfDayNote.textContent = "Half-Day Trips are for same-day walk-ins only, so we've switched you to a full Day Trip for that date.";
-      halfDayNote.hidden = false;
-    } else if (isToday) {
-      halfDayNote.textContent = "Visiting today? A Half-Day Trip (1:00 PM – 5:00 PM) is available for same-day walk-ins.";
-      halfDayNote.hidden = false;
+    var isToday = !!checkInEl.value && checkInEl.value === todayManila();
+    if (isToday) {
+      if (!halfDayOpt.parentNode) stayTypeEl.appendChild(halfDayOpt);
     } else {
-      halfDayNote.hidden = true;
+      if (stayTypeEl.value === "half_day") stayTypeEl.value = "day_trip";
+      if (halfDayOpt.parentNode) halfDayOpt.parentNode.removeChild(halfDayOpt);
     }
+    if (stayTypeField) stayTypeField.hidden = !isToday;
   }
   checkInEl.min = todayManila();
 
-  // Pre-fill from query string, e.g. book/index.html?type=corporate
+  // Pre-fill from query string, e.g. book/index.html?type=half_day (only
+  // honoured for today's date — see refreshHalfDay).
   var qType = params.get("type");
-  if (qType && TYPE_NAMES[qType]) stayTypeEl.value = qType;
+  if (qType === "half_day") checkInEl.value = todayManila();
   checkInLabel.textContent = "Preferred Date";
-  refreshHalfDay(true);
+  refreshHalfDay();
+  if (qType === "half_day" && halfDayOpt && halfDayOpt.parentNode) stayTypeEl.value = "half_day";
 
-  stayTypeEl.addEventListener("change", function () {
-    refreshHalfDay(true);
-    refreshCabanaStep();
-  });
+  stayTypeEl.addEventListener("change", refreshCabanaStep);
   checkInEl.addEventListener("change", function () {
-    refreshHalfDay(false);
+    refreshHalfDay();
     clearSelection();
     refreshCabanaStep();
   });

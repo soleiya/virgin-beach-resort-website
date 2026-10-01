@@ -48,18 +48,16 @@
 <div id="bookingFormWrap">
   <form class="inquiry" id="bookingForm">
     <div>
-      <label for="stayType">What are you booking?</label>
-      <select id="stayType">
-            <option value="day_trip" selected>Day Trip (Full Day)</option>
-            <option value="half_day">Half-Day Trip (same-day walk-in only)</option>
-            <option value="all_inclusive_family">All Inclusive — Family Package</option>
-            <option value="all_inclusive_barkada">All Inclusive — Barkada Package</option>
-      </select>
-    </div>
-
-    <div>
       <label for="checkIn" id="checkInLabel">Preferred Date</label>
       <input id="checkIn" type="date" required>
+    </div>
+
+    <div id="stayTypeField">
+      <label for="stayType">Full Day or Half Day?</label>
+      <select id="stayType">
+            <option value="day_trip" selected>Day Trip (Full Day)</option>
+            <option value="half_day">Half-Day Trip (1:00 PM – 5:00 PM)</option>
+      </select>
     </div>
 
     <div id="cabanaStep" hidden>
@@ -348,7 +346,7 @@
 <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
 <script src="../assets/js/booking-config.js?v=c116a3a0ae"></script>
 <script src="../assets/js/cabana-map.js?v=8f4f80dcb3"></script>
-<script src="../assets/js/booking.js?v=db3ee378f3"></script>
+<script src="../assets/js/booking.js?v=fa16a91c24"></script>
 
 <footer class="site-footer">
   <div class="wrap">
