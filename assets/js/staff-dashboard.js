@@ -709,6 +709,9 @@
   var notifyWrap = document.getElementById("addNotifyWrap");
   var notifyEl = document.getElementById("addNotify");
   var notifyText = document.getElementById("addNotifyText");
+  var notifyHint = document.getElementById("addNotifyHint");
+  var QUOTE_STATUSES = ["pending", "pending_payment"];
+  var RATE_SHEET_TYPES = ["day_trip", "half_day", "all_inclusive_family", "all_inclusive_barkada"];
   var EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 
   // Guest-facing details that go into the "changes to your reservation"
@@ -741,10 +744,38 @@
     return labels.length ? labels.join(", ") : "None";
   }
 
+  function uploadList() {
+    var items = ["their payment"];
+    if (intVal("addSeniors") > 0) items.push("Senior Citizen/PWD ID(s)");
+    if (intVal("addPets") > 0) items.push("pet vaccination card(s)");
+    return items.length === 1 ? items[0] : items.slice(0, -1).join(", ") + " and " + items[items.length - 1];
+  }
+
   function updateNotifyState() {
-    if (!editingRow) { notifyWrap.style.display = "none"; return; }
     notifyWrap.style.display = "flex";
     var email = $("addEmail").value.trim();
+    if (!editingRow) {
+      // New staff booking: optionally send it to the guest as a quotation —
+      // the same email a website booking gets (amount due, bank details,
+      // pay-by time, and a link to upload payment / Senior IDs / pet cards).
+      var type = $("addType").value, status = $("addStatus").value;
+      var hasTotal = $("addTotal").value !== "";
+      var why = !EMAIL_RE.test(email) ? "Add the guest's email address to send them the quotation"
+        : type === "corporate" ? "Corporate outings get a tailored quote from the events team — not sent automatically"
+        : QUOTE_STATUSES.indexOf(status) === -1 ? "Only Pending bookings can be sent as a quotation"
+        : RATE_SHEET_TYPES.indexOf(type) === -1 && !hasTotal ? "Enter the Total for this booking type to send a quotation"
+        : "";
+      notifyEl.disabled = !!why;
+      if (why) notifyEl.checked = false;
+      notifyWrap.classList.toggle("is-disabled", !!why);
+      notifyText.textContent = why || "Send this booking to the guest (" + email + ") as a quotation";
+      notifyHint.hidden = !!why;
+      notifyHint.textContent = "Same email as a website booking: amount due" + (hasTotal ? " (the Total you entered)" : " (from the rate sheet)") +
+        ", bank details, pay-by time, and a link for the guest to upload " + uploadList() +
+        ". Payment reminders and auto-expiry apply as usual.";
+      return;
+    }
+    notifyHint.hidden = true;
     var ok = EMAIL_RE.test(email);
     notifyEl.disabled = !ok;
     if (!ok) notifyEl.checked = false;
@@ -872,7 +903,9 @@
       $("addType").value = r.stay_type || "day_trip";
       $("addStatus").value = r.status || "pending";
       $("addName").value = r.guest_name || "";
-      $("addBookedBy").value = r.booked_by || "";
+      $("addName").readOnly = true;
+      $("addNameLock").hidden = false;
+      $("addBookedBy").value = r.booked_by || "—";
       $("addPhone").value = r.guest_phone || "";
       $("addEmail").value = r.guest_email || "";
       addDateEl.value = r.check_in || "";
@@ -891,7 +924,10 @@
       staffNotesField.style.display = "none";
       paymentField.style.display = "none";
       $("addStatus").value = "pending";
+      $("addName").readOnly = false;
+      $("addNameLock").hidden = true;
       $("addBookedBy").value = currentStaffName || "";
+      notifyEl.checked = false;
       modalCabanaIds = [];
     }
     renderModalMap();
@@ -909,7 +945,8 @@
   cancelAddBtn.addEventListener("click", closeModal);
   addModalBackdrop.addEventListener("click", function (e) { if (e.target === addModalBackdrop) closeModal(); });
   addDateEl.addEventListener("change", renderModalMap);
-  document.getElementById("addEmail").addEventListener("input", updateNotifyState);
+  ["addEmail", "addTotal", "addSeniors", "addPets"].forEach(function (id) { $(id).addEventListener("input", updateNotifyState); });
+  ["addType", "addStatus"].forEach(function (id) { $(id).addEventListener("change", updateNotifyState); });
 
   function formValues() {
     var type = $("addType").value;
@@ -920,7 +957,7 @@
       stay_type_label: TYPE_LABELS[type],
       status: $("addStatus").value,
       guest_name: $("addName").value.trim(),
-      booked_by: $("addBookedBy").value.trim() || null,
+      booked_by: currentStaffName || null,
       guest_phone: $("addPhone").value.trim() || null,
       guest_email: $("addEmail").value.trim() || null,
       check_in: addDateEl.value || null,
@@ -1001,6 +1038,7 @@
       var patch = {};
       Object.keys(vals).forEach(function (k) {
         if (k === "stay_type_label") return; // only follows a real type change (below)
+        if (k === "guest_name" || k === "booked_by") return; // locked once the booking exists
         if (!sameValue(vals[k], r[k])) patch[k] = vals[k];
       });
       if (patch.stay_type) patch.stay_type_label = vals.stay_type_label;
@@ -1047,22 +1085,31 @@
 
     // New booking. created_at (the "Date Entered") is left for Postgres to
     // stamp off the server clock; order_code comes from trg_set_order_code.
-    var payload = Object.assign({}, vals, { children_0_5: 0 });
+    var payload = Object.assign({}, vals, { children_0_5: 0, email_guest: false });
     if (!payload.staff_notes) delete payload.staff_notes;
     var cabanaIds = modalCabanaIds.slice();
+    var sendQuote = notifyEl.checked && !notifyEl.disabled;
     sb.from("booking_requests").insert([payload]).select().then(function (res) {
       if (res.error) return showFormError("Couldn't save this booking: " + res.error.message);
       var row = res.data && res.data[0];
       var attach = row && cabanaIds.length ? syncCabanas(row.id, [], cabanaIds) : Promise.resolve();
       attach.then(function () {
+        // Flip email_guest only now that the cabanas are attached — the
+        // database trigger then sends the quotation with them listed.
+        if (!sendQuote || !row) return null;
+        return sb.from("booking_requests").update({ email_guest: true }).eq("id", row.id).then(function (u) {
+          return u.error ? "Booking saved, but the quotation email couldn't be queued: " + u.error.message : null;
+        });
+      }).then(function (warn) {
         saveBookingBtn.disabled = false;
         closeModal();
         loadBookings();
+        if (warn) alert(warn);
       }, function (err) {
         saveBookingBtn.disabled = false;
         closeModal();
         loadBookings();
-        alert("Booking saved, but the cabana(s) couldn't be attached: " + (err && err.message ? err.message : err));
+        alert("Booking saved, but the cabana(s) couldn't be attached" + (sendQuote ? " and the quotation was NOT sent" : "") + ": " + (err && err.message ? err.message : err));
       });
     });
   });

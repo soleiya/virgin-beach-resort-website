@@ -144,7 +144,8 @@ export function esc(s: unknown): string {
 }
 const r2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100;
 export function peso(n: number | null | undefined): string {
-  return "₱" + Number(n || 0).toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const v = Number(n || 0);
+  return (v < 0 ? "−₱" : "₱") + Math.abs(v).toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 function num(n: unknown): string {
   return Number(n || 0).toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -236,6 +237,17 @@ function cabanaName(kind: "lounge" | "dining", capacity?: number) {
     : `Dining Cabana (capacity of ${capacity || 10})`;
 }
 
+export const isStaffMade = (r: Any) => String(r.source || "website") !== "website";
+
+// What the guest still has to upload on /pay (Senior/PWD IDs, pet cards).
+export function docsNeeded(r: Any) {
+  const seniors = int(r.senior_count) > 0 && !(Array.isArray(r.senior_id_paths) && r.senior_id_paths.length);
+  const pets = int(r.pet_count) > 0 && !(Array.isArray(r.pet_vaccination_paths) && r.pet_vaccination_paths.length);
+  return { seniors, pets, any: seniors || pets };
+}
+const uploadUrl = (r: Any, c: ReturnType<typeof cfg>) =>
+  `${c.site}/pay/index.html?order=${encodeURIComponent(r.order_code || "")}&email=${encodeURIComponent(r.guest_email || "")}`;
+
 // Rebuilds the bill server-side from the booking row, so what the guest is
 // asked to pay never depends on numbers the browser sent.
 export function buildQuote(record: Any, cabanas: Any[]): Quote | null {
@@ -284,7 +296,18 @@ export function buildQuote(record: Any, cabanas: Any[]): Quote | null {
       : "DAY TRIP AREA — Inclusive of entrance fee and lunch";
   }
 
-  const total = r2(lines.reduce((s, l) => s + l.amount, 0));
+  let total = r2(lines.reduce((s, l) => s + l.amount, 0));
+  const websiteTotal = record.total_amount === null || record.total_amount === undefined ? null : Number(record.total_amount);
+  // Staff-made bookings: a Total typed in by the team (special rate, discount,
+  // flash sale…) is the agreed price — show the difference as its own line.
+  if (isStaffMade(record) && websiteTotal !== null && Math.abs(websiteTotal - total) > 0.5) {
+    const diff = r2(websiteTotal - total);
+    lines.push({
+      desc: diff < 0 ? "Special rate / discount (as agreed with our reservations team)" : "Adjustment (as agreed with our reservations team)",
+      rate: diff, qty: 1, amount: diff, vatExempt: false,
+    });
+    total = r2(websiteTotal);
+  }
   const vatExemptSales = r2(lines.filter((l) => l.vatExempt).reduce((s, l) => s + l.amount, 0));
   // Same presentation as the printed quotation: prices are inclusive of 12%
   // VAT and a 5% (zero-rated) service charge, both computed on the net amount.
@@ -292,7 +315,6 @@ export function buildQuote(record: Any, cabanas: Any[]): Quote | null {
   const vatableSales = r2(gross / 1.17);
   const vat = r2(vatableSales * 0.12);
   const serviceCharge = r2(gross - vatableSales - vat);
-  const websiteTotal = record.total_amount === null || record.total_amount === undefined ? null : Number(record.total_amount);
   return {
     heading, lines, subtotal: total, total, vatExemptSales, vatableSales, vat, serviceCharge,
     websiteTotal, mismatch: websiteTotal !== null && Math.abs(websiteTotal - total) > 0.5,
@@ -474,7 +496,9 @@ const msgId = (r: Any, who: "guest" | "staff") =>
 export function guestQuoteEmail(r: Any, cabanas: Any[], q: Quote | null, c: ReturnType<typeof cfg>) {
   const first = esc(String(r.guest_name || "there").trim().split(/\s+/)[0]);
   const dl = paymentDeadline(r, c.deadlineHours);
-  const payUrl = `${c.site}/pay/index.html?order=${encodeURIComponent(r.order_code || "")}&email=${encodeURIComponent(r.guest_email || "")}`;
+  const payUrl = uploadUrl(r, c);
+  const need = docsNeeded(r);
+  const staffMade = isStaffMade(r);
 
   if (!q) {
     // Corporate: tailored quote comes from the team, no bank details yet.
@@ -490,7 +514,9 @@ ${signature(c)}`;
   }
 
   const body = `${p(`Hi ${first},`)}
-${p(`Thank you for choosing Virgin Beach Resort! We've received your <strong>${esc(r.stay_type_label || TYPE_NAMES[r.stay_type])}</strong> request for <strong>${esc(fmtDate(r.check_in))}</strong>${cabanas.length ? ` and are holding ${cabanas.length === 1 ? "your cabana" : "your cabanas"} for you` : ""}.`)}
+${p(staffMade
+    ? `Thank you for choosing Virgin Beach Resort! As discussed with our reservations team, here is the quotation for your <strong>${esc(r.stay_type_label || TYPE_NAMES[r.stay_type])}</strong> on <strong>${esc(fmtDate(r.check_in))}</strong>${cabanas.length ? ` — we're holding ${cabanas.length === 1 ? "your cabana" : "your cabanas"} for you` : ""}.`
+    : `Thank you for choosing Virgin Beach Resort! We've received your <strong>${esc(r.stay_type_label || TYPE_NAMES[r.stay_type])}</strong> request for <strong>${esc(fmtDate(r.check_in))}</strong>${cabanas.length ? ` and are holding ${cabanas.length === 1 ? "your cabana" : "your cabanas"} for you` : ""}.`)}
 ${p(dl.date
     ? `<strong>Full payment is required by ${esc(dl.label)}</strong> to secure the reservation. Unpaid bookings are automatically canceled and the cabana(s) released.`
     : `<strong>Payment is settled upon arrival at the resort.</strong>`)}
@@ -509,11 +535,13 @@ ${p(`<strong>Option 2 — Credit/debit card or e-wallet.</strong> Reply to this 
 ${h2("After you pay")}
 <ol style="margin:0 0 12px;padding-left:20px;font-size:14px;">
 <li style="margin:0 0 8px;"><strong>Send us your proof of payment</strong> — upload the screenshot or transaction slip using the button below, or simply reply to this email with it attached.</li>
-${int(r.pet_count) ? `<li style="margin:0 0 8px;"><strong>Bringing your pet${int(r.pet_count) > 1 ? "s" : ""}:</strong> please bring the vaccination card${int(r.pet_count) > 1 ? "s" : ""} you uploaded (we'll check ${int(r.pet_count) > 1 ? "them" : "it"} at check-in), a leash, food and water bowls. The Pet Policy you agreed to applies during your visit.</li>` : ""}
-<li style="margin:0 0 8px;"><strong>Reply with the signed Reservations Agreement</strong> (attached as a PDF — a photo of the signed last page is fine) and a photo of <strong>one (1) valid ID</strong>${int(r.senior_count) ? " (we already have the Senior Citizen/PWD ID you uploaded)" : ""}.</li>
+${need.seniors ? `<li style="margin:0 0 8px;"><strong>Upload the Senior Citizen / PWD ID${int(r.senior_count) > 1 ? "s" : ""}</strong> on the same page — the 20% discount applies only with a valid ID. Please bring ${int(r.senior_count) > 1 ? "them" : "it"} on the day too.</li>` : ""}
+${need.pets ? `<li style="margin:0 0 8px;"><strong>Upload your pet${int(r.pet_count) > 1 ? "s'" : "'s"} vaccination card${int(r.pet_count) > 1 ? "s" : ""}</strong> and agree to the Pet Policy on the same page. The card should show the pet's details and a current anti-rabies vaccination. Please bring it on the day too, with a leash and food and water bowls.</li>` : ""}
+${int(r.pet_count) && !need.pets ? `<li style="margin:0 0 8px;"><strong>Bringing your pet${int(r.pet_count) > 1 ? "s" : ""}:</strong> please bring the vaccination card${int(r.pet_count) > 1 ? "s" : ""} you uploaded (we'll check ${int(r.pet_count) > 1 ? "them" : "it"} at check-in), a leash, food and water bowls. The Pet Policy you agreed to applies during your visit.</li>` : ""}
+<li style="margin:0 0 8px;"><strong>Reply with the signed Reservations Agreement</strong> (attached as a PDF — a photo of the signed last page is fine) and a photo of <strong>one (1) valid ID</strong>${int(r.senior_count) && !need.seniors ? " (we already have the Senior Citizen/PWD ID you uploaded)" : ""}.</li>
 <li style="margin:0 0 8px;"><strong>We'll email your confirmation</strong> as soon as the payment is verified (during office hours, 9:00 AM–6:00 PM daily).</li>
 </ol>
-${button(payUrl, "Upload proof of payment")}
+${button(payUrl, need.any ? "Upload payment & documents" : "Upload proof of payment")}
 <p style="margin:14px 0 0;padding:12px 14px;background:${C.sand};border-radius:8px;font-size:13px;color:${C.soft};">This is a quotation, not yet a confirmed booking. Reservations are on a first-come, first-served basis and are confirmed only once payment is received. In the absence of a signed agreement, guests are not relieved of the resort rules, regulations and conditions.</p>
 ${goodToKnow()}
 ${policiesBlock()}
@@ -533,6 +561,8 @@ export function staffNewEmail(r: Any, cabanas: Any[], q: Quote | null, c: Return
     flags.push(`<li style="margin:0 0 6px;color:${tone === "red" ? C.red : C.warn};">${t}</li>`);
 
   if (!guestSent.ok) flag(`<strong>Guest email FAILED to send</strong> (${esc(guestSent.error || "unknown error")}). Send the quotation manually.`, "red");
+  const needDocs = docsNeeded(r);
+  if (needDocs.any) flag(`Guest still has to upload ${[needDocs.seniors ? "Senior/PWD ID(s)" : "", needDocs.pets ? "pet vaccination card(s)" : ""].filter(Boolean).join(" and ")} — the quotation email links to the upload page.`);
   if (q?.mismatch) flag(`Website showed the guest <strong>${peso(q.websiteTotal)}</strong>, but the rate sheet gives <strong>${peso(q.total)}</strong> (the amount emailed). Double-check before accepting payment.`, "red");
   if (d !== null && d <= 1) flag(`Trip is <strong>${d <= 0 ? "today" : "tomorrow"}</strong> — past the usual payment cut-off. Call the guest now: either accept with a same-day payment deadline, or send the walk-in reply.`, "red");
   else if (d !== null && d <= 7) flag(`Trip is <strong>${d <= 0 ? "today or past" : `in ${plural(d, "day")}`}</strong> — inside the 7-day non-refundable window. Follow up by phone.`, "red");
@@ -557,6 +587,7 @@ export function staffNewEmail(r: Any, cabanas: Any[], q: Quote | null, c: Return
     ["Amount due", q ? esc(peso(q.total)) : "Quote needed"],
     ["Status", "Unpaid"],
   ])}
+${isStaffMade(r) ? p(`Added in the staff dashboard${r.booked_by ? ` by <strong>${esc(r.booked_by)}</strong>` : ""} (${esc(label(r.source))}) and sent to the guest as a quotation.`) : ""}
 ${p(guestSent.ok
     ? `Quotation${q ? " + bank details" : ""} sent to <strong>${esc(r.guest_email)}</strong> at ${esc(fmtDateTime(now))}. It's in the <strong>Sent</strong> folder — the guest's replies will land in that same thread.${q ? ` Pay-by date given: <strong>${esc(dl.label)}</strong>.` : ""}`
     : `<strong style="color:${C.red};">The guest has NOT received an email.</strong>`)}
@@ -602,7 +633,11 @@ export function staffProofEmail(r: Any, q: Quote | null, c: ReturnType<typeof cf
   ])}
 ${urgent}${p(`<strong>${esc(r.guest_name)}</strong> uploaded a payment screenshot on the website${r.payment_uploaded_at ? ` (${esc(fmtDateTime(new Date(r.payment_uploaded_at)))})` : ""}.${hasAttachment ? " It's attached to this email." : " Open it from the dashboard."}`)}
 ${p(`Please check it against the bank statement for <strong>${q ? esc(peso(q.total)) : "the quoted amount"}</strong>, confirm the signed Reservations Agreement is in the guest thread, then set the booking to <strong>Confirmed</strong>. The guest has been told we're verifying it.`)}
-${kv([["Trip date", esc(fmtDate(r.check_in))], ["Mobile", esc(r.guest_phone)], ["Email", esc(r.guest_email)]])}
+${kv([
+    ["Trip date", esc(fmtDate(r.check_in))], ["Mobile", esc(r.guest_phone)], ["Email", esc(r.guest_email)],
+    ...(int(r.senior_count) ? [["Senior/PWD IDs", Array.isArray(r.senior_id_paths) && r.senior_id_paths.length ? plural(r.senior_id_paths.length, "photo") + " on file" : "<strong>None uploaded yet</strong>"] as [string, string]] : []),
+    ...(int(r.pet_count) ? [["Pet vaccination cards", Array.isArray(r.pet_vaccination_paths) && r.pet_vaccination_paths.length ? plural(r.pet_vaccination_paths.length, "card") + " on file" : "<strong>None uploaded yet</strong>"] as [string, string]] : []),
+  ])}
 <p style="margin-top:16px;">${button(dash, "Open in staff dashboard")}</p>`;
   return {
     subject: "Re: " + staffSubject(r, c),
@@ -652,7 +687,8 @@ ${signature(c)}`;
 export function guestReminderEmail(r: Any, cabanas: Any[], q: Quote | null, c: ReturnType<typeof cfg>) {
   const first = esc(String(r.guest_name || "there").trim().split(/\s+/)[0]);
   const fin = finalDeadline(r);
-  const payUrl = `${c.site}/pay/index.html?order=${encodeURIComponent(r.order_code || "")}&email=${encodeURIComponent(r.guest_email || "")}`;
+  const payUrl = uploadUrl(r, c);
+  const need = docsNeeded(r);
   const body = `${p(`Hi ${first},`)}
 ${p(`We haven't received payment yet for your reservation <strong>${esc(r.order_code || "")}</strong> on <strong>${esc(fmtDate(r.check_in))}</strong>, and the 24-hour payment window has passed.`)}
 ${p(fin.isTripMorning
@@ -664,7 +700,8 @@ ${statusBox([
     ["Final deadline", esc(fin.label)],
   ])}
 ${p("Already paid? Just upload your proof of payment (or reply to this email with it) and we'll take it from here.")}
-${button(payUrl, "Upload proof of payment")}
+${need.any ? p(`On the same page, please also upload ${[need.seniors ? "the Senior Citizen / PWD ID(s)" : "", need.pets ? "your pet's vaccination card(s)" : ""].filter(Boolean).join(" and ")}.`) : ""}
+${button(payUrl, need.any ? "Upload payment & documents" : "Upload proof of payment")}
 ${h2("Bank details")}${bankTable()}
 ${p(`Please put <strong>${esc(r.order_code)}</strong> and your name in the reference / remarks. Prefer card or e-wallet? Reply to this email and we'll send a secure Xendit link.`, "margin-top:12px;")}
 ${signature(c)}`;
@@ -835,18 +872,18 @@ async function agreementAttachment() {
   }
 }
 
-async function proofAttachment(path: string | null) {
+async function proofAttachment(path: string | null, bucket = "payment-proofs", name = "Payment proof") {
   if (!path) return [];
   const c = cfg();
   try {
-    const res = await fetch(`${c.supabaseUrl}/storage/v1/object/payment-proofs/${path.split("/").map(encodeURIComponent).join("/")}`, {
+    const res = await fetch(`${c.supabaseUrl}/storage/v1/object/${bucket}/${path.split("/").map(encodeURIComponent).join("/")}`, {
       headers: { apikey: c.serviceKey, Authorization: `Bearer ${c.serviceKey}` },
     });
     if (!res.ok) return [];
     const buf = new Uint8Array(await res.arrayBuffer());
     if (buf.byteLength > 15 * 1024 * 1024) return [];
     const ext = path.split(".").pop() || "jpg";
-    return [{ filename: `Payment proof ${path.split("/").pop()}`.replace(/\.[^.]+$/, "") + "." + ext, content: buf, contentType: res.headers.get("content-type") || "image/jpeg" }];
+    return [{ filename: `${name} ${path.split("/").pop()}`.replace(/\.[^.]+$/, "") + "." + ext, content: buf, contentType: res.headers.get("content-type") || "image/jpeg" }];
   } catch {
     return [];
   }
@@ -873,10 +910,11 @@ async function onInsert(r: Any) {
   return { guest, staff };
 }
 
-// Staff-added bookings (phone, Messenger, email, walk-in) are handled by hand,
-// as before — only bookings from the sources in AUTO_EMAIL_SOURCES get emails.
+// Staff-added bookings (phone, Messenger, email, walk-in) are handled by hand
+// unless staff ticked "Send this booking to the guest" (email_guest) — then
+// they get exactly the same emails as a website booking.
 function autoEmail(r: Any, c: ReturnType<typeof cfg>) {
-  return c.autoSources.includes(String(r.source || "website"));
+  return c.autoSources.includes(String(r.source || "website")) || r.email_guest === true;
 }
 
 async function onProof(r: Any) {
@@ -897,6 +935,33 @@ async function onProof(r: Any) {
     guest = await send({ booking: r, kind: "proof_guest", to: r.guest_email, subject: g.subject, html: g.html, thread: "guest" });
   }
   return { staff, guest };
+}
+
+export function staffDocsEmail(r: Any, seniorIds: number, petCards: number, c: ReturnType<typeof cfg>, hasAttachment: boolean) {
+  const dash = `${c.site}/staff/index.html?q=${encodeURIComponent(r.order_code || "")}`;
+  const what = [seniorIds ? plural(seniorIds, "Senior/PWD ID photo") : "", petCards ? plural(petCards, "pet vaccination card") : ""].filter(Boolean).join(" and ");
+  const body = `${p(`<strong>${esc(r.guest_name)}</strong> uploaded ${esc(what)} for <strong>${esc(r.order_code)}</strong> (${esc(fmtDate(r.check_in))}) on the website.${hasAttachment ? " They're attached to this email." : ""}`)}
+${petCards && r.pet_policy_agreed_at ? p("The guest agreed to the Pet Policy online.") : ""}
+${p("Please check them in the dashboard (and again at check-in).")}
+${button(dash, "Open in staff dashboard")}`;
+  return {
+    subject: "Re: " + staffSubject(r, c),
+    html: shell({ preheader: `Documents uploaded for ${r.order_code}`, body, c, internal: true }),
+  };
+}
+
+async function onDocs(r: Any, payload: Any) {
+  const c = cfg();
+  const nS = Math.min(int(payload.senior_ids), 10), nP = Math.min(int(payload.pet_cards), 6);
+  if (!nS && !nP) return { skipped: "nothing uploaded" };
+  const sp: string[] = Array.isArray(r.senior_id_paths) ? r.senior_id_paths.slice(-nS || r.senior_id_paths.length) : [];
+  const pp: string[] = Array.isArray(r.pet_vaccination_paths) ? r.pet_vaccination_paths.slice(-nP || r.pet_vaccination_paths.length) : [];
+  const att = [
+    ...(nS ? (await Promise.all(sp.map((x) => proofAttachment(x, "senior-ids", "Senior ID")))).flat() : []),
+    ...(nP ? (await Promise.all(pp.map((x) => proofAttachment(x, "pet-vaccinations", "Pet vaccination card")))).flat() : []),
+  ];
+  const s = staffDocsEmail(r, nS, nP, c, att.length > 0);
+  return await send({ booking: r, kind: `docs_staff:${String(payload.upload_id || Date.now())}`, to: c.staffEmails, subject: s.subject, html: s.html, thread: "staff", attachments: att });
 }
 
 async function onConfirmed(r: Any) {
@@ -964,7 +1029,11 @@ export async function handle(req: Request): Promise<Response> {
     if (payload.type === "INSERT") out.insert = await onInsert(r);
     if (payload.type === "CHANGE") out.changed = await onChanged(r, payload);
     if (payload.type === "REMINDER") out.reminder = await onReminder(r);
+    if (payload.type === "DOCS") out.docs = await onDocs(r, payload);
     if (payload.type === "UPDATE") {
+      // Staff ticked "Send this booking to the guest" — the dashboard flips
+      // email_guest after the cabanas are attached, so the quote lists them.
+      if (payload.record.email_guest === true && old.email_guest !== true) out.insert = await onInsert(r);
       if (payload.record.payment_uploaded_at && payload.record.payment_uploaded_at !== old.payment_uploaded_at) {
         out.proof = await onProof(r);
       }

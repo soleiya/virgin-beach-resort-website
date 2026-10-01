@@ -182,6 +182,8 @@ html = """<!doctype html>
   .modal .modal-check { display: flex; align-items: center; gap: 8px; text-transform: none; letter-spacing: 0; font-size: 0.88rem; font-weight: 600; color: var(--ink); margin: 6px 0 4px; cursor: pointer; }
   .modal .modal-check input { width: auto; }
   .modal .modal-check.is-disabled { color: var(--ink-soft); cursor: default; }
+  .modal input[readonly] { background: #e6dfd0; border-style: dashed; color: var(--ink-soft); cursor: not-allowed; }
+  .modal-lock { font-size: 0.72rem; font-weight: 400; color: var(--ink-soft); text-transform: none; letter-spacing: 0; }
   @media (max-width: 560px) { .modal-row, .modal-row.three { grid-template-columns: 1fr; } }
 </style>
 </head>
@@ -345,12 +347,12 @@ html = """<!doctype html>
       </div>
       <div class="modal-row">
         <div class="modal-field" style="margin-bottom:0;">
-          <label for="addName">Guest Name</label>
+          <label for="addName">Guest Name <span class="modal-lock" id="addNameLock" hidden>&middot; locked</span></label>
           <input id="addName" type="text" required>
         </div>
         <div class="modal-field" style="margin-bottom:0;">
-          <label for="addBookedBy">Booked By</label>
-          <input id="addBookedBy" type="text" placeholder="Staff name">
+          <label for="addBookedBy">Booked By <span class="modal-lock">&middot; locked</span></label>
+          <input id="addBookedBy" type="text" readonly tabindex="-1">
         </div>
       </div>
       <div class="modal-row">
@@ -412,6 +414,7 @@ html = """<!doctype html>
         <textarea id="addStaffNotes" rows="2"></textarea>
       </div>
       <label class="modal-check" id="addNotifyWrap"><input type="checkbox" id="addNotify" checked> <span id="addNotifyText">Email the guest a summary of these changes</span></label>
+      <p class="modal-hint" id="addNotifyHint" hidden></p>
       <p class="modal-error" id="addError"></p>
       <div class="modal-actions">
         <button type="button" class="btn-sm ghost" id="cancelAddBtn">Cancel</button>
