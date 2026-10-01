@@ -35,7 +35,8 @@ body = f"""
   <div class="wrap" style="max-width:560px; margin:0 auto;">
     <span class="eyebrow">Prefer to talk?</span>
     <h2>Call or message us directly</h2>
-    <p class="prose mx-auto mt-lg">Mobile: <a class="text-link" href="tel:+639177920712">+63 917 792 0712</a> &middot;
+    <p class="prose mx-auto mt-lg">Mobile: <a class="text-link" href="tel:+639177920712">+63 917 792 0712</a> (Globe) &middot;
+    <a class="text-link" href="tel:+639294309109">+63 929 430 9109</a> (Smart) &middot;
     Email: <a class="text-link" href="mailto:reservations@virginbeachresort.com">reservations@virginbeachresort.com</a></p>
   </div>
 </section>

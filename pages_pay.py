@@ -57,7 +57,7 @@ body = f"""
           </div>
         </div>
         <button class="btn btn-primary" type="submit" id="paySubmitBtn">Upload</button>
-        <p class="field-hint">Our reservations team reviews uploads and updates your status &mdash; you'll hear back within 24 hours.</p>
+        <p class="field-hint">Our reservations team reviews uploads and updates your status &mdash; you'll hear back within one business day (office hours: 9:00 AM &ndash; 4:00 PM, Monday &ndash; Friday).</p>
       </form>
     </div>
     <div id="payStatus" class="form-status" hidden></div>

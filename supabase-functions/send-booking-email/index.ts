@@ -68,7 +68,7 @@ function env(key: string, fallback = ""): string {
 
 const MAILBOX = "reservations@virginbeachresort.com";
 const FROM = `Virgin Beach Resort Reservations <${MAILBOX}>`;
-const EVENTS_EMAIL = "virginbeach.events@gmail.com";
+const EVENTS_EMAIL = "events@virginbeachresort.com";
 const MSGID_DOMAIN = "virginbeachresort.com";
 
 function cfg() {
@@ -462,11 +462,12 @@ function signature(c: ReturnType<typeof cfg>) {
   return `<div style="margin-top:28px;padding-top:16px;border-top:1px solid ${C.line};font-size:13px;color:${C.soft};">
 <p style="margin:0 0 10px;color:${C.ink};"><strong>Reservations Team</strong><br>Virgin Beach Resort</p>
 <p style="margin:0 0 10px;font-style:italic;">Since we are experiencing a large volume of inquiries, we kindly request that you reply to this same email thread, so we can easily monitor your responses.</p>
-<p style="margin:0 0 4px;"><strong>Office Hours:</strong> Monday–Sunday | 9:00 AM–6:00 PM</p>
+<p style="margin:0 0 4px;"><strong>Office Hours:</strong> Monday–Friday | 9:00 AM–4:00 PM</p>
 <p style="margin:0 0 4px;"><strong>Booking &amp; Inquiries:</strong> <a href="mailto:${MAILBOX}" style="color:${C.deep};">${MAILBOX}</a></p>
 <p style="margin:0 0 4px;"><strong>Corporate &amp; Events:</strong> <a href="mailto:${EVENTS_EMAIL}" style="color:${C.deep};">${EVENTS_EMAIL}</a></p>
-<p style="margin:0 0 4px;"><strong>Manila Reservations Office:</strong> +63 917 792 0712 · +63 929 430 9109 · +63 929 270 9724</p>
-<p style="margin:0 0 4px;"><strong>Resort:</strong> Km 23 Laiya, San Juan, Batangas · +63 969 623 4728</p>
+<p style="margin:0 0 4px;"><strong>Reservations:</strong> +63 917 792 0712 (Globe) · +63 929 430 9109 (Smart)</p>
+<p style="margin:0 0 4px;"><strong>Corporate:</strong> +63 929 270 9724</p>
+<p style="margin:0 0 4px;"><strong>Front Office (walk-ins):</strong> +63 969 623 4728 · Km 23 Laiya, San Juan, Batangas</p>
 <p style="margin:0;"><strong>Website:</strong> <a href="${esc(c.site)}" style="color:${C.deep};">${esc(c.site.replace(/^https?:\/\//, ""))}</a></p>
 </div>`;
 }
@@ -539,7 +540,7 @@ ${need.seniors ? `<li style="margin:0 0 8px;"><strong>Upload the Senior Citizen 
 ${need.pets ? `<li style="margin:0 0 8px;"><strong>Upload your pet${int(r.pet_count) > 1 ? "s'" : "'s"} vaccination card${int(r.pet_count) > 1 ? "s" : ""}</strong> and agree to the Pet Policy on the same page. The card should show the pet's details and a current anti-rabies vaccination. Please bring it on the day too, with a leash and food and water bowls.</li>` : ""}
 ${int(r.pet_count) && !need.pets ? `<li style="margin:0 0 8px;"><strong>Bringing your pet${int(r.pet_count) > 1 ? "s" : ""}:</strong> please bring the vaccination card${int(r.pet_count) > 1 ? "s" : ""} you uploaded (we'll check ${int(r.pet_count) > 1 ? "them" : "it"} at check-in), a leash, food and water bowls. The Pet Policy you agreed to applies during your visit.</li>` : ""}
 <li style="margin:0 0 8px;"><strong>Reply with the signed Reservations Agreement</strong> (attached as a PDF — a photo of the signed last page is fine) and a photo of <strong>one (1) valid ID</strong>${int(r.senior_count) && !need.seniors ? " (we already have the Senior Citizen/PWD ID you uploaded)" : ""}.</li>
-<li style="margin:0 0 8px;"><strong>We'll email your confirmation</strong> as soon as the payment is verified (during office hours, 9:00 AM–6:00 PM daily).</li>
+<li style="margin:0 0 8px;"><strong>We'll email your confirmation</strong> as soon as the payment is verified (during office hours, 9:00 AM–4:00 PM, Monday–Friday).</li>
 </ol>
 ${button(payUrl, need.any ? "Upload payment & documents" : "Upload proof of payment")}
 <p style="margin:14px 0 0;padding:12px 14px;background:${C.sand};border-radius:8px;font-size:13px;color:${C.soft};">This is a quotation, not yet a confirmed booking. Reservations are on a first-come, first-served basis and are confirmed only once payment is received. In the absence of a signed agreement, guests are not relieved of the resort rules, regulations and conditions.</p>

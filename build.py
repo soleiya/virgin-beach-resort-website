@@ -358,7 +358,8 @@ def footer_html(base):
       <div>
         <h4>Reach Us</h4>
         <ul>
-          <li><a href="tel:+639177920712">+63 917 792 0712</a></li>
+          <li><a href="tel:+639177920712">+63 917 792 0712</a> (Globe)</li>
+          <li><a href="tel:+639294309109">+63 929 430 9109</a> (Smart)</li>
           <li><a href="mailto:reservations@virginbeachresort.com">reservations@virginbeachresort.com</a></li>
           <li><a href="{base}faq/index.html">FAQ</a></li>
           <li><a href="{base}contact/index.html">Contact &amp; Map</a></li>

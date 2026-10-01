@@ -202,7 +202,7 @@
         showResult(
           "<h3>Thank you!</h3><p>We've received your " + andList(did) + " for order <strong>" + orderCode + "</strong>." +
             (payFile
-              ? " We've emailed you an acknowledgement, and our reservations team will send your confirmation once the payment is verified (office hours 9:00 AM–6:00 PM daily)."
+              ? " We've emailed you an acknowledgement, and our reservations team will send your confirmation once the payment is verified (office hours 9:00 AM–4:00 PM, Monday–Friday)."
               : " Our reservations team will check " + (did.length > 1 || /s$/.test(did[0] || "") ? "them" : "it") + " — please remember to upload your payment screenshot too, if you haven't yet.") +
             "</p>",
           true
