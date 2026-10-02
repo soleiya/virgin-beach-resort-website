@@ -283,6 +283,7 @@ def booking_scripts():
 <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
 <script src="../assets/js/booking-config.js?v={asset_v('assets/js/booking-config.js')}"></script>
 <script src="../assets/js/cabana-map.js?v={asset_v('assets/js/cabana-map.js')}"></script>
+<script src="../assets/js/pricing.js?v={asset_v('assets/js/pricing.js')}"></script>
 <script src="../assets/js/booking.js?v={asset_v('assets/js/booking.js')}"></script>
 """
 

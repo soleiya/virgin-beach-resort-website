@@ -55,17 +55,17 @@
   // Bookings that no longer hold their cabana(s).
   function releasesCabanas(status) { return status === "declined" || status === "expired"; }
 
-  // Same rule as booking_deadlines() in supabase-functions/booking-v3.sql:
-  // pay within 24h (reminder + 12h extension → 36h), never past 8:00 AM on
-  // the trip date. Booked on/after 8:00 AM of the trip date = pay on arrival.
+  // Same rule as booking_deadlines() in supabase-functions/booking-v7.sql:
+  // pay within 24h of booking or it expires, never past 8:00 AM on the trip
+  // date. Booked on/after 8:00 AM of the trip date = pay on arrival.
   function paymentDeadlines(r) {
     if (!r.created_at) return null;
     var created = new Date(r.created_at).getTime();
     var trip8 = r.check_in ? new Date(r.check_in + "T08:00:00+08:00").getTime() : null;
     if (trip8 !== null && trip8 <= created) return null;
-    var first = created + 24 * 3600e3, fin = created + 36 * 3600e3;
+    var fin = created + 24 * 3600e3;
     if (trip8 !== null && trip8 < fin) fin = trip8;
-    return { first: Math.min(first, fin), final: fin };
+    return { final: fin };
   }
   // Actions the booking_audit_log trigger can record — see the SQL that
   // created log_booking_change() / log_cabana_change() for exactly how
@@ -394,6 +394,9 @@
     });
   });
 
+  function esc(t) {
+    return String(t == null ? "" : t).replace(/[&<>"']/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]; });
+  }
   function peso(n) {
     if (n === null || n === undefined || n === "") return "—";
     return "₱" + Number(n).toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -583,12 +586,9 @@
         if (!dl) pb.textContent = "pay on arrival";
         else {
           var nowMs = Date.now();
-          var target = nowMs < dl.first ? dl.first : dl.final;
-          pb.textContent = nowMs >= dl.final
-            ? "past deadline — expiring"
-            : (nowMs < dl.first ? "pay by " : "extended to ") + fmtDateTime(new Date(target).toISOString());
-          if (nowMs >= dl.first) pb.classList.add("overdue");
-          pb.title = "Reminder + 12h extension at " + fmtDateTime(new Date(dl.first).toISOString()) + "; expires at " + fmtDateTime(new Date(dl.final).toISOString()) + " if still unpaid.";
+          pb.textContent = nowMs >= dl.final ? "past deadline — expiring" : "pay by " + fmtDateTime(new Date(dl.final).toISOString());
+          if (nowMs >= dl.final - 3 * 3600e3) pb.classList.add("overdue");
+          pb.title = "Expires at " + fmtDateTime(new Date(dl.final).toISOString()) + " if still unpaid; the cabana(s) are then released.";
         }
         tdStatus.appendChild(pb);
       } else if (r.status === "expired" && r.expired_at) {
@@ -722,7 +722,9 @@
     ["adults", "Adults", String],
     ["senior_count", "Senior citizens / PWD", String],
     ["children_6_12", "Kids (6–12)", String],
+    ["children_0_5", "Kids (0–5)", String],
     ["pet_count", "Pets", String],
+    ["discount_amount", "Discount", function (v) { return Number(v) > 0 ? peso(v) : "None"; }],
     ["total_amount", "Total", function (v) { return v === null || v === undefined || v === "" ? "" : peso(v); }],
     ["guest_name", "Name", String],
     ["guest_phone", "Phone", String],
@@ -759,7 +761,7 @@
       // the same email a website booking gets (amount due, bank details,
       // pay-by time, and a link to upload payment / Senior IDs / pet cards).
       var type = $("addType").value, status = $("addStatus").value;
-      var hasTotal = $("addTotal").value !== "";
+      var hasTotal = P.hasRateSheet(type) || $("addTotal").value !== "";
       var why = !EMAIL_RE.test(email) ? "Add the guest's email address to send them the quotation"
         : type === "corporate" ? "Corporate outings get a tailored quote from the events team — not sent automatically"
         : QUOTE_STATUSES.indexOf(status) === -1 ? "Only Pending bookings can be sent as a quotation"
@@ -770,9 +772,9 @@
       notifyWrap.classList.toggle("is-disabled", !!why);
       notifyText.textContent = why || "Send this booking to the guest (" + email + ") as a quotation";
       notifyHint.hidden = !!why;
-      notifyHint.textContent = "Same email as a website booking: amount due" + (hasTotal ? " (the Total you entered)" : " (from the rate sheet)") +
+      notifyHint.textContent = "Same email as a website booking: the amount due shown above" +
         ", bank details, pay-by time, and a link for the guest to upload " + uploadList() +
-        ". Payment reminders and auto-expiry apply as usual.";
+        ". Unpaid bookings expire automatically after 24 hours.";
       return;
     }
     notifyHint.hidden = true;
@@ -828,6 +830,7 @@
   }
 
   function renderModalSelected() {
+    renderModalBill();
     addSelectedEl.innerHTML = "";
     if (!modalCabanaIds.length) {
       addSelectedEl.innerHTML = '<span class="muted">No cabana picked yet — tap one on the map (optional).</span>';
@@ -886,6 +889,107 @@
     renderModalSelected();
   }
 
+  // ---------- pricing (same calculation as the public booking form) ----------
+  var P = window.VBRPricing;
+  var billEl = $("addBill");
+  var manualTotalWrap = $("addManualTotalWrap");
+  var discTypeEl = $("addDiscountType"), discValueEl = $("addDiscountValue"), discReasonEl = $("addDiscountReason");
+  var openPriceSig = null; // pricing inputs when an existing booking was opened
+
+  function priceSig() {
+    return [$("addType").value, intVal("addAdults"), intVal("addKids"), intVal("addKids05"), intVal("addSeniors"), intVal("addPets"),
+      modalCabanaIds.slice().sort().join(","), discTypeEl.value, discValueEl.value, $("addTotal").value].join("|");
+  }
+
+  // Everything the booking will be saved with: the rate-sheet bill, the
+  // discount and the total. For an existing booking whose pricing inputs
+  // haven't been touched, the saved total is kept as-is (older bookings were
+  // priced by hand) — change anything that affects price and it's recalculated.
+  function modalPricing() {
+    var type = $("addType").value;
+    var bill = P.compute({
+      type: type, adults: intVal("addAdults"), kids612: intVal("addKids"), kids05: intVal("addKids05"),
+      seniors: intVal("addSeniors"), pets: intVal("addPets"),
+      cabanas: modalCabanaIds.map(function (id) { return cabanasById[id]; }).filter(Boolean),
+    });
+    var out = { bill: bill, rated: bill.rated, discountType: null, discountValue: null, discount: 0, total: null, kept: false, error: null };
+    if (bill.rated) {
+      var kind = discTypeEl.value;
+      var val = Number(discValueEl.value) || 0;
+      if (kind && val > 0) {
+        if (kind === "percent" && val > 100) out.error = "A percentage discount can't be more than 100%.";
+        if (kind === "amount" && val > bill.total) out.error = "The discount is more than the total.";
+        out.discountType = kind; out.discountValue = val;
+        out.discount = P.discountAmount(bill.total, kind, val);
+      }
+      out.total = P.r2(bill.total - out.discount);
+    } else {
+      out.total = $("addTotal").value === "" ? null : Number($("addTotal").value);
+    }
+    out.calculated = out.total;
+    var saved = editingRow ? editingRow.total_amount : null;
+    if (editingRow && openPriceSig !== null && priceSig() === openPriceSig &&
+        (saved == null ? out.total != null : out.total == null || Math.abs(Number(saved) - out.total) > 0.5)) {
+      out.kept = true;
+      out.total = saved == null ? null : Number(saved);
+    }
+    return out;
+  }
+
+  function billRow(label, amount, cls) {
+    return '<div class="bill-row' + (cls ? " " + cls : "") + '"><span>' + label + "</span><span>" + amount + "</span></div>";
+  }
+
+  function renderModalBill() {
+    if (!billEl) return;
+    var pr = modalPricing(), b = pr.bill;
+    var rated = b.rated;
+    manualTotalWrap.hidden = rated;
+    discTypeEl.disabled = !rated;
+    if (!rated) discTypeEl.value = "";
+    discValueEl.disabled = discReasonEl.disabled = !rated || !discTypeEl.value;
+    $("addDiscountValueLabel").textContent = discTypeEl.value === "percent" ? "Percent (%)" : discTypeEl.value === "amount" ? "Amount (₱)" : "Value";
+    if (!rated) {
+      billEl.innerHTML = '<div class="bill-lines">' + billRow(esc(FULL_TYPE_NAMES[b.type] || b.type), "Quoted by hand") + "</div>" +
+        '<div class="bill-total"><span>Total</span><span>' + (pr.total == null ? "—" : peso(pr.total)) + "</span></div>";
+      return;
+    }
+    var L = [];
+    if (b.isPackage) {
+      L.push(billRow("Package (up to " + b.includedPax + " guests, " + b.includedCabanas + " cabana)", peso(b.base)));
+      if (b.extraPax) L.push(billRow(b.extraPax + " extra guest" + (b.extraPax === 1 ? "" : "s"), peso(b.extraPaxCost)));
+      if (b.pets) L.push(billRow(b.pets + " pet" + (b.pets === 1 ? "" : "s"), peso(b.extraPetCost)));
+      if (b.extraCabanas) L.push(billRow(b.extraCabanas + " extra cabana" + (b.extraCabanas === 1 ? "" : "s"), peso(b.extraCabanaCost)));
+    } else {
+      if (b.regularAdults) L.push(billRow(b.regularAdults + " adult" + (b.regularAdults === 1 ? "" : "s") + " × " + peso(b.rate.adult), peso(b.regularAdults * b.rate.adult)));
+      if (b.seniors) L.push(billRow(b.seniors + " senior/PWD × " + peso(b.seniorRate) + " <em>(20% off)</em>", peso(b.seniors * b.seniorRate)));
+      if (b.kids612) L.push(billRow(b.kids612 + " child" + (b.kids612 === 1 ? "" : "ren") + " (6–12) × " + peso(b.rate.child612), peso(b.kids612 * b.rate.child612)));
+      if (b.kids05) L.push(billRow(b.kids05 + " child" + (b.kids05 === 1 ? "" : "ren") + " (0–5)", "Free"));
+      if (b.pets) L.push(billRow(b.pets + " pet" + (b.pets === 1 ? "" : "s") + " × " + peso(b.rate.pet), peso(b.petCost)));
+      b.cabanas.forEach(function (c) { L.push(billRow(esc(c.label), peso(b.cabanaPrice(c)))); });
+    }
+    if (pr.discount > 0) {
+      L.push(billRow("Discount" + (pr.discountType === "percent" ? " (" + pr.discountValue + "%)" : "") +
+        (discReasonEl.value.trim() ? " — " + esc(discReasonEl.value.trim()) : ""), "−" + peso(pr.discount), "discount"));
+    }
+    var warn = b.cabanas.length && b.totalCapacity < b.totalGuests
+      ? '<p class="bill-warning">The cabana' + (b.cabanas.length === 1 ? "" : "s") + " picked seat up to " + b.totalCapacity + ", and the party is " + b.totalGuests + ".</p>" : "";
+    var note = pr.kept
+      ? '<p class="bill-note">' + (pr.total == null ? "No saved total" : "Saved total kept: " + peso(pr.total)) + " (rate sheet gives " + peso(pr.calculated) + ")." +
+        ' <button type="button" class="btn-sm ghost" id="useCalcTotal">Use rate sheet total</button></p>'
+      : "";
+    billEl.innerHTML = '<div class="bill-lines">' + (L.join("") || billRow("Add the party size and cabana(s)", "—")) + "</div>" + warn +
+      '<div class="bill-total"><span>Total</span><span>' + (pr.total == null ? "—" : peso(pr.total)) + "</span></div>" + note +
+      (pr.error ? '<p class="bill-note" style="color:#9b2c2c;">' + esc(pr.error) + "</p>" : "");
+    var useBtn = $("useCalcTotal");
+    if (useBtn) useBtn.addEventListener("click", function () { openPriceSig = null; renderModalBill(); });
+  }
+
+  ["addAdults", "addKids", "addKids05", "addSeniors", "addPets", "addTotal", "addDiscountValue", "addDiscountReason"].forEach(function (id) {
+    $(id).addEventListener("input", renderModalBill);
+  });
+  ["addType", "addDiscountType"].forEach(function (id) { $(id).addEventListener("change", renderModalBill); });
+
   function openModal(row) {
     addForm.reset();
     addError.style.display = "none";
@@ -911,13 +1015,19 @@
       addDateEl.value = r.check_in || "";
       $("addAdults").value = r.adults || 0;
       $("addKids").value = r.children_6_12 || 0;
+      $("addKids05").value = r.children_0_5 || 0;
+      discTypeEl.value = r.discount_type || "";
+      discValueEl.value = r.discount_value != null ? r.discount_value : "";
+      discReasonEl.value = r.discount_reason || "";
       $("addSeniors").value = r.senior_count || 0;
       $("addPets").value = r.pet_count || 0;
       $("addTotal").value = r.total_amount != null ? r.total_amount : "";
       $("addNotes").value = r.notes || "";
       $("addStaffNotes").value = r.staff_notes || "";
       modalCabanaIds = (r.booking_cabanas || []).map(function (bc) { return bc.cabana_id; });
+      openPriceSig = priceSig();
     } else {
+      openPriceSig = null;
       modalTitle.textContent = "Add a Booking";
       modalSub.textContent = "For a request that came in outside the website — Messenger, phone, walk-in, etc.";
       saveBookingBtn.textContent = "Save Booking";
@@ -950,7 +1060,8 @@
 
   function formValues() {
     var type = $("addType").value;
-    var totalRaw = $("addTotal").value;
+    var pr = modalPricing();
+    var b = pr.bill;
     return {
       source: $("addChannel").value,
       stay_type: type,
@@ -965,7 +1076,15 @@
       children_6_12: intVal("addKids"),
       senior_count: intVal("addSeniors"),
       pet_count: intVal("addPets"),
-      total_amount: totalRaw === "" ? null : Number(totalRaw),
+      children_0_5: intVal("addKids05"),
+      total_amount: pr.total,
+      subtotal_people: b.rated && !pr.kept ? P.r2(b.subtotalPeople) : undefined,
+      cabana_total: b.rated && !pr.kept ? P.r2(b.isPackage ? b.extraCabanaCost : b.cabanaTotal) : undefined,
+      senior_discount: b.rated && !pr.kept ? P.r2(b.seniorDiscount) : undefined,
+      discount_type: pr.discountType,
+      discount_value: pr.discountType ? pr.discountValue : null,
+      discount_amount: pr.discount,
+      discount_reason: pr.discountType ? (discReasonEl.value.trim() || null) : null,
       notes: $("addNotes").value.trim() || null,
       staff_notes: $("addStaffNotes").value.trim() || null,
     };
@@ -978,7 +1097,10 @@
   }
 
   function sameValue(a, b) {
-    if ((a === null || a === undefined || a === "") && (b === null || b === undefined || b === "")) return true;
+    var empty = function (v) { return v === null || v === undefined || v === ""; };
+    if (empty(a) && empty(b)) return true;
+    // an empty count and 0 are the same (older bookings left some counts blank)
+    if ((empty(a) && b === 0) || (a === 0 && empty(b))) return true;
     if (typeof a === "number" || typeof b === "number") return Number(a) === Number(b);
     return String(a) === String(b);
   }
@@ -1029,6 +1151,10 @@
     e.preventDefault();
     addError.style.display = "none";
     var vals = formValues();
+    Object.keys(vals).forEach(function (k) { if (vals[k] === undefined) delete vals[k]; });
+    var pricing = modalPricing();
+    if (pricing.error) return showFormError(pricing.error);
+    if (vals.pet_count > 2) return showFormError("A maximum of two pets are permitted per reservation.");
     if (!vals.guest_name) return showFormError("Guest name is required.");
     if (vals.senior_count > vals.adults) return showFormError("Senior citizens are counted within adults — senior count can't be more than adults.");
     saveBookingBtn.disabled = true;
@@ -1085,7 +1211,7 @@
 
     // New booking. created_at (the "Date Entered") is left for Postgres to
     // stamp off the server clock; order_code comes from trg_set_order_code.
-    var payload = Object.assign({}, vals, { children_0_5: 0, email_guest: false });
+    var payload = Object.assign({}, vals, { email_guest: false });
     if (!payload.staff_notes) delete payload.staff_notes;
     var cabanaIds = modalCabanaIds.slice();
     var sendQuote = notifyEl.checked && !notifyEl.disabled;

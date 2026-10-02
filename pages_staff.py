@@ -182,6 +182,11 @@ html = """<!doctype html>
   .modal .modal-check { display: flex; align-items: center; gap: 8px; text-transform: none; letter-spacing: 0; font-size: 0.88rem; font-weight: 600; color: var(--ink); margin: 6px 0 4px; cursor: pointer; }
   .modal .modal-check input { width: auto; }
   .modal .modal-check.is-disabled { color: var(--ink-soft); cursor: default; }
+  .modal-bill { padding: 16px 18px; }
+  .modal-bill .bill-total { font-size: 1.1rem; }
+  .modal-bill .bill-row.discount span:last-child { color: var(--lagoon-deep); }
+  .modal-bill .bill-note { font-size: 0.8rem; color: var(--ink-soft); margin: 10px 0 0; }
+  .modal-bill .bill-note button { margin-left: 6px; }
   .modal input[readonly] { background: #e6dfd0; border-style: dashed; color: var(--ink-soft); cursor: not-allowed; }
   .modal-lock { font-size: 0.72rem; font-weight: 400; color: var(--ink-soft); text-transform: none; letter-spacing: 0; }
   @media (max-width: 560px) { .modal-row, .modal-row.three { grid-template-columns: 1fr; } }
@@ -381,16 +386,17 @@ html = """<!doctype html>
       </div>
       <div class="modal-row three">
         <div class="modal-field" style="margin-bottom:0;">
+          <label for="addKids05">Kids 0&ndash;5 <span class="modal-lock">&middot; free</span></label>
+          <input id="addKids05" type="number" min="0" value="0">
+        </div>
+        <div class="modal-field" style="margin-bottom:0;">
           <label for="addSeniors">Senior Citizens / PWD</label>
           <input id="addSeniors" type="number" min="0" value="0">
+          <p class="modal-hint">Counted within Adults &mdash; 20% off their own share.</p>
         </div>
         <div class="modal-field" style="margin-bottom:0;">
           <label for="addPets">Pets</label>
-          <input id="addPets" type="number" min="0" value="0">
-        </div>
-        <div class="modal-field" style="margin-bottom:0;">
-          <label for="addTotal">Total (&#8369;)</label>
-          <input id="addTotal" type="number" min="0" step="0.01" placeholder="Optional">
+          <input id="addPets" type="number" min="0" max="2" value="0">
         </div>
       </div>
       <div class="modal-field">
@@ -398,6 +404,33 @@ html = """<!doctype html>
         <p class="modal-map-status" id="addMapStatus">Pick a preferred date to see which cabanas are free that day.</p>
         <div id="addCabanaMap"></div>
         <div class="modal-map-selected" id="addCabanaSelected"></div>
+      </div>
+      <div class="modal-field" id="addPricing">
+        <label>Amount</label>
+        <div id="addBill" class="bill-summary modal-bill"></div>
+        <div class="modal-row three" id="addDiscountRow" style="margin:12px 0 0;">
+          <div class="modal-field" style="margin-bottom:0;">
+            <label for="addDiscountType">Discount</label>
+            <select id="addDiscountType">
+              <option value="">No discount</option>
+              <option value="percent">Percent (%)</option>
+              <option value="amount">Amount (&#8369;)</option>
+            </select>
+          </div>
+          <div class="modal-field" style="margin-bottom:0;">
+            <label for="addDiscountValue" id="addDiscountValueLabel">Value</label>
+            <input id="addDiscountValue" type="number" min="0" step="0.01" disabled>
+          </div>
+          <div class="modal-field" style="margin-bottom:0;">
+            <label for="addDiscountReason">Reason <span class="modal-lock">&middot; shown to guest</span></label>
+            <input id="addDiscountReason" type="text" maxlength="80" placeholder="e.g. Repeat guest" disabled>
+          </div>
+        </div>
+        <div class="modal-field" id="addManualTotalWrap" style="margin:12px 0 0;" hidden>
+          <label for="addTotal">Total (&#8369;)</label>
+          <input id="addTotal" type="number" min="0" step="0.01" placeholder="Enter the quoted amount">
+          <p class="modal-hint" id="addManualTotalHint">No rate sheet for this booking type &mdash; enter the quoted amount.</p>
+        </div>
       </div>
       <div class="modal-field">
         <label for="addNotes">Notes</label>
@@ -496,6 +529,7 @@ html = """<!doctype html>
 <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
 <script src="../assets/js/booking-config.js?v=__V_CFG__"></script>
 <script src="../assets/js/cabana-map.js?v=__V_MAP__"></script>
+<script src="../assets/js/pricing.js?v=__V_PRICE__"></script>
 <script src="../assets/js/staff-dashboard.js?v=__V_DASH__"></script>
 </body>
 </html>
@@ -504,6 +538,7 @@ html = """<!doctype html>
 html = (html.replace("__V_CSS__", v("assets/css/style.css"))
             .replace("__V_CFG__", v("assets/js/booking-config.js"))
             .replace("__V_MAP__", v("assets/js/cabana-map.js"))
+            .replace("__V_PRICE__", v("assets/js/pricing.js"))
             .replace("__V_DASH__", v("assets/js/staff-dashboard.js")))
 
 os.makedirs(os.path.join(ROOT, "staff"), exist_ok=True)

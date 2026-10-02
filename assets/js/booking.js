@@ -19,20 +19,9 @@
   // already includes a set number of guests and one cabana — extra guests,
   // pets, or cabanas beyond that are billed at the package's own add-on
   // rates. Every rate below matches the resort's 2026 Rate Sheet.
-  var SENIOR_DISCOUNT_RATE = 0.2; // 20% off a senior's own per-person fee only
-
-  var PRICING = {
-    day_trip: { adult: 1250, child612: 825, child05: 0, pet: 750, dining: 1500, lounge: 2000 },
-    half_day: { adult: 800, child612: 550, child05: 0, pet: 375, dining: 750, lounge: 1000 },
-  };
-  var PACKAGE_PRICING = {
-    all_inclusive_family: { base: 5000, includedPax: 4, includedCabanas: 1, addlAdult: 1250, addlChild: 825, addlPet: 750, addlCabana: 1000 },
-    all_inclusive_barkada: { base: 10000, includedPax: 10, includedCabanas: 1, addlAdult: 1250, addlChild: 825, addlPet: 750, addlCabana: 1000 },
-  };
-
-  function isPackageType(t) {
-    return !!PACKAGE_PRICING[t];
-  }
+  // Rates and the bill calculation live in pricing.js (shared with the
+  // staff dashboard so staff-made bookings are priced the same way).
+  var P = window.VBRPricing;
 
   var stayTypeEl = form.querySelector("#stayType");
   var checkInEl = form.querySelector("#checkIn");
@@ -183,55 +172,19 @@
 
   // ---------- live bill ----------
   function computeBill() {
-    var type = stayTypeEl.value;
     var adults = parseInt(adultsEl.value || "0", 10) || 0;
-    var kids612 = parseInt(kids612El.value || "0", 10) || 0;
-    var kids05 = parseInt(kids05El.value || "0", 10) || 0;
     var seniorsRaw = parseInt((seniorCountEl && seniorCountEl.value) || "0", 10) || 0;
     var seniors = Math.max(0, Math.min(seniorsRaw, adults));
     if (seniorCountEl && seniors !== seniorsRaw) seniorCountEl.value = seniors;
-    var pets = parseInt((petCountEl && petCountEl.value) || "0", 10) || 0;
-    var regularAdults = adults - seniors;
-    var totalGuests = adults + kids612 + kids05;
-    // Half-day has its own (lower) cabana rates; full day uses the cabanas table price.
-    var cabanaPrice = function (c) {
-      var r = PRICING[type];
-      if (type === "half_day" && r) return String(c.cabana_type || "").indexOf("lounge") === 0 ? r.lounge : r.dining;
-      return Number(c.price) || 0;
-    };
-    var cabanaTotal = selectedCabanas.reduce(function (sum, c) { return sum + cabanaPrice(c); }, 0);
-    var totalCapacity = selectedCabanas.reduce(function (sum, c) { return sum + (Number(c.capacity) || 0); }, 0);
-
-    if (isPackageType(type)) {
-      var pkg = PACKAGE_PRICING[type];
-      var extraPax = Math.max(0, totalGuests - pkg.includedPax);
-      var extraCabanas = Math.max(0, selectedCabanas.length - pkg.includedCabanas);
-      var extraPaxCost = extraPax * pkg.addlAdult;
-      var extraPetCost = pets * pkg.addlPet;
-      var extraCabanaCost = extraCabanas * pkg.addlCabana;
-      return {
-        type: type, adults: adults, kids612: kids612, kids05: kids05, seniors: seniors, pets: pets,
-        regularAdults: regularAdults, totalGuests: totalGuests, cabanaTotal: cabanaTotal, totalCapacity: totalCapacity,
-        isPackage: true, base: pkg.base, includedPax: pkg.includedPax, includedCabanas: pkg.includedCabanas,
-        extraPax: extraPax, extraPaxCost: extraPaxCost, extraPetCost: extraPetCost,
-        extraCabanas: extraCabanas, extraCabanaCost: extraCabanaCost,
-        subtotalPeople: pkg.base + extraPaxCost, seniorDiscount: 0,
-        total: pkg.base + extraPaxCost + extraPetCost + extraCabanaCost,
-      };
-    }
-
-    var rate = PRICING[type] || PRICING.day_trip;
-    var seniorRate = rate.adult * (1 - SENIOR_DISCOUNT_RATE);
-    var subtotalPeople = regularAdults * rate.adult + seniors * seniorRate + kids612 * rate.child612 + kids05 * rate.child05;
-    var petCost = pets * rate.pet;
-    var seniorDiscount = seniors * rate.adult * SENIOR_DISCOUNT_RATE;
-    return {
-      type: type, adults: adults, kids612: kids612, kids05: kids05, seniors: seniors, pets: pets,
-      regularAdults: regularAdults, rate: rate, seniorRate: seniorRate, subtotalPeople: subtotalPeople,
-      petCost: petCost, seniorDiscount: seniorDiscount, cabanaTotal: cabanaTotal, totalCapacity: totalCapacity,
-      totalGuests: totalGuests, isPackage: false, cabanaPrice: cabanaPrice,
-      total: subtotalPeople + petCost + cabanaTotal,
-    };
+    return P.compute({
+      type: stayTypeEl.value,
+      adults: adults,
+      kids612: kids612El.value,
+      kids05: kids05El.value,
+      seniors: seniors,
+      pets: petCountEl && petCountEl.value,
+      cabanas: selectedCabanas,
+    });
   }
 
   function renderPackageNote(bill) {

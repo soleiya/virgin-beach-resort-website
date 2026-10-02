@@ -21,8 +21,8 @@
 //     → GUEST:  "Your Day Trip is confirmed" + arrival guide
 //
 //   Still unpaid 24 hours after booking (process_booking_deadlines cron job)
-//     → GUEST:  "12-hour extension" payment reminder  (kind: payment_reminder)
-//     After 36 hours (or 8:00 AM on the trip date, whichever is first) the
+//     (no reminder email any more — booking-v7.sql)
+//     After 24 hours (or 8:00 AM on the trip date, whichever is first) the
 //     booking is set to Expired and its cabanas are released.
 //
 //   Staff edit a booking in the dashboard (✎) and leave "Email the guest"
@@ -183,10 +183,9 @@ function daysUntil(checkIn: string | null, now: Date): number | null {
   return Math.round((trip - today) / 86400000);
 }
 
-// Payment deadlines — must match booking_deadlines() in booking-v3.sql:
-//   first deadline = booked + 24h; final = booked + 36h (one 12-hour
-//   extension, announced by the reminder email); but never later than
-//   8:00 AM on the trip date. Bookings made on/after 8:00 AM of the trip date
+// Payment deadline — must match booking_deadlines() in booking-v7.sql:
+//   booked + 24h — the booking expires then if still unpaid — but never
+//   later than 8:00 AM on the trip date. Bookings made on/after 8:00 AM of the trip date
 //   (same-day walk-ins) are paid on arrival.
 function trip8(checkIn: string | null): Date | null {
   return checkIn ? new Date(checkIn + "T08:00:00+08:00") : null;
@@ -203,7 +202,7 @@ export function finalDeadline(record: Any): { date: Date | null; label: string; 
   const created = new Date(record.created_at || Date.now());
   const t8 = trip8(record.check_in);
   if (t8 && t8.getTime() <= created.getTime()) return { date: null, label: "upon arrival at the resort", isTripMorning: false };
-  let d = new Date(created.getTime() + 36 * 3600_000);
+  let d = new Date(created.getTime() + 24 * 3600_000);
   let isTripMorning = false;
   if (t8 && t8 < d) { d = t8; isTripMorning = true; }
   return { date: d, label: fmtDateTime(d), isTripMorning };
@@ -298,12 +297,23 @@ export function buildQuote(record: Any, cabanas: Any[]): Quote | null {
 
   let total = r2(lines.reduce((s, l) => s + l.amount, 0));
   const websiteTotal = record.total_amount === null || record.total_amount === undefined ? null : Number(record.total_amount);
-  // Staff-made bookings: a Total typed in by the team (special rate, discount,
-  // flash sale…) is the agreed price — show the difference as its own line.
-  if (isStaffMade(record) && websiteTotal !== null && Math.abs(websiteTotal - total) > 0.5) {
+  // Staff discount (percent or amount, set in the dashboard) — same rule as
+  // assets/js/pricing.js: taken off the rate-sheet total, never below zero.
+  const rated = !!PRICING[type] || !!PACKAGE_PRICING[type];
+  const disc = Number(record.discount_amount) || 0;
+  if (rated && disc > 0) {
+    const d = r2(Math.min(disc, total));
+    const pct = record.discount_type === "percent" && record.discount_value ? ` (${Number(record.discount_value)}%)` : "";
+    const why = record.discount_reason ? ` — ${String(record.discount_reason).slice(0, 80)}` : "";
+    lines.push({ desc: `Discount${pct}${why}`, rate: -d, qty: 1, amount: -d, vatExempt: false });
+    total = r2(total - d);
+  }
+  // Staff-made bookings of a type with no rate sheet (Flash Sale, Other): the
+  // Total typed in by the team is the agreed price — show the difference.
+  if (!rated && isStaffMade(record) && websiteTotal !== null && Math.abs(websiteTotal - total) > 0.5) {
     const diff = r2(websiteTotal - total);
     lines.push({
-      desc: diff < 0 ? "Special rate / discount (as agreed with our reservations team)" : "Adjustment (as agreed with our reservations team)",
+      desc: diff < 0 ? "Special rate (as agreed with our reservations team)" : "Adjustment (as agreed with our reservations team)",
       rate: diff, qty: 1, amount: diff, vatExempt: false,
     });
     total = r2(websiteTotal);
@@ -311,7 +321,7 @@ export function buildQuote(record: Any, cabanas: Any[]): Quote | null {
   const vatExemptSales = r2(lines.filter((l) => l.vatExempt).reduce((s, l) => s + l.amount, 0));
   // Same presentation as the printed quotation: prices are inclusive of 12%
   // VAT and a 5% (zero-rated) service charge, both computed on the net amount.
-  const gross = r2(total - vatExemptSales);
+  const gross = Math.max(0, r2(total - vatExemptSales));
   const vatableSales = r2(gross / 1.17);
   const vat = r2(vatableSales * 0.12);
   const serviceCharge = r2(gross - vatableSales - vat);
@@ -423,17 +433,13 @@ function cabanaNote(cabanas: Any[]) {
   return cabanas.length ? p(esc(PREFERRED_CABANA_NOTE), `font-size:12.5px;color:${C.soft};margin-top:8px;`) : "";
 }
 
-function policiesBlock() {
-  const td = `padding:7px 8px;border-bottom:1px solid ${C.line};font-size:13px;vertical-align:top;`;
-  return `${h2("Cancellation &amp; postponement")}
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;">
-<tr><td style="${td}">15 days or more before arrival</td><td style="${td}">Free of charge</td></tr>
-<tr><td style="${td}">14 days or less before arrival</td><td style="${td}">50% of booking value forfeited</td></tr>
-<tr><td style="${td}">7 days or less before arrival / no-show</td><td style="${td}">100% of booking value forfeited</td></tr>
-<tr><td style="${td}">Postponement, 14 days or more before arrival</td><td style="${td}">20% of booking value forfeited · one-time, new date within 1 month</td></tr>
-<tr><td style="${td}">Inclement weather in San Juan, Batangas</td><td style="${td}">Free rebooking — Signal No. 2 (individual) / Signal No. 1 (corporate)</td></tr>
-</table>
-<p style="margin:8px 0 0;color:${C.soft};font-size:12.5px;">Promotional bookings are non-rebookable, non-cancelable and non-refundable. The final guest count is considered guaranteed 7 days before the trip; reductions after that follow the cancellation policy.</p>`;
+// Rebooking: unpaid bookings simply expire after 24 hours; paid guests reply
+// to change their date. (The cancellation & postponement table applies to
+// overnight casitas, not Day Trips, so it's no longer in these emails.)
+function rebookNote(paid = false) {
+  return p("<strong>Need to change your date?</strong> Just reply to this email and we'll help you rebook." +
+    (paid ? "" : " Haven't paid yet? You can simply ignore this booking — unpaid bookings expire automatically after 24 hours — and make a new one."),
+    `font-size:13.5px;color:${C.soft};margin-top:14px;`);
 }
 
 function goodToKnow() {
@@ -445,7 +451,6 @@ ${li("<strong>Lunch</strong> is served from 12:00 NN to 2:00 PM only.")}
 ${li("<strong>Valid government ID</strong> for the primary guest and every companion at check-in.")}
 ${li("<strong>Resort attire:</strong> no swimming in jersey shirts/shorts, denim or similar clothing.")}
 ${li("<strong>Outside food &amp; drinks</strong> are not allowed, except chips, biscuits and bottled water. Corkage applies to specific beverages.")}
-${li("<strong>Drivers, nannies &amp; bodyguards:</strong> ₱250 per meal, based on your meal package; a standby area is provided.")}
 ${li("<strong>Arrivals from 1:00 PM onward</strong> are charged half-day rates.")}
 </ul>`;
 }
@@ -545,7 +550,7 @@ ${int(r.pet_count) && !need.pets ? `<li style="margin:0 0 8px;"><strong>Bringing
 ${button(payUrl, need.any ? "Upload payment & documents" : "Upload proof of payment")}
 <p style="margin:14px 0 0;padding:12px 14px;background:${C.sand};border-radius:8px;font-size:13px;color:${C.soft};">This is a quotation, not yet a confirmed booking. Reservations are on a first-come, first-served basis and are confirmed only once payment is received. In the absence of a signed agreement, guests are not relieved of the resort rules, regulations and conditions.</p>
 ${goodToKnow()}
-${policiesBlock()}
+${rebookNote()}
 ${signature(c)}`;
 
   return {
@@ -564,7 +569,7 @@ export function staffNewEmail(r: Any, cabanas: Any[], q: Quote | null, c: Return
   if (!guestSent.ok) flag(`<strong>Guest email FAILED to send</strong> (${esc(guestSent.error || "unknown error")}). Send the quotation manually.`, "red");
   const needDocs = docsNeeded(r);
   if (needDocs.any) flag(`Guest still has to upload ${[needDocs.seniors ? "Senior/PWD ID(s)" : "", needDocs.pets ? "pet vaccination card(s)" : ""].filter(Boolean).join(" and ")} — the quotation email links to the upload page.`);
-  if (q?.mismatch) flag(`Website showed the guest <strong>${peso(q.websiteTotal)}</strong>, but the rate sheet gives <strong>${peso(q.total)}</strong> (the amount emailed). Double-check before accepting payment.`, "red");
+  if (q?.mismatch) flag(`${isStaffMade(r) ? "The dashboard saved" : "Website showed the guest"} <strong>${peso(q.websiteTotal)}</strong>, but the rate sheet${Number(r.discount_amount) > 0 ? " (less the discount)" : ""} gives <strong>${peso(q.total)}</strong> (the amount emailed). Double-check before accepting payment.`, "red");
   if (d !== null && d <= 1) flag(`Trip is <strong>${d <= 0 ? "today" : "tomorrow"}</strong> — past the usual payment cut-off. Call the guest now: either accept with a same-day payment deadline, or send the walk-in reply.`, "red");
   else if (d !== null && d <= 7) flag(`Trip is <strong>${d <= 0 ? "today or past" : `in ${plural(d, "day")}`}</strong> — inside the 7-day non-refundable window. Follow up by phone.`, "red");
   else if (d !== null && d <= 14) flag(`Trip is in ${plural(d, "day")} — inside the 14-day (50% forfeit) window.`);
@@ -611,7 +616,7 @@ ${h2("Follow-up checklist")}
 <li>Watch the guest thread (search the Order ID) for proof of payment, the signed agreement and one valid ID. Website uploads also alert this inbox.</li>
 <li>Guest asks for card / e-wallet? Create a Xendit invoice for <strong>${q ? esc(peso(q.total)) : "the quoted amount"}</strong> with description <strong>Booking# ${esc(r.order_code)}</strong>, and reply in the guest's thread with the link and the same pay-by time.</li>
 <li>Verify the deposit against the bank statement, then set the booking to <strong>Confirmed</strong> in the dashboard — the guest gets the confirmation email automatically.</li>
-<li>No payment by ${esc(dl.label)}? The guest automatically gets a 12-hour extension reminder; if still unpaid at ${esc(finalDeadline(r).label)} the booking turns <strong>Expired</strong> and the cabana(s) are released. Nothing to do unless the guest calls.</li>
+<li>No payment by ${esc(dl.label)}? The booking automatically turns <strong>Expired</strong> and the cabana(s) are released. Nothing to do unless the guest calls.</li>
 </ol>
 ${button(dash, "Open in staff dashboard")}${button(gmail, "Find guest thread in Gmail")}`;
 
@@ -677,7 +682,7 @@ ${p(`Kindly present this confirmation, your proof of payment, and one (1) valid 
 ${p("If you haven't sent it yet, please reply with a signed copy of the Reservations Agreement. Once you receive this email, we'd appreciate a quick reply to acknowledge it.", `font-size:13.5px;color:${C.soft};`)}
 ${button(map, "Directions to the resort")}
 ${goodToKnow()}
-${policiesBlock()}
+${rebookNote(true)}
 ${signature(c)}`;
   return {
     subject: "Re: " + guestSubject(r, c),
