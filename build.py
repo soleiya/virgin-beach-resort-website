@@ -28,6 +28,25 @@ CASITAS = [
     ("bamboo-casita", "Bamboo Casita"),
 ]
 
+# Nightly rates (PHP, inclusive of 12% VAT and service charge) — same as
+# virginbeachresort.com/overnight. (weekday, weekend)
+CASITA_RATES = {
+    "deluxe-king-casita": ("18,525", "21,825"),
+    "double-queen-casita": ("18,525", "21,825"),
+    "sunrise-casita": ("15,525", "17,525"),
+    "louver-window-casita": ("14,525", "16,525"),
+    "bamboo-king-casita": ("9,225", "12,925"),
+    "bamboo-casita": ("9,225", "12,925"),
+}
+
+
+def rate_lines(slug):
+    """Card price block: weekend and weekday nightly rates."""
+    wd, we = CASITA_RATES[slug]
+    return (f'<div class="price"><span>Weekend rate: <b>&#8369;{we}</b></span>'
+            f'<span>Weekday rate: <b>&#8369;{wd}</b></span><small>per night</small></div>')
+
+
 NAV_ITEMS = [
     ("index.html", "Home", None),
     ("overnight/index.html", "Overnight", [(f"overnight/{slug}/index.html", name) for slug, name in CASITAS]),

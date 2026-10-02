@@ -1,14 +1,6 @@
 # -*- coding: utf-8 -*-
-from build import page, CASITAS, book_link, CLOUDBEDS_URL
+from build import page, CASITAS, book_link, CLOUDBEDS_URL, rate_lines
 
-RATES = {
-    "deluxe-king-casita": "18,525",
-    "double-queen-casita": "18,525",
-    "sunrise-casita": "15,525",
-    "louver-window-casita": "14,525",
-    "bamboo-king-casita": "9,225",
-    "bamboo-casita": "9,225",
-}
 CASITA_IMG = {
     "deluxe-king-casita": "casita-king-exterior.jpg",
     "double-queen-casita": "casita-queen-exterior.jpg",
@@ -36,7 +28,7 @@ for slug, name in CASITAS:
         <div class="card-body">
           <span class="meta">{CASITA_META[slug]}</span>
           <h3>{name}</h3>
-          <div class="price">Starts at <b>&#8369;{RATES[slug]}</b> / night</div>
+          {rate_lines(slug)}
         </div>
       </a>'''
 

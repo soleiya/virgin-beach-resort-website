@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-from build import page, CASITAS, CLOUDBEDS_URL
+from build import page, CASITAS, CLOUDBEDS_URL, CASITA_RATES, rate_lines
 
 FINE_PRINT = """
 <div class="fine-print">
@@ -61,8 +61,9 @@ def casita_page(slug, name, tagline, description, occupancy, beds, size, rate, f
         <ul class="spec-list mt-lg">
           <li><span class="k">Occupancy</span><span class="v">{occupancy}</span></li>
           <li><span class="k">Beds</span><span class="v">{beds}</span></li>
+          <li><span class="k">Weekend Rate</span><span class="v">&#8369;{CASITA_RATES[slug][1]} / night</span></li>
+          <li><span class="k">Weekday Rate</span><span class="v">&#8369;{CASITA_RATES[slug][0]} / night</span></li>
           <li><span class="k">Size</span><span class="v">{size}</span></li>
-          <li><span class="k">Rate</span><span class="v">Starts at &#8369;{rate}</span></li>
         </ul>
         <div class="feature-tags">{feature_tags}</div>
         <div class="hero-actions" style="margin-top:30px;">
@@ -94,12 +95,12 @@ def casita_page(slug, name, tagline, description, occupancy, beds, size, rate, f
 # ---------------------------------------------------------------- overnight index
 
 RATES = {
-    "deluxe-king-casita": ("52 m&sup2;", "2 Persons", "18,525", "21,825"),
-    "double-queen-casita": ("52 m&sup2;", "4 Persons", "18,525", "21,825"),
-    "sunrise-casita": ("35 m&sup2;", "4 Persons", "15,525", "17,525"),
-    "louver-window-casita": ("35 m&sup2;", "4 Persons", "14,525", "16,525"),
-    "bamboo-king-casita": ("30 m&sup2;", "2 Persons", "9,225", "12,925"),
-    "bamboo-casita": ("30 m&sup2;", "4 Persons", "9,225", "12,925"),
+    "deluxe-king-casita": ("52 m&sup2;", "2 Persons"),
+    "double-queen-casita": ("52 m&sup2;", "4 Persons"),
+    "sunrise-casita": ("35 m&sup2;", "4 Persons"),
+    "louver-window-casita": ("35 m&sup2;", "4 Persons"),
+    "bamboo-king-casita": ("30 m&sup2;", "2 Persons"),
+    "bamboo-casita": ("30 m&sup2;", "4 Persons"),
 }
 IMG = {
     "deluxe-king-casita": "casita-king-exterior.jpg",
@@ -121,8 +122,9 @@ BLURB = {
 rows = ""
 cards = ""
 for slug, name in CASITAS:
-    size, occ, wd, we = RATES[slug]
-    rows += f"""<tr><td>{name}</td><td class="num">{size}</td><td class="num">{occ}</td><td class="num">&#8369;{wd}</td><td class="num">&#8369;{we}</td></tr>"""
+    size, occ = RATES[slug]
+    wd, we = CASITA_RATES[slug]
+    rows += f"""<tr><td>{name}</td><td class="num">{size}</td><td class="num">{occ}</td><td class="num">&#8369;{we}</td><td class="num">&#8369;{wd}</td></tr>"""
     cards += f'''
       <a class="card" href="{slug}/index.html">
         <div class="card-media"><img src="../assets/images/{IMG[slug]}" alt="{name}" loading="lazy"></div>
@@ -130,7 +132,7 @@ for slug, name in CASITAS:
           <span class="meta">{occ}</span>
           <h3>{name}</h3>
           <p style="font-size:0.92rem;">{BLURB[slug]}</p>
-          <div class="price">Starts at <b>&#8369;{wd}</b> / night</div>
+          {rate_lines(slug)}
         </div>
       </a>'''
 
@@ -163,7 +165,7 @@ overnight_body = f"""
     <div class="two-col-head"><h2>Rates at a glance</h2></div>
     <div class="table-wrap">
       <table class="rate-table">
-        <thead><tr><th>Casita</th><th class="num">Size</th><th class="num">Occupancy</th><th class="num">Weekday</th><th class="num">Weekend</th></tr></thead>
+        <thead><tr><th>Casita</th><th class="num">Size</th><th class="num">Occupancy</th><th class="num">Weekend</th><th class="num">Weekday</th></tr></thead>
         <tbody>{rows}</tbody>
       </table>
     </div>
