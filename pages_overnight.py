@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-from build import page, CASITAS, CLOUDBEDS_URL, CASITA_RATES, rate_lines
+from build import page, CASITAS, stay_link, CASITA_RATES, rate_lines
 
 FINE_PRINT = """
 <div class="fine-print">
@@ -67,7 +67,7 @@ def casita_page(slug, name, tagline, description, occupancy, beds, size, rate, f
         </ul>
         <div class="feature-tags">{feature_tags}</div>
         <div class="hero-actions" style="margin-top:30px;">
-          <a class="btn btn-primary" href="{CLOUDBEDS_URL}">Book Now</a>
+          <a class="btn btn-primary" href="{stay_link("../../", slug)}">Book This Casita</a>
           <a class="btn btn-ghost" href="../../terms-and-conditions.html">See Terms and Conditions</a>
         </div>
       </div>

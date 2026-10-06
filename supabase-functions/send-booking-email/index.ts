@@ -117,12 +117,14 @@ const TYPE_NAMES: Record<string, string> = {
   all_inclusive_family: "All Inclusive — Family Package",
   all_inclusive_barkada: "All Inclusive — Barkada Package",
   corporate: "Corporate Outing",
+  overnight: "Overnight Stay",
 };
 
 const LABELS: Record<string, string> = {
   facebook: "Facebook / Instagram", google: "Google Search", referral: "Friend / Family Referral",
   repeat_guest: "Stayed before", travel_agent: "Travel Agent", other: "Other",
   birthday: "Birthday", anniversary: "Anniversary", team_building: "Team Building / Company Outing", reunion: "Reunion",
+  honeymoon: "Honeymoon",
 };
 const label = (v: unknown) => (v ? LABELS[String(v)] || String(v) : "—");
 
@@ -133,7 +135,10 @@ const TIMES: Record<string, { in: string; out: string }> = {
   all_inclusive_barkada: { in: "8:00 AM", out: "5:00 PM" },
   half_day: { in: "1:00 PM", out: "5:00 PM" },
   corporate: { in: "8:00 AM", out: "5:00 PM" },
+  overnight: { in: "2:00 PM", out: "11:30 AM" },
 };
+
+export const isOvernight = (r: Any) => r?.stay_type === "overnight";
 
 // ---------- helpers ----------------------------------------------------------
 
@@ -413,6 +418,7 @@ function partyText(r: Any) {
 }
 
 function reservationRows(r: Any, cabanas: Any[]): [string, string][] {
+  if (isOvernight(r)) return overnightRows(r, cabanas);
   const t = TIMES[r.stay_type] || TIMES.day_trip;
   const rows: [string, string][] = [
     ["Order ID", `<strong>${esc(r.order_code || "—")}</strong>`],
@@ -430,6 +436,7 @@ function reservationRows(r: Any, cabanas: Any[]): [string, string][] {
 export const PREFERRED_CABANA_NOTE =
   "Cabana numbers are preferred cabanas. To make sure every group has its own space, the resort may move your party to a comparable cabana if a large group books in — we'll always let you know.";
 function cabanaNote(cabanas: Any[]) {
+  if (cabanas.length && cabanas[0].unit_label) return p(esc(PREFERRED_VILLA_NOTE), `font-size:12.5px;color:${C.soft};margin-top:8px;`);
   return cabanas.length ? p(esc(PREFERRED_CABANA_NOTE), `font-size:12.5px;color:${C.soft};margin-top:8px;`) : "";
 }
 
@@ -487,11 +494,14 @@ function statusBox(rows: [string, string][], tone: "info" | "ok" = "info") {
 // ---------- subjects (shared so Gmail threads each booking) ------------------
 
 export function guestSubject(r: Any, c: ReturnType<typeof cfg>) {
+  // Overnight: arrival date only, so a date change email (built from the
+  // original arrival) still lands in the same Gmail thread.
+  if (isOvernight(r)) return `${c.testMode ? "[TEST] " : ""}Virgin Beach Resort Overnight Stay — ${r.order_code || "Booking"} (Arrival ${fmtDate(r.check_in, "short").replace(/^\w+, /, "")})`;
   const type = r.stay_type === "corporate" ? "Corporate Outing" : r.stay_type === "half_day" ? "Half-Day Trip" : "Day Trip";
   return `${c.testMode ? "[TEST] " : ""}Virgin Beach Resort ${type} — ${r.order_code || "Booking"} (${fmtDate(r.check_in, "short").replace(/^\w+, /, "")})`;
 }
 export function staffSubject(r: Any, c: ReturnType<typeof cfg>) {
-  const kind = r.stay_type === "corporate" ? "Corporate Inquiry" : "Day Trip Booking";
+  const kind = r.stay_type === "corporate" ? "Corporate Inquiry" : isOvernight(r) ? "Overnight Booking" : "Day Trip Booking";
   return `${c.testMode ? "[TEST] " : ""}New ${kind} from ${r.guest_name || "Guest"} — ${r.order_code || ""} (${fmtDate(r.check_in, "short").replace(/^\w+, /, "")})`;
 }
 const msgId = (r: Any, who: "guest" | "staff") =>
@@ -500,6 +510,7 @@ const msgId = (r: Any, who: "guest" | "staff") =>
 // ---------- templates --------------------------------------------------------
 
 export function guestQuoteEmail(r: Any, cabanas: Any[], q: Quote | null, c: ReturnType<typeof cfg>) {
+  if (isOvernight(r)) return guestQuoteEmailOvernight(r, cabanas, q, c);
   const first = esc(String(r.guest_name || "there").trim().split(/\s+/)[0]);
   const dl = paymentDeadline(r, c.deadlineHours);
   const payUrl = uploadUrl(r, c);
@@ -560,6 +571,7 @@ ${signature(c)}`;
 }
 
 export function staffNewEmail(r: Any, cabanas: Any[], q: Quote | null, c: ReturnType<typeof cfg>, guestSent: { ok: boolean; error?: string }, now = new Date()) {
+  if (isOvernight(r)) return staffNewEmailOvernight(r, cabanas, q, c, guestSent, now);
   const d = daysUntil(r.check_in, now);
   const dl = paymentDeadline(r, c.deadlineHours);
   const flags: string[] = [];
@@ -629,7 +641,7 @@ ${button(dash, "Open in staff dashboard")}${button(gmail, "Find guest thread in 
 export function staffProofEmail(r: Any, q: Quote | null, c: ReturnType<typeof cfg>, hasAttachment: boolean, now = new Date()) {
   const d = daysUntil(r.check_in, now);
   const urgent = d !== null && d <= 2
-    ? `<p style="margin:0 0 12px;padding:10px 14px;background:${C.redBg};color:${C.red};border-radius:8px;font-weight:bold;">Trip is ${d <= 0 ? "TODAY" : d === 1 ? "TOMORROW" : "in 2 days"} — please validate and confirm right away.</p>`
+    ? `<p style="margin:0 0 12px;padding:10px 14px;background:${C.redBg};color:${C.red};border-radius:8px;font-weight:bold;">${isOvernight(r) ? "Arrival" : "Trip"} is ${d <= 0 ? "TODAY" : d === 1 ? "TOMORROW" : "in 2 days"} — please validate and confirm right away.</p>`
     : "";
   const dash = `${c.site}/staff/index.html?q=${encodeURIComponent(r.order_code || "")}`;
   const body = `${statusBox([
@@ -640,7 +652,7 @@ export function staffProofEmail(r: Any, q: Quote | null, c: ReturnType<typeof cf
 ${urgent}${p(`<strong>${esc(r.guest_name)}</strong> uploaded a payment screenshot on the website${r.payment_uploaded_at ? ` (${esc(fmtDateTime(new Date(r.payment_uploaded_at)))})` : ""}.${hasAttachment ? " It's attached to this email." : " Open it from the dashboard."}`)}
 ${p(`Please check it against the bank statement for <strong>${q ? esc(peso(q.total)) : "the quoted amount"}</strong>, confirm the signed Reservations Agreement is in the guest thread, then set the booking to <strong>Confirmed</strong>. The guest has been told we're verifying it.`)}
 ${kv([
-    ["Trip date", esc(fmtDate(r.check_in))], ["Mobile", esc(r.guest_phone)], ["Email", esc(r.guest_email)],
+    [isOvernight(r) ? "Stay" : "Trip date", esc(isOvernight(r) ? stayRange(r) : fmtDate(r.check_in))], ["Mobile", esc(r.guest_phone)], ["Email", esc(r.guest_email)],
     ...(int(r.senior_count) ? [["Senior/PWD IDs", Array.isArray(r.senior_id_paths) && r.senior_id_paths.length ? plural(r.senior_id_paths.length, "photo") + " on file" : "<strong>None uploaded yet</strong>"] as [string, string]] : []),
     ...(int(r.pet_count) ? [["Pet vaccination cards", Array.isArray(r.pet_vaccination_paths) && r.pet_vaccination_paths.length ? plural(r.pet_vaccination_paths.length, "card") + " on file" : "<strong>None uploaded yet</strong>"] as [string, string]] : []),
   ])}
@@ -664,6 +676,7 @@ ${signature(c)}`;
 }
 
 export function guestConfirmedEmail(r: Any, cabanas: Any[], q: Quote | null, c: ReturnType<typeof cfg>) {
+  if (isOvernight(r)) return guestConfirmedEmailOvernight(r, cabanas, q, c);
   const first = esc(String(r.guest_name || "there").trim().split(/\s+/)[0]);
   const t = TIMES[r.stay_type] || TIMES.day_trip;
   const map = "https://www.google.com/maps/search/?api=1&query=" + encodeURIComponent("Virgin Beach Resort, Laiya, San Juan, Batangas");
@@ -745,6 +758,257 @@ ${signature(c)}`;
   };
 }
 
+// ---------- overnight stays (casitas) ----------------------------------------
+// Same look, threading and flow as the Day Trip emails. The bill comes from
+// quote_overnight() in the database (booking-v8-villas.sql) — the very same
+// calculation the website showed the guest and the dashboard uses.
+
+export const PREFERRED_VILLA_NOTE =
+  "Casita numbers are a preference. The resort may move your party to an identical casita if operations require it — we'll always let you know beforehand.";
+
+const AGE_LABELS: Record<string, string> = {
+  adult: "Adult", senior: "Senior Citizen / PWD", child_6_12: "Child (6–12)", child_0_5: "Child (0–5)",
+};
+
+export function stayRange(r: Any) {
+  const n = nightsOf(r);
+  return `${fmtDate(r.check_in, "short")} → ${fmtDate(r.check_out, "short")}${n ? ` (${plural(n, "night")})` : ""}`;
+}
+function nightsOf(r: Any) {
+  if (!r.check_in || !r.check_out) return 0;
+  return Math.round((new Date(r.check_out + "T00:00:00Z").getTime() - new Date(r.check_in + "T00:00:00Z").getTime()) / 86400000);
+}
+function villaText(villas: Any[]) {
+  return villas.map((v) => `${v.room_type_name} (${v.unit_label})`).join(", ");
+}
+
+// Everyone on the booking: the primary guest + the companion list.
+export function guestRoster(r: Any): { name: string; group: string }[] {
+  const list = [{ name: String(r.guest_name || "Primary guest"), group: r.primary_is_senior ? "Senior Citizen / PWD" : "Adult" }];
+  if (Array.isArray(r.companions)) {
+    for (const c of r.companions) list.push({ name: String(c?.name || "—"), group: AGE_LABELS[c?.age_group] || "—" });
+  }
+  return list;
+}
+function rosterComplete(r: Any) {
+  const party = int(r.adults) + int(r.children_6_12) + int(r.children_0_5);
+  return Array.isArray(r.companions) && r.companions.length + 1 === party;
+}
+function rosterTable(r: Any) {
+  const td = `padding:6px 8px;border-bottom:1px solid ${C.line};font-size:13.5px;`;
+  const rows = guestRoster(r).map((g, i) =>
+    `<tr><td style="${td}color:${C.soft};width:28px;">${i + 1}</td><td style="${td}">${esc(g.name)}${i === 0 ? ` <span style="color:${C.soft};font-size:12px;">(primary guest)</span>` : ""}</td><td style="${td}color:${C.soft};white-space:nowrap;">${esc(g.group)}</td></tr>`
+  ).join("");
+  const missing = rosterComplete(r) ? "" :
+    p(`<em>Guest list incomplete — ${plural(int(r.adults) + int(r.children_6_12) + int(r.children_0_5), "guest")} booked. Please reply with the full name and age of each guest.</em>`, `font-size:13px;color:${C.warn};margin-top:8px;`);
+  return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;">${rows}</table>${missing}`;
+}
+
+function overnightRows(r: Any, villas: Any[]): [string, string][] {
+  const t = TIMES.overnight;
+  const rows: [string, string][] = [
+    ["Order ID", `<strong>${esc(r.order_code || "—")}</strong>`],
+    ["Booking", "Overnight Stay"],
+    ["Check-in", `<strong>${esc(fmtDate(r.check_in))}</strong> · from ${t.in}`],
+    ["Check-out", `<strong>${esc(fmtDate(r.check_out))}</strong> · by ${t.out}`],
+    ["Nights", String(nightsOf(r) || "—")],
+    ["Casita(s)", villas.length ? `<strong>${esc(villaText(villas))}</strong>` : esc(r.room_name || "To be assigned")],
+    ["Guests", esc(partyText(r)) + (int(r.extra_beds) ? ` · ${plural(int(r.extra_beds), "extra floor mattress", "extra floor mattresses")}` : "")],
+  ];
+  if (r.occasion) rows.push(["Occasion", esc(label(r.occasion))]);
+  if (r.notes) rows.push(["Special requests", esc(r.notes)]);
+  return rows;
+}
+
+function overnightGoodToKnow() {
+  const li = (t: string) => `<li style="margin:0 0 6px;">${t}</li>`;
+  return `${h2("Good to know before your stay")}
+<ul style="margin:0;padding-left:20px;font-size:14px;">
+${li("<strong>Check-in</strong> is from 2:00 PM and <strong>check-out</strong> is at 11:30 AM. Early check-in (from 10:00 AM) and late check-out (until 3:00 PM) are subject to availability at ₱750 per hour.")}
+${li("<strong>Full-board meals</strong> are included for every guest each night — lunch on arrival, dinner, and breakfast the next morning. Breakfast 7:00–10:00 AM · Lunch 12:00 NN–2:00 PM · Dinner 7:00–9:00 PM.")}
+${li("<strong>Fewer guests?</strong> Please tell us at least 7 days before arrival. Unused meal packages convert to dining credits at the Pavilion.")}
+${li("<strong>Every guest</strong> must be present at check-in with a valid government-issued ID. Unregistered guests may be refused entry.")}
+${li("<strong>Tourism Ecological Fee:</strong> ₱50.00 per visitor, collected by the Municipality of San Juan at its booth at Km 3, Buhay na Sapa, San Juan (or at our Front Office).")}
+${li("<strong>Outside food &amp; drinks</strong> are not allowed, except chips, biscuits and bottled water. Corkage applies to specific beverages.")}
+${li("<strong>Drivers, nannies &amp; bodyguards:</strong> ₱1,000 per night for quarters plus ₱750 per night for meals — please let us know in advance.")}
+</ul>`;
+}
+
+function cancellationTable() {
+  const td = `padding:7px 8px;border-bottom:1px solid ${C.line};font-size:13px;`;
+  const row = (a: string, b: string) => `<tr><td style="${td}">${a}</td><td style="${td}text-align:right;">${b}</td></tr>`;
+  return `${h2("Cancellation &amp; rebooking")}
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;">
+${row("15 days or more before arrival", "Free of charge")}
+${row("14 days or less before arrival", "50% of booking value forfeited")}
+${row("7 days or less before arrival / no-show", "100% of booking value forfeited")}
+</table>
+${p("One-time rescheduling within one (1) month of the original dates is possible for medical emergencies or a death in the immediate family (with documents); 20% is forfeited for other rebookings made 14+ days before arrival. Promotional bookings are non-refundable. Inclement weather: free rebooking at Signal No. 2 in San Juan, Batangas.", `font-size:12.5px;color:${C.soft};margin-top:8px;`)}`;
+}
+
+export function guestQuoteEmailOvernight(r: Any, villas: Any[], q: Quote | null, c: ReturnType<typeof cfg>) {
+  const first = esc(String(r.guest_name || "there").trim().split(/\s+/)[0]);
+  const dl = paymentDeadline(r, c.deadlineHours);
+  const payUrl = uploadUrl(r, c);
+  const need = docsNeeded(r);
+  const staffMade = isStaffMade(r);
+  const casitaWord = villas.length === 1 ? "your casita" : "your casitas";
+  const body = `${p(`Hi ${first},`)}
+${p(staffMade
+    ? `Thank you for choosing Virgin Beach Resort! As discussed with our reservations team, here is the quotation for your <strong>overnight stay</strong> from <strong>${esc(fmtDate(r.check_in))}</strong> to <strong>${esc(fmtDate(r.check_out))}</strong> — we're holding ${casitaWord} for you.`
+    : `Thank you for choosing Virgin Beach Resort! We've received your request for an <strong>overnight stay</strong> from <strong>${esc(fmtDate(r.check_in))}</strong> to <strong>${esc(fmtDate(r.check_out))}</strong> and are holding ${casitaWord} for you.`)}
+${p(dl.date
+    ? `<strong>Full payment is required by ${esc(dl.label)}</strong> to secure the reservation. Unpaid bookings are automatically canceled and the casita${villas.length === 1 ? "" : "s"} released.`
+    : `<strong>Payment is settled upon arrival at the resort.</strong>`)}
+${statusBox([
+    ["Order ID", esc(r.order_code || "—")],
+    ["Amount due", q ? esc(peso(q.total)) : "To follow"],
+    ["Please pay by", esc(dl.label)],
+  ])}
+${h2("Your reservation")}${kv(overnightRows(r, villas))}${cabanaNote(villas)}
+${h2("Guest list")}${rosterTable(r)}
+${q ? h2("Quotation") + quoteTable(q) + p("The full-board meal package (lunch, dinner and breakfast) is mandatory for every guest and is charged per guest, per night. Children 0–5 eat free.", `font-size:12.5px;color:${C.soft};margin-top:8px;`) : ""}
+${h2("How to pay")}
+${p(`<strong>Option 1 — Bank deposit or online transfer</strong> (InstaPay / PESONet) to any of these accounts. Please put <strong>${esc(r.order_code)}</strong> and your name in the reference / remarks.`)}
+${bankTable()}
+${p(`<strong>Option 2 — Credit/debit card or e-wallet.</strong> Reply to this email and we'll send you a secure Xendit payment link${q ? ` for ${esc(peso(q.total))}` : ""}.`, "margin-top:14px;")}
+${h2("After you pay")}
+<ol style="margin:0 0 12px;padding-left:20px;font-size:14px;">
+<li style="margin:0 0 8px;"><strong>Send us your proof of payment</strong> — upload the screenshot or transaction slip using the button below, or simply reply to this email with it attached.</li>
+${need.seniors ? `<li style="margin:0 0 8px;"><strong>Upload the Senior Citizen / PWD ID${int(r.senior_count) > 1 ? "s" : ""}</strong> on the same page — the 20% discount applies only with a valid ID. Please bring ${int(r.senior_count) > 1 ? "them" : "it"} on arrival too.</li>` : ""}
+${need.pets ? `<li style="margin:0 0 8px;"><strong>Upload your pet${int(r.pet_count) > 1 ? "s'" : "'s"} vaccination card${int(r.pet_count) > 1 ? "s" : ""}</strong> and agree to the Pet Policy on the same page.</li>` : ""}
+${int(r.pet_count) && !need.pets ? `<li style="margin:0 0 8px;"><strong>Bringing your pet${int(r.pet_count) > 1 ? "s" : ""}:</strong> please bring the vaccination card${int(r.pet_count) > 1 ? "s" : ""} you uploaded, a leash, food and water bowls. Pets stay only in the casita they're registered to.</li>` : ""}
+<li style="margin:0 0 8px;"><strong>Reply with the signed Reservations Agreement</strong> (attached as a PDF — a photo of the signed last page is fine) and a photo of <strong>one (1) valid ID</strong> of the primary guest.</li>
+<li style="margin:0 0 8px;"><strong>We'll email your confirmation</strong> as soon as the payment is verified (office hours, 9:00 AM–4:00 PM, Monday–Friday).</li>
+</ol>
+${button(payUrl, need.any ? "Upload payment & documents" : "Upload proof of payment")}
+<p style="margin:14px 0 0;padding:12px 14px;background:${C.sand};border-radius:8px;font-size:13px;color:${C.soft};">This is a quotation, not yet a confirmed booking. Your casita${villas.length === 1 ? " is" : "s are"} held until the payment deadline above and confirmed only once full payment is received. In the absence of a signed agreement, guests are not relieved of the resort rules, regulations and conditions.</p>
+${overnightGoodToKnow()}
+${cancellationTable()}
+${p("<strong>Need to change your dates or guest list?</strong> Just reply to this email and we'll help.", `font-size:13.5px;color:${C.soft};margin-top:14px;`)}
+${signature(c)}`;
+  return {
+    subject: guestSubject(r, c),
+    html: shell({ preheader: `${r.order_code} · ${q ? peso(q.total) + " due · " : ""}${stayRange(r)} · Bank details inside`, body, c }),
+  };
+}
+
+export function staffNewEmailOvernight(r: Any, villas: Any[], q: Quote | null, c: ReturnType<typeof cfg>, guestSent: { ok: boolean; error?: string }, now = new Date()) {
+  const d = daysUntil(r.check_in, now);
+  const dl = paymentDeadline(r, c.deadlineHours);
+  const flags: string[] = [];
+  const flag = (t: string, tone: "warn" | "red" = "warn") =>
+    flags.push(`<li style="margin:0 0 6px;color:${tone === "red" ? C.red : C.warn};">${t}</li>`);
+  if (!guestSent.ok) flag(`<strong>Guest email FAILED to send</strong> (${esc(guestSent.error || "unknown error")}). Send the quotation manually.`, "red");
+  if (q?.mismatch) flag(`${isStaffMade(r) ? "The dashboard saved" : "Website showed the guest"} <strong>${peso(q.websiteTotal)}</strong>, but the rate sheet${Number(r.discount_amount) > 0 ? " (less the discount)" : ""} gives <strong>${peso(q.total)}</strong> (the amount emailed). Double-check before accepting payment.`, "red");
+  if (!villas.length) flag("No casita assigned — assign one in the dashboard before taking payment.", "red");
+  if (d !== null && d <= 1) flag(`Arrival is <strong>${d <= 0 ? "today" : "tomorrow"}</strong> — call the guest now to arrange payment.`, "red");
+  else if (d !== null && d <= 7) flag(`Arrival is in ${plural(d, "day")} — inside the 7-day non-refundable window. Follow up by phone.`, "red");
+  else if (d !== null && d <= 14) flag(`Arrival is in ${plural(d, "day")} — inside the 14-day (50% forfeit) window.`);
+  if (!rosterComplete(r)) flag("Guest list is incomplete — ask the guest for every companion's full name and age (meals are per person).");
+  if (int(r.extra_beds)) flag(`${plural(int(r.extra_beds), "extra floor mattress", "extra floor mattresses")} needed — tell Housekeeping.`);
+  const needDocs = docsNeeded(r);
+  if (needDocs.any) flag(`Guest still has to upload ${[needDocs.seniors ? "Senior/PWD ID(s)" : "", needDocs.pets ? "pet vaccination card(s)" : ""].filter(Boolean).join(" and ")}.`);
+  if (int(r.senior_count)) flag(`${plural(int(r.senior_count), "senior citizen/PWD", "senior citizens/PWDs")} — ${Array.isArray(r.senior_id_paths) && r.senior_id_paths.length ? plural(r.senior_id_paths.length, "ID photo") + " uploaded" : "no ID photo yet"}. Verify at check-in.`);
+  if (int(r.pet_count)) flag(`${plural(int(r.pet_count), "pet")} — ${Array.isArray(r.pet_vaccination_paths) && r.pet_vaccination_paths.length ? "vaccination card(s) uploaded" : "NO vaccination card yet"}${r.pet_policy_agreed_at ? ", Pet Policy agreed online" : ""}.`);
+  if (r.occasion) flag(`Occasion: <strong>${esc(label(r.occasion))}</strong> — consider a welcome touch.`);
+
+  const tel = String(r.guest_phone || "").replace(/[^\d+]/g, "");
+  const dash = `${c.site}/staff/index.html?q=${encodeURIComponent(r.order_code || "")}`;
+  const gmail = `https://mail.google.com/mail/u/?authuser=${encodeURIComponent(MAILBOX)}#search/${encodeURIComponent('"' + (r.order_code || "") + '"')}`;
+  const body = `${statusBox([
+    ["Order", esc(r.order_code || "—")],
+    ["Amount due", q ? esc(peso(q.total)) : "Quote needed"],
+    ["Stay", esc(`${fmtDate(r.check_in, "short").replace(/^\w+, /, "")} · ${plural(nightsOf(r), "night")}`)],
+  ])}
+${isStaffMade(r) ? p(`Added in the staff dashboard${r.booked_by ? ` by <strong>${esc(r.booked_by)}</strong>` : ""} (${esc(label(r.source))}) and sent to the guest as a quotation.`) : ""}
+${p(guestSent.ok
+    ? `Quotation + bank details sent to <strong>${esc(r.guest_email)}</strong> at ${esc(fmtDateTime(now))}. It's in the <strong>Sent</strong> folder — the guest's replies will land in that same thread. Pay-by date given: <strong>${esc(dl.label)}</strong>.`
+    : `<strong style="color:${C.red};">The guest has NOT received an email.</strong>`)}
+${flags.length ? `${h2("Needs attention")}<ul style="margin:0;padding-left:20px;font-size:14px;">${flags.join("")}</ul>` : ""}
+${h2("Guest")}
+${kv([
+    ["Name", `<strong>${esc(r.guest_name)}</strong>`],
+    ["Mobile", `<a href="tel:${esc(tel)}" style="color:${C.deep};">${esc(r.guest_phone)}</a>`],
+    ["Email", `<a href="mailto:${esc(r.guest_email)}" style="color:${C.deep};">${esc(r.guest_email)}</a>`],
+    ["Country", esc(r.country || "—")],
+    ["Heard about us", esc(label(r.how_heard))],
+    ["Promos opt-in", r.marketing_opt_in ? "Yes" : "No"],
+    ["Submitted", esc(fmtDateTime(new Date(r.created_at || now)))],
+  ])}
+${h2("Stay")}${kv(overnightRows(r, villas).slice(1))}
+${h2("Guest list")}${rosterTable(r)}
+${q ? h2("Quotation sent") + quoteTable(q) : ""}
+${h2("Follow-up checklist")}
+<ol style="margin:0 0 14px;padding-left:20px;font-size:14px;">
+<li>Watch the guest thread (search the Order ID) for proof of payment, the signed agreement and a valid ID. Website uploads also alert this inbox.</li>
+<li>Guest asks for card / e-wallet? Create a Xendit invoice for <strong>${q ? esc(peso(q.total)) : "the quoted amount"}</strong> with description <strong>Booking# ${esc(r.order_code)}</strong>, and reply in the guest's thread with the link and the same pay-by time.</li>
+<li>Verify the deposit against the bank statement, then set the booking to <strong>Confirmed</strong> in the dashboard — the guest gets the confirmation email automatically.</li>
+<li>No payment by ${esc(dl.label)}? The booking automatically turns <strong>Expired</strong> and the casita(s) are released.</li>
+<li>Share the guest count with the kitchen (full board, ${plural(nightsOf(r), "night")}) and any extra mattress with Housekeeping once confirmed.</li>
+</ol>
+${button(dash, "Open in staff dashboard")}${button(gmail, "Find guest thread in Gmail")}`;
+  return {
+    subject: staffSubject(r, c),
+    html: shell({ preheader: `${r.guest_name} · ${stayRange(r)} · ${q ? peso(q.total) : "quote needed"}`, body, c, internal: true }),
+  };
+}
+
+export function guestConfirmedEmailOvernight(r: Any, villas: Any[], q: Quote | null, c: ReturnType<typeof cfg>) {
+  const first = esc(String(r.guest_name || "there").trim().split(/\s+/)[0]);
+  const map = "https://www.google.com/maps/search/?api=1&query=" + encodeURIComponent("Virgin Beach Resort, Laiya, San Juan, Batangas");
+  const body = `${p(`Hi ${first},`)}
+${p(`We are delighted to confirm your <strong>overnight stay</strong> at Virgin Beach Resort from <strong>${esc(fmtDate(r.check_in))}</strong> to <strong>${esc(fmtDate(r.check_out))}</strong>. We can't wait to welcome you.`)}
+${statusBox([
+    ["Order ID", esc(r.order_code || "—")],
+    ["Arrival", esc(fmtDate(r.check_in, "short"))],
+    ["Status", "Confirmed"],
+  ], "ok")}
+${h2("Your reservation")}${kv([
+    ...overnightRows(r, villas).slice(1),
+    ...(q ? [["Amount paid", `<strong>${esc(peso(q.total))}</strong>`] as [string, string]] : []),
+  ])}${cabanaNote(villas)}
+${h2("Registered guests")}${rosterTable(r)}
+${p(`Kindly present this confirmation and your proof of payment at the Front Office. <strong>Every guest</strong> listed above needs a valid government-issued ID at check-in. Check-in is from <strong>2:00 PM</strong>; check-out is at <strong>11:30 AM</strong>.`, "margin-top:14px;")}
+${p("If you haven't sent it yet, please reply with a signed copy of the Reservations Agreement. A quick reply to acknowledge this email would be much appreciated.", `font-size:13.5px;color:${C.soft};`)}
+${button(map, "Directions to the resort")}
+${overnightGoodToKnow()}
+${cancellationTable()}
+${signature(c)}`;
+  return {
+    subject: "Re: " + guestSubject(r, c),
+    html: shell({ preheader: `Confirmed: ${stayRange(r)} · ${r.order_code}`, body, c }),
+  };
+}
+
+// Server-side quote for an overnight booking, from quote_booking_overnight().
+export function quoteFromOvernight(record: Any, oq: Any): Quote | null {
+  if (!oq || !Array.isArray(oq.lines)) return null;
+  const lines: QuoteLine[] = oq.lines.map((l: Any) => ({
+    desc: String(l.desc), rate: Number(l.rate) || 0, qty: Number(l.qty) || 0, amount: r2(Number(l.amount) || 0), vatExempt: !!l.vat_exempt,
+  }));
+  let total = r2(Number(oq.total) || 0);
+  const disc = Number(record.discount_amount) || 0;
+  if (disc > 0) {
+    const d = r2(Math.min(disc, total));
+    const pct = record.discount_type === "percent" && record.discount_value ? ` (${Number(record.discount_value)}%)` : "";
+    const why = record.discount_reason ? ` — ${String(record.discount_reason).slice(0, 80)}` : "";
+    lines.push({ desc: `Discount${pct}${why}`, rate: -d, qty: 1, amount: -d, vatExempt: false });
+    total = r2(total - d);
+  }
+  const websiteTotal = record.total_amount === null || record.total_amount === undefined ? null : Number(record.total_amount);
+  const vatExemptSales = r2(lines.filter((l) => l.vatExempt).reduce((s, l) => s + l.amount, 0));
+  const gross = Math.max(0, r2(total - vatExemptSales));
+  const vatableSales = r2(gross / 1.17);
+  const vat = r2(vatableSales * 0.12);
+  const serviceCharge = r2(gross - vatableSales - vat);
+  return {
+    heading: `OVERNIGHT STAY — ${plural(Number(oq.nights) || 0, "night")}, casita${(oq.villas || []).length === 1 ? "" : "s"} with full-board meals`,
+    lines, subtotal: total, total, vatExemptSales, vatableSales, vat, serviceCharge,
+    websiteTotal, mismatch: websiteTotal !== null && Math.abs(websiteTotal - total) > 0.5,
+  };
+}
+
 // ---------- database (service role, PostgREST) -------------------------------
 
 async function db(path: string, init: RequestInit = {}) {
@@ -779,6 +1043,27 @@ async function loadCabanas(r: Any): Promise<Any[]> {
     if (one.ok) list = await one.json();
   }
   return list.sort((a, b) => String(a.label).localeCompare(String(b.label), undefined, { numeric: true }));
+}
+
+async function loadVillas(r: Any): Promise<Any[]> {
+  const res = await db(
+    `booking_villas?booking_id=eq.${encodeURIComponent(r.id)}&select=villa_id,active,villas(unit_label,room_type,room_type_name,base_occupancy,max_extra,sort)`
+  );
+  if (!res.ok) return [];
+  return (await res.json()).map((x: Any) => x.villas).filter(Boolean)
+    .sort((a: Any, b: Any) => (a.sort || 0) - (b.sort || 0));
+}
+
+// Cabanas for a Day Trip, casitas for an overnight stay.
+async function loadUnits(r: Any): Promise<Any[]> {
+  return isOvernight(r) ? await loadVillas(r) : await loadCabanas(r);
+}
+
+async function quoteFor(r: Any, units: Any[]): Promise<Quote | null> {
+  if (!isOvernight(r)) return buildQuote(r, units);
+  const res = await db("rpc/quote_booking_overnight", { method: "POST", body: JSON.stringify({ p_booking_id: r.id }) });
+  if (!res.ok) { console.error("quote_booking_overnight", res.status, await res.text()); return null; }
+  return quoteFromOvernight(r, await res.json());
 }
 
 // Claims a (booking, kind) slot. Returns false if that email already went out
@@ -900,8 +1185,8 @@ async function proofAttachment(path: string | null, bucket = "payment-proofs", n
 async function onInsert(r: Any) {
   const c = cfg();
   if (!autoEmail(r, c)) return { skipped: "source " + r.source };
-  const cabanas = await loadCabanas(r);
-  const q = buildQuote(r, cabanas);
+  const cabanas = await loadUnits(r);
+  const q = await quoteFor(r, cabanas);
   let guest: { ok: boolean; error?: string } = { ok: false, error: "no guest email on booking" };
   if (r.guest_email) {
     const g = guestQuoteEmail(r, cabanas, q, c);
@@ -929,8 +1214,8 @@ async function onProof(r: Any) {
   if (r.status === "confirmed" || String(r.payment_screenshot_path || "").startsWith("staff/")) {
     return { skipped: "uploaded by staff" };
   }
-  const cabanas = await loadCabanas(r);
-  const q = buildQuote(r, cabanas);
+  const cabanas = await loadUnits(r);
+  const q = await quoteFor(r, cabanas);
   const att = await proofAttachment(r.payment_screenshot_path);
   const s = staffProofEmail(r, q, c, att.length > 0);
   const stamp = String(r.payment_uploaded_at || Date.now());
@@ -974,8 +1259,8 @@ async function onConfirmed(r: Any) {
   const c = cfg();
   if (!autoEmail(r, c)) return { skipped: "source " + r.source };
   if (!r.guest_email) return { skipped: "no guest email" };
-  const cabanas = await loadCabanas(r);
-  const q = buildQuote(r, cabanas);
+  const cabanas = await loadUnits(r);
+  const q = await quoteFor(r, cabanas);
   const g = guestConfirmedEmail(r, cabanas, q, c);
   return await send({ booking: r, kind: "guest_confirmed", to: r.guest_email, subject: g.subject, html: g.html, thread: "guest" });
 }
@@ -987,8 +1272,8 @@ async function onReminder(r: Any) {
   if (!autoEmail(r, c)) return { skipped: "source " + r.source };
   if (!["pending", "pending_payment"].includes(r.status) || r.payment_uploaded_at) return { skipped: "no longer unpaid" };
   if (!r.guest_email || !EMAIL_RE.test(String(r.guest_email).trim())) return { skipped: "no valid guest email" };
-  const cabanas = await loadCabanas(r);
-  const q = buildQuote(r, cabanas);
+  const cabanas = await loadUnits(r);
+  const q = await quoteFor(r, cabanas);
   const g = guestReminderEmail(r, cabanas, q, c);
   return await send({ booking: r, kind: "payment_reminder", to: String(r.guest_email).trim(), subject: g.subject, html: g.html, thread: "guest" });
 }
@@ -1001,7 +1286,7 @@ async function onChanged(r: Any, payload: Any) {
     .map((x: Any) => ({ label: String(x?.label ?? "").slice(0, 80), before: String(x?.before ?? "").slice(0, 300), after: String(x?.after ?? "").slice(0, 300) }))
     .filter((x: Change) => x.label);
   if (!changes.length) return { skipped: "no changes" };
-  const cabanas = await loadCabanas(r);
+  const cabanas = await loadUnits(r);
   const threadRecord = { ...r, check_in: payload.old_check_in || r.check_in };
   const g = guestChangedEmail(r, cabanas, changes, c, threadRecord);
   const kind = `guest_changed:${String(payload.change_id || Date.now())}`;

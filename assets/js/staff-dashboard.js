@@ -42,10 +42,12 @@
     all_inclusive_barkada: "All Inclusive (Barkada)",
     corporate: "Corporate",
     other: "Other / Add-on",
+    overnight: "Overnight Stay",
   };
   var SOURCE_LABELS = {
     website: "Website", messenger: "Messenger", phone: "Phone", email: "Email", walk_in: "Walk-in", other: "Other",
     sheet_import: "Imported (2026 Sheet)",
+    cloudbeds: "Cloudbeds (imported)", booking_com: "Booking.com", agoda: "Agoda", expo: "Expo", events: "Wedding / Events",
   };
   var STATUS_ORDER = ["pending", "pending_payment", "confirmed", "declined", "completed", "expired"];
   var STATUS_LABELS = {
@@ -76,6 +78,11 @@
     delete: "Booking deleted",
     cabana_added: "Cabana added",
     cabana_removed: "Cabana removed",
+    villa_added: "Villa assigned",
+    villa_removed: "Villa removed",
+    villa_changed: "Villa changed",
+    villa_blocked: "Villa blocked",
+    villa_unblocked: "Villa block removed",
   };
 
   var loginScreen = document.getElementById("loginScreen");
@@ -126,7 +133,7 @@
     dashScreen.style.display = "block";
     logoutBtn.style.display = "inline-block";
     populateStaticFilterOptions();
-    loadCabanaOptions().then(loadBookings);
+    Promise.all([loadCabanaOptions(), window.VBRVillas ? window.VBRVillas.init().catch(function () {}) : null]).then(loadBookings);
   }
   function showLogin() {
     loginScreen.style.display = "block";
@@ -225,7 +232,7 @@
   var PAGE_SIZE = 1000;
   function loadBookingsPage(offset, acc) {
     return sb.from("booking_requests")
-      .select("*, booking_cabanas(cabana_id)")
+      .select("*, booking_cabanas(cabana_id), booking_villas(villa_id)")
       .order("created_at", { ascending: false })
       .range(offset, offset + PAGE_SIZE - 1)
       .then(function (res) {
@@ -297,6 +304,8 @@
       else if (activeFilter === "month") matchesFilter = isThisMonth(r.check_in);
       else if (activeFilter === "unpaid") matchesFilter = isUnpaidStatus(r.status);
       else if (activeFilter === "imported") matchesFilter = r.source === "sheet_import";
+      else if (activeFilter === "overnight") matchesFilter = r.stay_type === "overnight";
+      else if (activeFilter === "daytrip") matchesFilter = r.stay_type !== "overnight";
       if (!matchesFilter) return false;
 
       if (dFrom || dTo) {
@@ -313,7 +322,7 @@
       if (fSource && (r.source || "website") !== fSource) return false;
 
       if (!q) return true;
-      var hay = [r.guest_name, r.guest_email, r.guest_phone, r.notes, r.staff_notes, r.booked_by, r.order_code].join(" ").toLowerCase();
+      var hay = [r.guest_name, r.guest_email, r.guest_phone, r.notes, r.staff_notes, r.booked_by, r.order_code, r.room_name, r.guest_names].join(" ").toLowerCase();
       return hay.indexOf(q) !== -1;
     });
   }
@@ -451,6 +460,21 @@
   function renderCabanaCell(td, r) {
     td.innerHTML = "";
     td.className = "cabana-cell";
+    if (r.stay_type === "overnight") {
+      var vlabels = window.VBRVillas ? window.VBRVillas.labelsFor(r) : [];
+      if (!vlabels.length) { td.innerHTML = '<span class="muted">— no villa</span>'; return; }
+      var vwrap = document.createElement("div");
+      vwrap.className = "cabana-cell-chips";
+      vlabels.forEach(function (l) {
+        var chip = document.createElement("span");
+        chip.className = "cabana-mini-chip villa-chip";
+        chip.style.paddingRight = "10px";
+        chip.textContent = l;
+        vwrap.appendChild(chip);
+      });
+      td.appendChild(vwrap);
+      return;
+    }
     var assignedIds = (r.booking_cabanas || []).map(function (bc) { return bc.cabana_id; });
     // Imported 2026-sheet rows never had a literal cabana number recorded —
     // only how many dining/lounge cabanas were used.
@@ -550,6 +574,10 @@
 
       var tdDate = document.createElement("td");
       tdDate.textContent = fmtDate(r.check_in);
+      if (r.stay_type === "overnight" && r.check_out) {
+        var nn = Math.round((new Date(r.check_out + "T00:00:00Z") - new Date(r.check_in + "T00:00:00Z")) / 86400000);
+        tdDate.innerHTML = esc(fmtDate(r.check_in)) + '<span class="payby">→ ' + esc(fmtDate(r.check_out)) + " · " + nn + " night" + (nn === 1 ? "" : "s") + "</span>";
+      }
       tr.appendChild(tdDate);
 
       var tdCabana = document.createElement("td");
@@ -561,14 +589,21 @@
       var partyText = (r.adults || 0) + " adult" + (r.adults === 1 ? "" : "s") + (kids ? ", " + kids + " kid" + (kids === 1 ? "" : "s") : "");
       if (r.senior_count) partyText += " (incl. " + r.senior_count + " senior)";
       if (r.pet_count) partyText += ", " + r.pet_count + " pet" + (r.pet_count === 1 ? "" : "s");
+      if (r.extra_beds) partyText += " · " + r.extra_beds + " extra bed" + (r.extra_beds === 1 ? "" : "s");
       tdParty.textContent = partyText;
+      if (r.stay_type === "overnight" && r.source === "website" && !(r.companions && r.companions.length + 1 === partyTotal(r))) {
+        tdParty.innerHTML += '<span class="payby overdue">guest names missing</span>';
+      }
       if (r.guest_names) tdParty.title = "Guests: " + r.guest_names;
       tr.appendChild(tdParty);
 
       var tdTotal = document.createElement("td");
       tdTotal.className = "col-total";
       tdTotal.textContent = peso(r.total_amount);
-      if (r.total_amount != null) {
+      if (r.total_amount != null && r.stay_type === "overnight") {
+        tdTotal.title = "Room: " + peso(r.room_total) + " · Meals: " + peso(r.meal_total) + (Number(r.extra_bed_total) ? " · Extra beds: " + peso(r.extra_bed_total) : "") +
+          (Number(r.pet_total) ? " · Pets: " + peso(r.pet_total) : "") + (Number(r.discount_amount) ? " · Discount: −" + peso(r.discount_amount) : "");
+      } else if (r.total_amount != null) {
         tdTotal.title = "People: " + peso(r.subtotal_people) + (r.senior_discount ? " (incl. " + peso(r.senior_discount) + " senior discount)" : "") + " · Cabana(s): " + peso(r.cabana_total);
       }
       tr.appendChild(tdTotal);
@@ -640,7 +675,10 @@
       editBtnCell.className = "log-btn";
       editBtnCell.title = "Edit this booking";
       editBtnCell.textContent = "✎";
-      editBtnCell.addEventListener("click", function () { openModal(r); });
+      editBtnCell.addEventListener("click", function () {
+        if (r.stay_type === "overnight" && window.VBRVillas) window.VBRVillas.openBooking(r);
+        else openModal(r);
+      });
       actions.appendChild(editBtnCell);
       var logBtnCell = document.createElement("button");
       logBtnCell.type = "button";
@@ -1389,7 +1427,7 @@
   // ---------- CSV export (currently filtered/visible rows) ----------
   document.getElementById("exportBtn").addEventListener("click", function () {
     var rows = sortRows(applyFilter(allRows));
-    var headers = ["Order ID", "Guest", "Guest Names", "Phone", "Email", "Type", "Booked By", "Preferred Date", "Cabana(s)", "Adults", "Senior Citizens", "Kids 6-12", "Kids 0-5", "Pets", "Subtotal (People)", "Cabana Total", "Senior Discount", "Total", "Status", "Payment Proof", "Senior ID(s)", "Source", "How Heard", "Occasion", "Notes", "Staff Notes", "Date Entered"];
+    var headers = ["Order ID", "Guest", "Guest Names", "Phone", "Email", "Type", "Booked By", "Preferred Date / Check-in", "Check-out", "Cabana(s) / Villa(s)", "Adults", "Senior Citizens", "Kids 6-12", "Kids 0-5", "Pets", "Subtotal (People)", "Cabana Total", "Senior Discount", "Total", "Status", "Payment Proof", "Senior ID(s)", "Source", "How Heard", "Occasion", "Notes", "Staff Notes", "Date Entered"];
     function csvCell(v) {
       v = v === null || v === undefined ? "" : String(v);
       return '"' + v.replace(/"/g, '""') + '"';
@@ -1406,9 +1444,10 @@
         if (r.legacy_lounge_cabanas) legacyBits.push(r.legacy_lounge_cabanas + " lounge");
         cabanaLabels = legacyBits.join(", ") + " (from 2026 sheet)";
       }
+      if (r.stay_type === "overnight" && window.VBRVillas) cabanaLabels = window.VBRVillas.labelsFor(r).join("; ");
       lines.push([
         r.order_code, r.guest_name, r.guest_names || "", r.guest_phone, r.guest_email,
-        TYPE_LABELS[r.stay_type] || r.stay_type, r.booked_by || "", fmtDate(r.check_in), cabanaLabels,
+        TYPE_LABELS[r.stay_type] || r.stay_type, r.booked_by || "", fmtDate(r.check_in), r.check_out ? fmtDate(r.check_out) : "", cabanaLabels,
         r.adults, r.senior_count || 0, r.children_6_12, r.children_0_5, r.pet_count || 0,
         r.subtotal_people != null ? r.subtotal_people : "", r.cabana_total != null ? r.cabana_total : "",
         r.senior_discount != null ? r.senior_discount : "", r.total_amount != null ? r.total_amount : "",
@@ -1465,6 +1504,11 @@
   function describeLogChanges(entry) {
     if (entry.action === "insert") return "New booking created.";
     if (entry.action === "delete") return "Booking deleted.";
+    if (entry.action && entry.action.indexOf("villa_") === 0) {
+      var ch = entry.changes || {};
+      return esc((LOG_ACTION_LABELS[entry.action] || entry.action) + ": " + (ch.from_villa ? ch.from_villa + " → " : "") + (ch.villa || "a villa") +
+        (ch.check_in ? " (" + fmtDate(ch.check_in) + " → " + fmtDate(ch.check_out) + ")" : "") + (ch.reason ? " — " + ch.reason : ""));
+    }
     if (entry.action === "cabana_added" || entry.action === "cabana_removed") {
       var cid = entry.changes && entry.changes.cabana_id;
       var label = cid && cabanasById[cid] ? cabanasById[cid].label : "a cabana";
@@ -1557,4 +1601,17 @@
   logStaffFilter.addEventListener("change", loadLog);
   logFrom.addEventListener("change", loadLog);
   logTo.addEventListener("change", loadLog);
+
+  // Shared with staff-villas.js (overnight bookings, villa calendar).
+  window.VBRDash = {
+    sb: sb,
+    rows: function () { return allRows; },
+    reload: loadBookings,
+    render: render,
+    staffName: function () { return currentStaffName; },
+    openLog: openLogModal,
+    esc: esc, peso: peso, fmtDate: fmtDate, fmtDateTime: fmtDateTime,
+    proofLinks: proofLinks, openSignedUrl: openSignedUrl, uploadProof: uploadProof,
+    STATUS_LABELS: STATUS_LABELS, SOURCE_LABELS: SOURCE_LABELS,
+  };
 })();

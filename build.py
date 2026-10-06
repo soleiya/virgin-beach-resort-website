@@ -59,9 +59,16 @@ NAV_ITEMS = [
     ("contact/index.html", "Contact", None),
 ]
 
-# Overnight room reservations go to Cloudbeds (same redirect the current
-# virginbeachresort.com uses) — not handled by this site's own booking form.
+# Overnight casitas are booked on this site (book-stay/) — Cloudbeds is no
+# longer used for new reservations. Kept only for reference.
 CLOUDBEDS_URL = "https://booking.virginbeachresort.com"
+STAY_PATH = "book-stay/index.html"
+
+
+def stay_link(base, casita=None):
+    """Link to the overnight casita booking page, optionally pre-selecting a
+    casita type (its overnight/<slug>/ page slug)."""
+    return f"{base}{STAY_PATH}" + (f"?casita={casita}" if casita else "")
 
 
 def book_link(base, **params):
@@ -310,7 +317,7 @@ def nav_html(base, current_path, solid=False, cta_label=None, cta_href=None):
         return path == current_path
 
     cta_label = cta_label or "Book Now"
-    cta_href = cta_href if cta_href is not None else CLOUDBEDS_URL
+    cta_href = cta_href if cta_href is not None else stay_link(base)
 
     links = []
     for path, label, sub in NAV_ITEMS:

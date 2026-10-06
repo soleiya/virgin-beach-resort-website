@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-from build import page, CASITAS, book_link, CLOUDBEDS_URL, rate_lines
+from build import page, CASITAS, book_link, stay_link, rate_lines
 
 CASITA_IMG = {
     "deluxe-king-casita": "casita-king-exterior.jpg",
@@ -42,7 +42,7 @@ body = f"""
     <h1>Manila&rsquo;s Quick Escape to Pure Unspoiled Paradise</h1>
     <p class="lede">Leave the city hustle behind for a secluded stretch of pristine white sand, bespoke beachside service, and quiet luxury&mdash;just a few hours&rsquo; drive away.</p>
     <div class="hero-actions">
-      <a class="btn btn-primary" href="{CLOUDBEDS_URL}">Book Now</a>
+      <a class="btn btn-primary" href="{stay_link("")}">Book Now</a>
       <a class="btn btn-on-dark" href="overnight/index.html">View Casitas</a>
     </div>
   </div>
@@ -162,7 +162,7 @@ body = f"""
     <p class="prose mx-auto" style="margin-top:18px;">While we work on getting our website up and running, please direct all inquiries to our email address:
     <a class="text-link" href="mailto:reservations@virginbeachresort.com">reservations@virginbeachresort.com</a></p>
     <p class="prose mx-auto" style="margin-top:10px;">Thank you and we look forward to your visit! &mdash; <strong>Virgin Beach Resort Management</strong></p>
-    <a class="btn btn-primary mt-lg" href="{CLOUDBEDS_URL}">Book Now</a>
+    <a class="btn btn-primary mt-lg" href="{stay_link("")}">Book Now</a>
   </div>
 </section>
 """

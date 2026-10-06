@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-from build import page, CLOUDBEDS_URL
+from build import page, stay_link
 
 # ---------------------------------------------------------------- Dining
 
@@ -48,8 +48,8 @@ dining_body = f"""
         <table class="rate-table">
           <thead><tr><th>Guest</th><th class="num">Rate</th></tr></thead>
           <tbody>
-            <tr><td>Adult</td><td class="num">&#8369;2,450</td></tr>
-            <tr><td>Child (Ages 6 to 12)</td><td class="num">&#8369;1,225</td></tr>
+            <tr><td>Adult</td><td class="num">&#8369;2,695</td></tr>
+            <tr><td>Child (Ages 6 to 12)</td><td class="num">&#8369;1,347.50</td></tr>
             <tr><td>Ages 0 to 5</td><td class="num">Free</td></tr>
           </tbody>
         </table>
@@ -67,7 +67,7 @@ dining_body = f"""
   <span class="eyebrow">The Pavilion</span>
   <h2>Reserve your table</h2>
   <div class="hero-actions" style="justify-content:center; margin-top:20px;">
-    <a class="btn btn-primary" href="{CLOUDBEDS_URL}">Book Now</a>
+    <a class="btn btn-primary" href="{stay_link("../")}">Book Now</a>
     <a class="btn btn-ghost" href="../experiences/index.html">Private Dinner on the Beach</a>
   </div>
 </section>

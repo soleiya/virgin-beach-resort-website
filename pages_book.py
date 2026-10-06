@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-from build import page, CLOUDBEDS_URL, booking_form_section, booking_scripts
+from build import page, stay_link, booking_form_section, booking_scripts
 
 body = f"""
 <section class="page-hero" style="min-height:40vh;">
@@ -12,8 +12,8 @@ body = f"""
 </section>
 
 <section class="center" style="max-width:640px; margin:0 auto; padding-bottom:0;">
-  <p class="prose">Booking an overnight stay instead? Reserve a casita directly through our booking engine.</p>
-  <a class="btn btn-ghost mt-lg" href="{CLOUDBEDS_URL}">Book an Overnight Stay</a>
+  <p class="prose">Staying the night instead? Book a casita directly with us &mdash; live availability, instant quotation.</p>
+  <a class="btn btn-ghost mt-lg" href="{stay_link("../")}">Book an Overnight Stay</a>
 </section>
 
 <section>
@@ -43,4 +43,4 @@ body = f"""
 {booking_scripts()}
 """
 
-page("book/index.html", "Request Your Day Trip", "Request a Day Trip or Corporate outing directly with Virgin Beach Resort. Booking an overnight casita? That's handled through our booking engine.", body)
+page("book/index.html", "Request Your Day Trip", "Request a Day Trip or Corporate outing directly with Virgin Beach Resort. Booking an overnight casita? Use our Book Your Stay page.", body)

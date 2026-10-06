@@ -76,8 +76,8 @@ dining = [
      "served managed buffet style. &Agrave; la carte meals are available in addition to the mandatory full board meals availed during the stay. "
      "Meals for guests' staff are available for &#8369;750/day.</p>"
      "<table class='rate-table'><tbody>"
-     "<tr><td>Adult</td><td class='num'>&#8369;2,450.00</td></tr>"
-     "<tr><td>Child (6&ndash;12)</td><td class='num'>&#8369;1,225.00</td></tr>"
+     "<tr><td>Adult</td><td class='num'>&#8369;2,695.00</td></tr>"
+     "<tr><td>Child (6&ndash;12)</td><td class='num'>&#8369;1,347.50</td></tr>"
      "<tr><td>Ages 0&ndash;5</td><td class='num'>Free</td></tr>"
      "</tbody></table><p style='font-size:0.85rem; margin-top:10px;'>*All prices are inclusive of 12% VAT and Service Charge.</p>"),
     ("What if my guest count decreases?",

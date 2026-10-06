@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-from build import page, CLOUDBEDS_URL
+from build import page, stay_link
 
 GALLERY_IMAGES = [
     "drone-hero.jpg", "casita-king-interior.jpg", "ATV-and-view.jpg",
@@ -46,7 +46,7 @@ body = f"""
 <section class="band-tint center">
   <div class="wrap" style="max-width:640px; margin:0 auto;">
     <h2>See it for yourself</h2>
-    <a class="btn btn-primary mt-lg" href="{CLOUDBEDS_URL}">Book Now</a>
+    <a class="btn btn-primary mt-lg" href="{stay_link("../")}">Book Now</a>
   </div>
 </section>
 """

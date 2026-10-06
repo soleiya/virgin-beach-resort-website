@@ -1,6 +1,6 @@
 # Setting up your booking database (Supabase)
 
-This covers **Day Trip, Half-day Tour, Day Picnic, and Corporate** requests only. Overnight casita reservations are handled separately, straight through Cloudbeds (see "Overnight stays" below) — they never touch this database.
+This covers **Day Trip, Half-day Tour, Day Picnic, Corporate** requests and — since section 10 — **overnight casita stays**, which are now booked on the website instead of Cloudbeds.
 
 Your site's Day Trip / Corporate request form writes straight to a real database you own — Supabase, a free hosted Postgres database with a built-in dashboard. No app to install, no server to run. This takes about 10 minutes, once.
 
@@ -259,9 +259,9 @@ grant execute on function submit_payment_proof(text, text, text) to anon;
 
 **A known limitation, since there's still no online payment gateway locking a slot**: two guests could theoretically pick the same open cabana for the same date a few minutes apart before either pays. This is the same trade-off as any manual-payment system — the dashboard's Cabana column makes a double-booking easy to spot and resolve by phone/message, exactly like it would be with a paper or spreadsheet chart.
 
-## Overnight stays (Cloudbeds, not this database)
+## Overnight stays
 
-Every "Book Now" button tied to an overnight casita — the nav bar, the homepage hero, each casita's own page — links straight to `https://booking.virginbeachresort.com`, which redirects to your Cloudbeds reservation page. That's the same flow the current virginbeachresort.com site uses today. Nothing about that needs Supabase, and none of those bookings appear in the `booking_requests` table — manage them in Cloudbeds as you already do.
+Overnight casitas are now booked on the website itself — see section 10. Cloudbeds is no longer linked from the site.
 
 ## If you skip this setup
 
@@ -548,3 +548,23 @@ create trigger trg_log_cabana_change
 ## What's next: a Google Drive backup of payment screenshots
 
 Copying payment screenshots into your Google Drive is ready to turn on whenever you want — I can do it myself using my own connected Google Drive access, either on request ("back up this week's payment screenshots to Drive") or on a schedule. I'll just need the shared staff login (from step 4 in Section 4 above) so I can read the Storage bucket the same way the dashboard does. Just share those credentials with me whenever you're ready — no rush.
+
+## 10. Overnight casita bookings (replaces Cloudbeds)
+
+**Run** `supabase-functions/booking-v8-villas.sql` (SQL Editor → New query → paste → Run), then redeploy the `send-booking-email` Edge Function with the updated `index.ts`.
+
+**What it sets up**
+
+- `villas` — the 18 real units exactly as in Cloudbeds: Deluxe King (Casita 15), Deluxe Double Queen (Casita 14), Sunrise (Casitas 7–12), Louver-Window (Casitas 1–4), Bamboo King (B.Casitas 2, 4), Bamboo (B.Casitas 1, 3, 5, 6) — with weekday / weekend rates and occupancy. Change a rate in Table Editor and the website, dashboard and emails all follow.
+- `overnight_rates` — full-board meal package (₱2,695 adult / ₱1,347.50 child 6–12 / 0–5 free, per night), extra floor mattress (₱1,500/night), pet fee (₱750/pet/night).
+- `peak_dates` — nights charged the weekend rate on top of every Friday and Saturday night. Staff add these from the dashboard's Villa Calendar.
+- `booking_villas` — which unit a booking holds for which nights. A database constraint makes **double-booking impossible** — from the website, the dashboard, or two guests clicking at the same second. Rows without a booking are staff blocks (repairs, owner use).
+- `quote_overnight()` — the one price calculation used by the website, the dashboard and the emails.
+- `submit_overnight_booking()` — the website's only way in. It re-counts guests from the **mandatory guest list** (every companion's full name + age group), because the meal package is charged per person per night.
+- `staff_save_overnight()` — the dashboard's create / edit, in one atomic step.
+
+**The guest experience** (`book-stay/index.html`, linked from every Book Now button): pick dates → see live availability per casita type → choose how many of each → enter every guest's name and age group → see the full quotation (room nights split weekday/weekend, meals, extra mattress, pets, senior/PWD discount) → submit. They get the same quotation → proof → confirmation email thread as Day Trip guests, with an overnight-specific guest list, check-in/out times, meal times and the cancellation table.
+
+**The staff experience**: an **Overnight** filter, villa names and stay dates in the table, **+ Villa Booking** (create/edit with villa availability, guest list, discount, payment proof, emailing the guest), and a **Villa Calendar** (all 18 units over 2–8 weeks; click a booking to open it, click an empty night to start one; add blocks and peak dates).
+
+**Payment deadline** is the same as Day Trips (24 hours after booking, or 8:00 AM on arrival day if sooner) — unpaid bookings expire and their casitas are released automatically.

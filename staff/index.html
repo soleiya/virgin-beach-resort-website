@@ -8,7 +8,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400..600;1,9..144,400..600&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="../assets/css/style.css?v=2497d7b9a9">
+<link rel="stylesheet" href="../assets/css/style.css?v=d570907058">
 <style>
   body { background: var(--sand); min-height: 100vh; }
   .dash-wrap { max-width: 1280px; margin: 0 auto; padding: 28px 20px 80px; }
@@ -167,6 +167,58 @@
   .modal-bill .bill-note button { margin-left: 6px; }
   .modal input[readonly] { background: #e6dfd0; border-style: dashed; color: var(--ink-soft); cursor: not-allowed; }
   .modal-lock { font-size: 0.72rem; font-weight: 400; color: var(--ink-soft); text-transform: none; letter-spacing: 0; }
+
+  /* ---------- villas (overnight) ---------- */
+  .villa-chip { background: #e8e2f4 !important; }
+  .modal.modal-villa { max-width: 900px; }
+  .villa-pick { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 8px; }
+  .villa-pick-group { grid-column: 1 / -1; font-size: 0.7rem; text-transform: uppercase; letter-spacing: .06em; color: var(--ink-soft); font-weight: 700; margin-top: 6px; }
+  .villa-opt { display: flex !important; align-items: flex-start; gap: 8px; border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; background: var(--sand); cursor: pointer; text-transform: none !important; letter-spacing: 0 !important; font-size: 0.84rem !important; color: var(--ink) !important; font-weight: 600 !important; margin: 0 !important; }
+  .villa-opt input { width: auto !important; margin-top: 2px; }
+  .villa-opt small { display: block; font-weight: 400; color: var(--ink-soft); font-size: 0.72rem; }
+  .villa-opt.is-taken { opacity: .55; cursor: not-allowed; background: #f1e3df; }
+  .villa-opt.is-on { border-color: var(--lagoon); background: var(--lagoon-tint); }
+  .vg-row { display: grid; grid-template-columns: 26px 1fr 190px 30px; gap: 8px; align-items: center; margin-bottom: 6px; }
+  .vg-row .vg-n { font-size: .75rem; color: var(--ink-soft); font-weight: 700; text-align: center; }
+  .vg-row button { border: 1px solid var(--line); background: var(--surface); border-radius: 50%; width: 28px; height: 28px; cursor: pointer; }
+  .vg-row.vg-missing input { border-color: #d6a06b; background: #fdf3e6; }
+  .modal-subhead { font-family: var(--font-display); font-size: 1.02rem; margin: 18px 0 10px; padding-top: 14px; border-top: 1px solid var(--line); }
+  .cap-line { font-size: 0.82rem; padding: 8px 12px; border-radius: 8px; background: var(--sand-deep); margin-top: 8px; }
+  .cap-line.over { background: #fbe4e4; color: #9b2c2c; font-weight: 700; }
+
+  .modal.modal-cal { max-width: 1260px; width: 100%; }
+  .cal-bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: flex-end; margin-bottom: 12px; }
+  .cal-scroll { overflow: auto; border: 1px solid var(--line); border-radius: 10px; max-height: 64vh; }
+  table.cal { border-collapse: separate; border-spacing: 0; min-width: 0; width: max-content; }
+  table.cal th, table.cal td { border-bottom: 1px solid var(--line); border-right: 1px solid var(--line); padding: 0; height: 40px; }
+  table.cal thead th { position: sticky; top: 0; z-index: 2; background: var(--sand-deep); font-size: .68rem; text-transform: none; letter-spacing: 0; padding: 4px 2px; min-width: 64px; text-align: center; }
+  table.cal thead th.we { background: #eadfc6; }
+  table.cal thead th.peak { background: #f3d9b1; }
+  table.cal thead th.today { box-shadow: inset 0 -3px 0 var(--lagoon); }
+  table.cal th.unit { position: sticky; left: 0; z-index: 3; background: var(--surface); text-align: left; padding: 4px 10px; min-width: 150px; font-size: .78rem; text-transform: none; letter-spacing: 0; }
+  table.cal th.unit small { display: block; color: var(--ink-soft); font-weight: 400; font-size: .68rem; }
+  table.cal thead th.unit { z-index: 4; background: var(--sand-deep); }
+  table.cal td.free { cursor: pointer; }
+  table.cal td.free:hover { background: var(--lagoon-tint); }
+  table.cal td.free.we { background: rgba(234,223,198,.35); }
+  .cal-bk { margin: 3px 2px; height: 32px; border-radius: 6px; padding: 2px 8px; font-size: .72rem; line-height: 1.2; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; cursor: pointer; color: #fff; display: flex; flex-direction: column; justify-content: center; }
+  .cal-bk small { opacity: .85; font-size: .64rem; }
+  .cal-bk.st-pending { background: #c98a3a; }
+  .cal-bk.st-pending_payment { background: #c0652a; }
+  .cal-bk.st-confirmed { background: #1f7a72; }
+  .cal-bk.st-completed { background: #7d7466; }
+  .cal-bk.st-block { background: repeating-linear-gradient(45deg, #6b6559, #6b6559 6px, #7d776c 6px, #7d776c 12px); }
+  .cal-bk.cont-l { border-top-left-radius: 0; border-bottom-left-radius: 0; margin-left: 0; }
+  .cal-bk.cont-r { border-top-right-radius: 0; border-bottom-right-radius: 0; margin-right: 0; }
+  .cal-legend { display: flex; flex-wrap: wrap; gap: 14px; font-size: .76rem; color: var(--ink-soft); margin-top: 10px; }
+  .cal-legend i { display: inline-block; width: 14px; height: 14px; border-radius: 4px; vertical-align: -2px; margin-right: 5px; }
+  .cal-side { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 16px; }
+  @media (max-width: 760px) { .cal-side { grid-template-columns: 1fr; } .vg-row { grid-template-columns: 22px 1fr; } .vg-row select { grid-column: 2; } }
+  .cal-panel { border: 1px solid var(--line); border-radius: 10px; padding: 14px; background: var(--sand); }
+  .cal-panel h3 { font-family: var(--font-display); font-size: 1rem; margin: 0 0 10px; }
+  .peak-list { list-style: none; padding: 0; margin: 8px 0 0; max-height: 160px; overflow: auto; font-size: .82rem; }
+  .peak-list li { display: flex; justify-content: space-between; gap: 8px; padding: 4px 0; border-bottom: 1px solid var(--line); }
+  .peak-list button { border: 0; background: none; color: #9b2c2c; cursor: pointer; }
   @media (max-width: 560px) { .modal-row, .modal-row.three { grid-template-columns: 1fr; } }
 </style>
 </head>
@@ -178,7 +230,7 @@
       <img src="../assets/brand/logo-mark.png" alt="">
       <div>
         <h1>Reservations Dashboard</h1>
-        <span>Day Trip &middot; Corporate</span>
+        <span>Overnight &middot; Day Trip &middot; Corporate</span>
       </div>
     </div>
     <button class="btn-sm ghost" id="logoutBtn">Sign Out</button>
@@ -203,14 +255,18 @@
         <button class="pill" data-filter="week">This Week</button>
         <button class="pill" data-filter="month">This Month</button>
         <button class="pill" data-filter="unpaid">Unpaid</button>
+        <button class="pill" data-filter="overnight">Overnight</button>
+        <button class="pill" data-filter="daytrip">Day Trips</button>
         <button class="pill" data-filter="imported">Imported (2026 Sheet)</button>
         <input class="search" id="searchBox" type="text" placeholder="Search guest, contact, notes&hellip;">
       </div>
       <div class="toolbar-right">
+        <button class="btn-sm ghost" id="villaCalBtn">Villa Calendar</button>
         <button class="btn-sm ghost" id="plannerBtn">Cabana Map</button>
         <button class="btn-sm ghost" id="logBtn">Activity Log</button>
         <button class="btn-sm ghost" id="exportBtn">Export CSV</button>
-        <button class="btn-sm primary" id="addBtn">+ Add Booking</button>
+        <button class="btn-sm primary" id="addVillaBtn">+ Villa Booking</button>
+        <button class="btn-sm primary" id="addBtn">+ Day Trip Booking</button>
       </div>
     </div>
 
@@ -265,8 +321,8 @@
             <th>Contact</th>
             <th class="sortable" data-sort="stay_type">Type<span class="sort-arrow">&#9662;</span></th>
             <th class="sortable" data-sort="booked_by">Booked By<span class="sort-arrow">&#9662;</span></th>
-            <th class="sortable" data-sort="check_in">Preferred Date<span class="sort-arrow">&#9662;</span></th>
-            <th>Cabana(s)</th>
+            <th class="sortable" data-sort="check_in">Date / Check-in<span class="sort-arrow">&#9662;</span></th>
+            <th>Cabana / Villa</th>
             <th class="sortable" data-sort="party">Party<span class="sort-arrow">&#9662;</span></th>
             <th class="sortable" data-sort="total_amount">Total<span class="sort-arrow">&#9662;</span></th>
             <th class="sortable" data-sort="status">Status<span class="sort-arrow">&#9662;</span></th>
@@ -435,6 +491,161 @@
   </div>
 </div>
 
+
+<div class="modal-backdrop" id="villaModalBackdrop">
+  <div class="modal modal-villa">
+    <h2 id="villaModalTitle">New Villa Booking</h2>
+    <p id="villaModalSub" style="color:var(--ink-soft); font-size:0.85rem; margin:-10px 0 20px;">Overnight stay in one or more casitas. Priced from the same rate sheet as the website.</p>
+    <form id="villaForm">
+      <div class="modal-row three">
+        <div class="modal-field" style="margin-bottom:0;">
+          <label for="vChannel">Came in via</label>
+          <select id="vChannel">
+            <option value="phone">Phone Call</option>
+            <option value="messenger">Messenger</option>
+            <option value="email">Email</option>
+            <option value="walk_in">Walk-in</option>
+            <option value="website">Website</option>
+            <option value="booking_com">Booking.com</option>
+            <option value="agoda">Agoda</option>
+            <option value="cloudbeds">Cloudbeds (imported)</option>
+            <option value="events">Wedding / Events</option>
+            <option value="other">Other</option>
+          </select>
+        </div>
+        <div class="modal-field" style="margin-bottom:0;">
+          <label for="vStatus">Status</label>
+          <select id="vStatus">
+            <option value="pending">Pending</option>
+            <option value="pending_payment">Pending Payment</option>
+            <option value="confirmed">Confirmed</option>
+            <option value="completed">Completed</option>
+            <option value="declined">Declined / Cancelled</option>
+            <option value="expired">Expired (unpaid)</option>
+          </select>
+        </div>
+        <div class="modal-field" style="margin-bottom:0;">
+          <label for="vBookedBy">Booked By <span class="modal-lock">&middot; locked</span></label>
+          <input id="vBookedBy" type="text" readonly tabindex="-1">
+        </div>
+      </div>
+      <div class="modal-row three">
+        <div class="modal-field" style="margin-bottom:0;">
+          <label for="vName">Primary Guest <span class="modal-lock" id="vNameLock" hidden>&middot; locked</span></label>
+          <input id="vName" type="text" required>
+        </div>
+        <div class="modal-field" style="margin-bottom:0;">
+          <label for="vPhone">Phone</label>
+          <input id="vPhone" type="text">
+        </div>
+        <div class="modal-field" style="margin-bottom:0;">
+          <label for="vEmail">Email</label>
+          <input id="vEmail" type="text">
+        </div>
+      </div>
+
+      <h3 class="modal-subhead">Stay</h3>
+      <div class="modal-row three">
+        <div class="modal-field" style="margin-bottom:0;"><label for="vIn">Check-in</label><input id="vIn" type="date" required></div>
+        <div class="modal-field" style="margin-bottom:0;"><label for="vOut">Check-out</label><input id="vOut" type="date" required></div>
+        <div class="modal-field" style="margin-bottom:0;"><label>Nights</label><input id="vNights" type="text" readonly tabindex="-1"></div>
+      </div>
+      <div class="modal-field">
+        <label>Villa(s)</label>
+        <p class="modal-hint" id="vAvailNote" style="margin:0 0 8px;">Set the dates to see which villas are free.</p>
+        <div class="villa-pick" id="vPick"></div>
+      </div>
+
+      <h3 class="modal-subhead">Guests <span class="modal-lock">&middot; every guest is charged the meal package per night</span></h3>
+      <label class="modal-check"><input type="checkbox" id="vPrimarySenior"> Primary guest is a Senior Citizen / PWD</label>
+      <div id="vGuests" style="margin-top:8px;"></div>
+      <button type="button" class="btn-sm ghost" id="vAddGuest">+ Add companion</button>
+      <div class="cap-line" id="vCap" hidden></div>
+      <div class="modal-row three" style="margin-top:14px;">
+        <div class="modal-field" style="margin-bottom:0;"><label for="vPets">Pets</label><input id="vPets" type="number" min="0" max="2" value="0"></div>
+        <div class="modal-field" style="margin-bottom:0;"><label for="vCountry">Country</label><input id="vCountry" type="text" value="Philippines"></div>
+        <div class="modal-field" style="margin-bottom:0;"><label class="modal-check" style="margin-top:26px;"><input type="checkbox" id="vOverCap"> Allow over capacity</label></div>
+      </div>
+
+      <h3 class="modal-subhead">Amount</h3>
+      <div id="vBill" class="bill-summary modal-bill"></div>
+      <div class="modal-row three" style="margin:12px 0 0;">
+        <div class="modal-field" style="margin-bottom:0;">
+          <label for="vDiscType">Discount</label>
+          <select id="vDiscType"><option value="">No discount</option><option value="percent">Percent (%)</option><option value="amount">Amount (&#8369;)</option></select>
+        </div>
+        <div class="modal-field" style="margin-bottom:0;"><label for="vDiscValue">Value</label><input id="vDiscValue" type="number" min="0" step="0.01" disabled></div>
+        <div class="modal-field" style="margin-bottom:0;"><label for="vDiscReason">Reason <span class="modal-lock">&middot; shown to guest</span></label><input id="vDiscReason" type="text" maxlength="80" disabled></div>
+      </div>
+      <label class="modal-check" id="vKeepWrap" hidden><input type="checkbox" id="vKeepTotal"> Keep the price agreed elsewhere: <input id="vKeepAmount" type="number" step="0.01" style="width:140px; margin-left:6px;"></label>
+
+      <h3 class="modal-subhead">Notes &amp; payment</h3>
+      <div class="modal-field"><label for="vNotes">Guest requests</label><textarea id="vNotes" rows="2"></textarea></div>
+      <div class="modal-field"><label for="vStaffNotes">Staff Notes</label><textarea id="vStaffNotes" rows="2"></textarea></div>
+      <div class="modal-field" id="vPayField">
+        <label for="vPayFile">Payment Proof</label>
+        <div id="vPayExisting" class="modal-pay-existing"></div>
+        <input id="vPayFile" type="file" accept="image/*,application/pdf">
+        <p class="modal-hint">Uploading a proof marks a Pending booking as Confirmed when you save (the guest gets the confirmation email).</p>
+      </div>
+      <label class="modal-check" id="vNotifyWrap"><input type="checkbox" id="vNotify"> <span id="vNotifyText">Email the guest</span></label>
+      <p class="modal-error" id="vError"></p>
+      <div class="modal-actions">
+        <button type="button" class="btn-sm ghost" id="vLogBtn" hidden>Activity</button>
+        <button type="button" class="btn-sm ghost" id="vCancel">Cancel</button>
+        <button type="submit" class="btn-sm primary" id="vSave">Save Booking</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="modal-backdrop" id="villaCalBackdrop">
+  <div class="modal modal-cal">
+    <h2>Villa Calendar</h2>
+    <p style="color:var(--ink-soft); font-size:0.85rem; margin:-10px 0 14px;">All 18 casitas. Click a booking to open it, or an empty night to start a booking there. Weekend / peak nights are shaded.</p>
+    <div class="cal-bar">
+      <div class="filter-field"><label for="calStart">From</label><input type="date" id="calStart"></div>
+      <div class="filter-field"><label for="calDays">Show</label>
+        <select id="calDays"><option value="14">2 weeks</option><option value="21" selected>3 weeks</option><option value="31">1 month</option><option value="62">2 months</option></select>
+      </div>
+      <button class="btn-sm ghost" type="button" id="calPrev">&larr; Back</button>
+      <button class="btn-sm ghost" type="button" id="calToday">Today</button>
+      <button class="btn-sm ghost" type="button" id="calNext">Forward &rarr;</button>
+      <span id="calStatus" class="modal-hint" style="margin-left:auto;"></span>
+    </div>
+    <div class="cal-scroll"><table class="cal" id="calTable"></table></div>
+    <div class="cal-legend">
+      <span><i style="background:#c98a3a"></i>Pending</span><span><i style="background:#c0652a"></i>Pending payment</span>
+      <span><i style="background:#1f7a72"></i>Confirmed</span><span><i style="background:#7d7466"></i>Completed</span>
+      <span><i style="background:#6b6559"></i>Blocked</span>
+    </div>
+    <div class="cal-side">
+      <div class="cal-panel">
+        <h3>Block a villa</h3>
+        <p class="modal-hint" style="margin:0 0 8px;">For repairs, owner use, etc. Blocked nights can't be booked online or here.</p>
+        <div class="modal-row" style="margin-bottom:8px;">
+          <select id="blkVilla"></select>
+          <input id="blkReason" type="text" placeholder="Reason, e.g. Roof repair">
+        </div>
+        <div class="modal-row" style="margin-bottom:8px;">
+          <input id="blkIn" type="date"><input id="blkOut" type="date">
+        </div>
+        <button class="btn-sm primary" type="button" id="blkSave">Block these nights</button>
+        <p class="modal-error" id="blkError"></p>
+      </div>
+      <div class="cal-panel">
+        <h3>Peak dates <span class="modal-lock">&middot; charged the weekend rate</span></h3>
+        <div class="modal-row" style="margin-bottom:8px;">
+          <input id="peakDate" type="date"><input id="peakLabel" type="text" placeholder="e.g. Eve of All Saints' Day">
+        </div>
+        <button class="btn-sm ghost" type="button" id="peakAdd">Add peak night</button>
+        <ul class="peak-list" id="peakList"></ul>
+      </div>
+    </div>
+    <div class="modal-actions"><button type="button" class="btn-sm ghost" id="calClose">Close</button></div>
+  </div>
+</div>
+
 <div class="modal-backdrop" id="plannerBackdrop">
   <div class="modal modal-planner">
     <h2>Cabana Map</h2>
@@ -508,6 +719,7 @@
 <script src="../assets/js/booking-config.js?v=c116a3a0ae"></script>
 <script src="../assets/js/cabana-map.js?v=8f4f80dcb3"></script>
 <script src="../assets/js/pricing.js?v=da412788ee"></script>
-<script src="../assets/js/staff-dashboard.js?v=68587e2780"></script>
+<script src="../assets/js/staff-dashboard.js?v=e1531a2294"></script>
+<script src="../assets/js/staff-villas.js?v=6b193a2a67"></script>
 </body>
 </html>

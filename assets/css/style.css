@@ -576,3 +576,53 @@ form.inquiry .field-hint { font-size: 0.8rem; color: var(--ink-soft); margin-top
 @media (prefers-reduced-motion: reduce) {
   .reveal { opacity: 1; transform: none; transition: none; }
 }
+
+/* ---------- overnight stay booking (book-stay/) ---------- */
+.stay-step { border-top: 1px solid var(--line); padding-top: 26px; margin-top: 10px; }
+.stay-step:first-child { border-top: 0; padding-top: 0; margin-top: 0; }
+.stay-step-head { display: flex; align-items: baseline; gap: 12px; margin-bottom: 14px; }
+.stay-step-num { flex: none; width: 28px; height: 28px; border-radius: 50%; background: var(--lagoon); color: #fff; font-weight: 700; font-size: 0.85rem; display: inline-flex; align-items: center; justify-content: center; }
+.stay-step-head h2 { font-size: 1.35rem; margin: 0; }
+.stay-step-head p { margin: 2px 0 0; font-size: 0.86rem; color: var(--ink-soft); }
+.stay-nights { font-size: 0.9rem; color: var(--lagoon-deep); font-weight: 700; margin-top: 4px; min-height: 1.3em; }
+
+.villa-type-list { display: grid; gap: 14px; }
+.villa-type { display: grid; grid-template-columns: 150px 1fr auto; gap: 18px; align-items: center; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); padding: 12px; transition: border-color .15s, box-shadow .15s; }
+.villa-type.is-picked { border-color: var(--lagoon); box-shadow: 0 0 0 1px var(--lagoon); }
+.villa-type.is-full { opacity: 0.55; }
+.villa-type img { width: 150px; height: 108px; object-fit: cover; border-radius: 6px; display: block; }
+.villa-type h3 { font-size: 1.08rem; margin: 0 0 4px; }
+.villa-type .vt-meta { font-size: 0.8rem; color: var(--ink-soft); line-height: 1.5; }
+.villa-type .vt-rate { font-size: 0.84rem; margin-top: 4px; }
+.villa-type .vt-rate b { font-family: var(--font-display); font-weight: 600; font-size: 1rem; }
+.villa-type .vt-avail { font-size: 0.78rem; font-weight: 700; letter-spacing: .03em; margin-top: 6px; color: var(--lagoon-deep); }
+.villa-type.is-full .vt-avail { color: #9c4a3f; }
+.stepper { display: inline-flex; align-items: center; border: 1px solid var(--line); border-radius: 999px; background: var(--sand); }
+.stepper button { width: 38px; height: 38px; border: 0 !important; background: transparent; font-size: 1.2rem; color: var(--ink); cursor: pointer; margin: 0 !important; border-radius: 50%; }
+.stepper button:disabled { opacity: .3; cursor: not-allowed; }
+.stepper output { min-width: 26px; text-align: center; font-weight: 700; }
+@media (max-width: 620px) {
+  .villa-type { grid-template-columns: 96px 1fr; }
+  .villa-type img { width: 96px; height: 84px; }
+  .villa-type .stepper { grid-column: 1 / -1; justify-self: end; }
+}
+.villa-picked-note { font-size: 0.86rem; background: var(--lagoon-tint); border-radius: 8px; padding: 10px 14px; }
+
+.guest-list { display: grid; gap: 10px; }
+.guest-row { display: grid; grid-template-columns: 34px 1fr 210px; gap: 10px; align-items: center; }
+.guest-row .gr-num { width: 30px; height: 30px; border-radius: 50%; background: var(--sand-deep); font-size: 0.8rem; font-weight: 700; display: inline-flex; align-items: center; justify-content: center; color: var(--ink-soft); }
+.guest-row.is-primary .gr-num { background: var(--lagoon); color: #fff; }
+.guest-row.is-invalid input, .guest-row.is-invalid select { border-color: #9c4a3f !important; background: #fbefec !important; }
+.guest-row .gr-primary-name { padding: 13px 14px; border: 1px dashed var(--line); border-radius: 4px; font-size: 0.95rem; color: var(--ink-soft); background: var(--sand); }
+@media (max-width: 560px) {
+  .guest-row { grid-template-columns: 30px 1fr; }
+  .guest-row select, .guest-row .gr-age { grid-column: 2; }
+}
+.capacity-meter { font-size: 0.85rem; border-radius: 8px; padding: 10px 14px; background: var(--sand-deep); }
+.capacity-meter.is-over { background: #fbe4e4; color: #9b2c2c; font-weight: 600; }
+.capacity-meter.is-ok { background: var(--lagoon-tint); }
+.inline-check { display: flex !important; align-items: flex-start; gap: 8px; text-transform: none !important; letter-spacing: 0 !important; font-size: 0.9rem !important; color: var(--ink) !important; }
+.inline-check input { width: auto !important; margin-top: 4px; }
+.form-error-box { background: #fbe4e4; color: #9b2c2c; border-radius: 8px; padding: 12px 16px; font-size: 0.9rem; }
+.bill-row.is-discount span:last-child { color: var(--lagoon-deep); }
+.bill-sub { font-size: 0.78rem; color: var(--ink-soft); margin-top: 2px; }
