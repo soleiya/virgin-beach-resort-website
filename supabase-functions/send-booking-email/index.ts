@@ -770,7 +770,7 @@ ${signature(c)}`;
 // Display names for add-on slugs in reservation summaries (the price lines in
 // the quotation come from the add_ons table via quote_overnight()).
 const ADD_ON_NAMES: Record<string, string> = {
-  massage_60: "Massage (60 min)", massage_90: "Massage (90 min)", atv: "ATV ride",
+  massage_60: "Massage (60 min)", massage_90: "Massage (90 min)", atv_1: "ATV ride (40 min, 1 rider)", atv_2: "ATV ride (40 min, 2 riders)",
 };
 
 export const PREFERRED_VILLA_NOTE =

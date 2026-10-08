@@ -26,7 +26,9 @@ create policy "Anyone can view add-ons" on add_ons for select to anon, authentic
 
 insert into add_ons (slug, name, description, unit, price, sort) values
   ('massage_60', 'Massage — 60 minutes', 'In-casita or beachside massage by our visiting wellness therapists.', 'per person', 500, 10),
-  ('massage_90', 'Massage — 90 minutes', 'A longer, deeper session to fully unwind.', 'per person', 700, 20)
+  ('massage_90', 'Massage — 90 minutes', 'A longer, deeper session to fully unwind.', 'per person', 700, 20),
+  ('atv_1', 'ATV ride — 40 minutes, 1 rider', 'Off-road ride along the scenic trails around the property.', 'per ATV', 1000, 30),
+  ('atv_2', 'ATV ride — 40 minutes, 2 riders', 'Share one ATV with a companion on the trails around the property.', 'per ATV', 1200, 40)
 on conflict (slug) do nothing;
 
 alter table overnight_rates add column if not exists online_bank_discount_rate numeric not null default 0.03;

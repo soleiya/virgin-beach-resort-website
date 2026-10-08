@@ -325,7 +325,7 @@
     var rows = (q.lines || []).map(function (l) {
       var qty = Number(l.qty) || 0;
       var label = esc(l.desc);
-      if (l.kind !== "senior_room") label += ' <span class="muted">' + (Number(l.rate) ? "× " + qty + " @ " + peso(l.rate) : "× " + qty) + "</span>";
+      if (l.kind !== "senior_room" && l.kind !== "online_discount") label += ' <span class="muted">' + (Number(l.rate) ? "× " + qty + " @ " + peso(l.rate) : "× " + qty) + "</span>";
       var amt = Number(l.amount) === 0 ? "Free" : peso(l.amount);
       return '<div class="bill-row' + (Number(l.amount) < 0 ? " is-discount" : "") + '"><span>' + label + "</span><span>" + amt + "</span></div>";
     }).join("");
