@@ -602,7 +602,8 @@
       tdTotal.textContent = peso(r.total_amount);
       if (r.total_amount != null && r.stay_type === "overnight") {
         tdTotal.title = "Room: " + peso(r.room_total) + " · Meals: " + peso(r.meal_total) + (Number(r.extra_bed_total) ? " · Extra beds: " + peso(r.extra_bed_total) : "") +
-          (Number(r.pet_total) ? " · Pets: " + peso(r.pet_total) : "") + (Number(r.discount_amount) ? " · Discount: −" + peso(r.discount_amount) : "");
+          (Number(r.pet_total) ? " · Pets: " + peso(r.pet_total) : "") + (Number(r.add_on_total) ? " · Add-ons: " + peso(r.add_on_total) : "") +
+          (Number(r.online_discount) ? " · 3% book-direct: −" + peso(r.online_discount) : "") + (Number(r.discount_amount) ? " · Discount: −" + peso(r.discount_amount) : "");
       } else if (r.total_amount != null) {
         tdTotal.title = "People: " + peso(r.subtotal_people) + (r.senior_discount ? " (incl. " + peso(r.senior_discount) + " senior discount)" : "") + " · Cabana(s): " + peso(r.cabana_total);
       }

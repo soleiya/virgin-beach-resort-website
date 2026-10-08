@@ -227,6 +227,10 @@ export type Quote = {
   serviceCharge: number;
   websiteTotal: number | null;
   mismatch: boolean;
+  // Overnight website bookings: price when paying by card / e-wallet instead
+  // of bank transfer (i.e. without the 3% book-direct discount).
+  cardTotal?: number;
+  onlineDiscount?: number;
 };
 
 function cabanaKind(c: Any): "lounge" | "dining" {
@@ -763,6 +767,12 @@ ${signature(c)}`;
 // quote_overnight() in the database (booking-v8-villas.sql) — the very same
 // calculation the website showed the guest and the dashboard uses.
 
+// Display names for add-on slugs in reservation summaries (the price lines in
+// the quotation come from the add_ons table via quote_overnight()).
+const ADD_ON_NAMES: Record<string, string> = {
+  massage_60: "Massage (60 min)", massage_90: "Massage (90 min)", atv: "ATV ride",
+};
+
 export const PREFERRED_VILLA_NOTE =
   "Casita numbers are a preference. The resort may move your party to an identical casita if operations require it — we'll always let you know beforehand.";
 
@@ -815,6 +825,7 @@ function overnightRows(r: Any, villas: Any[]): [string, string][] {
     ["Casita(s)", villas.length ? `<strong>${esc(villaText(villas))}</strong>` : esc(r.room_name || "To be assigned")],
     ["Guests", esc(partyText(r)) + (int(r.extra_beds) ? ` · ${plural(int(r.extra_beds), "extra floor mattress", "extra floor mattresses")}` : "")],
   ];
+  if (Array.isArray(r.add_ons) && r.add_ons.length) rows.push(["Add-ons", esc(r.add_ons.map((a: Any) => `${int(a.qty)} × ${ADD_ON_NAMES[a.slug] || a.slug}`).join(", "))]);
   if (r.occasion) rows.push(["Occasion", esc(label(r.occasion))]);
   if (r.notes) rows.push(["Special requests", esc(r.notes)]);
   return rows;
@@ -865,13 +876,14 @@ ${statusBox([
     ["Amount due", q ? esc(peso(q.total)) : "To follow"],
     ["Please pay by", esc(dl.label)],
   ])}
+${q && q.onlineDiscount ? p(`<strong>Thank you for booking direct!</strong> The amount due already includes your <strong>3% book-direct discount (${esc(peso(q.onlineDiscount))})</strong> for booking on our website and paying by bank transfer.`, `background:${C.tint};border-radius:8px;padding:10px 14px;font-size:14px;`) : ""}
 ${h2("Your reservation")}${kv(overnightRows(r, villas))}${cabanaNote(villas)}
 ${h2("Guest list")}${rosterTable(r)}
 ${q ? h2("Quotation") + quoteTable(q) + p("The full-board meal package (lunch, dinner and breakfast) is mandatory for every guest and is charged per guest, per night. Children 0–5 eat free.", `font-size:12.5px;color:${C.soft};margin-top:8px;`) : ""}
 ${h2("How to pay")}
 ${p(`<strong>Option 1 — Bank deposit or online transfer</strong> (InstaPay / PESONet) to any of these accounts. Please put <strong>${esc(r.order_code)}</strong> and your name in the reference / remarks.`)}
 ${bankTable()}
-${p(`<strong>Option 2 — Credit/debit card or e-wallet.</strong> Reply to this email and we'll send you a secure Xendit payment link${q ? ` for ${esc(peso(q.total))}` : ""}.`, "margin-top:14px;")}
+${p(`<strong>Option 2 — Credit/debit card or e-wallet.</strong> Reply to this email and we'll send you a secure Xendit payment link${q ? ` for ${esc(peso(q.cardTotal ?? q.total))}` : ""}${q && q.onlineDiscount ? " (the 3% discount applies to bank transfers only)" : ""}.`, "margin-top:14px;")}
 ${h2("After you pay")}
 <ol style="margin:0 0 12px;padding-left:20px;font-size:14px;">
 <li style="margin:0 0 8px;"><strong>Send us your proof of payment</strong> — upload the screenshot or transaction slip using the button below, or simply reply to this email with it attached.</li>
@@ -942,7 +954,7 @@ ${q ? h2("Quotation sent") + quoteTable(q) : ""}
 ${h2("Follow-up checklist")}
 <ol style="margin:0 0 14px;padding-left:20px;font-size:14px;">
 <li>Watch the guest thread (search the Order ID) for proof of payment, the signed agreement and a valid ID. Website uploads also alert this inbox.</li>
-<li>Guest asks for card / e-wallet? Create a Xendit invoice for <strong>${q ? esc(peso(q.total)) : "the quoted amount"}</strong> with description <strong>Booking# ${esc(r.order_code)}</strong>, and reply in the guest's thread with the link and the same pay-by time.</li>
+<li>Guest asks for card / e-wallet? Create a Xendit invoice for <strong>${q ? esc(peso(q.cardTotal ?? q.total)) : "the quoted amount"}</strong>${q && q.onlineDiscount ? " (no 3% book-direct discount on card payments)" : ""} with description <strong>Booking# ${esc(r.order_code)}</strong>, and reply in the guest's thread with the link and the same pay-by time.</li>
 <li>Verify the deposit against the bank statement, then set the booking to <strong>Confirmed</strong> in the dashboard — the guest gets the confirmation email automatically.</li>
 <li>No payment by ${esc(dl.label)}? The booking automatically turns <strong>Expired</strong> and the casita(s) are released.</li>
 <li>Share the guest count with the kitchen (full board, ${plural(nightsOf(r), "night")}) and any extra mattress with Housekeeping once confirmed.</li>
@@ -1002,7 +1014,9 @@ export function quoteFromOvernight(record: Any, oq: Any): Quote | null {
   const vatableSales = r2(gross / 1.17);
   const vat = r2(vatableSales * 0.12);
   const serviceCharge = r2(gross - vatableSales - vat);
+  const onlineDiscount = r2(Number(oq.online_discount) || 0);
   return {
+    cardTotal: onlineDiscount > 0 ? r2(total + onlineDiscount) : total, onlineDiscount,
     heading: `OVERNIGHT STAY — ${plural(Number(oq.nights) || 0, "night")}, casita${(oq.villas || []).length === 1 ? "" : "s"} with full-board meals`,
     lines, subtotal: total, total, vatExemptSales, vatableSales, vat, serviceCharge,
     websiteTotal, mismatch: websiteTotal !== null && Math.abs(websiteTotal - total) > 0.5,

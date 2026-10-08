@@ -16,6 +16,7 @@
   function $(id) { return document.getElementById(id); }
 
   var villas = [], villasById = {};
+  var addOns = [], addonQty = {};
   var AGE = [["adult", "Adult (13+)"], ["senior", "Senior / PWD"], ["child_6_12", "Child 6–12"], ["child_0_5", "Child 0–5 (free)"]];
   var EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 
@@ -25,6 +26,7 @@
   function dow(s) { return new Date(s + "T00:00:00Z").getUTCDay(); }
 
   function init() {
+    sb.from("add_ons").select("*").eq("active", true).not("price", "is", null).order("sort").then(function (res) { addOns = res.error ? [] : (res.data || []); });
     return sb.from("villas").select("*").eq("active", true).order("sort").then(function (res) {
       if (res.error) throw res.error;
       villas = res.data || [];
@@ -80,6 +82,10 @@
     $("vStaffNotes").value = r.staff_notes || "";
     $("vOverCap").checked = false;
     picked = editing ? (r.booking_villas || []).map(function (bv) { return bv.villa_id; }) : (preset.villa_id ? [preset.villa_id] : []);
+    addonQty = {};
+    (Array.isArray(r.add_ons) ? r.add_ons : []).forEach(function (a) { addonQty[a.slug] = a.qty; });
+    $("vOnline").checked = editing ? Number(r.online_discount) > 0 : false;
+    renderAddOns();
     guests = Array.isArray(r.companions) ? r.companions.map(function (c) { return { name: c.name || "", age_group: c.age_group || "adult" }; }) : [];
     // Older / imported bookings may have head-counts but no names: fill blank rows.
     if (editing) {
@@ -182,6 +188,27 @@
     });
   }
 
+  // ---------------- add-ons ----------------
+  function renderAddOns() {
+    var el = $("vAddons");
+    el.innerHTML = "";
+    if (!addOns.length) { el.innerHTML = '<span class="muted">No add-ons set up (add rows with a price to the add_ons table).</span>'; return; }
+    addOns.forEach(function (a) {
+      var lab = document.createElement("label");
+      lab.className = "villa-opt" + (addonQty[a.slug] ? " is-on" : "");
+      lab.innerHTML = '<span style="flex:1;">' + esc(a.name) + "<small>" + peso(a.price) + (a.unit ? " " + esc(a.unit) : "") + '</small></span><input type="number" min="0" max="20" value="' + (addonQty[a.slug] || 0) + '" style="width:64px !important;">';
+      lab.querySelector("input").addEventListener("input", function (e) {
+        addonQty[a.slug] = Math.max(0, Math.min(20, parseInt(e.target.value || "0", 10) || 0));
+        lab.classList.toggle("is-on", addonQty[a.slug] > 0);
+        requestQuote();
+      });
+      el.appendChild(lab);
+    });
+  }
+  function addOnPayload() {
+    return Object.keys(addonQty).filter(function (k) { return addonQty[k] > 0; }).map(function (k) { return { slug: k, qty: addonQty[k] }; });
+  }
+
   // ---------------- guests ----------------
   function renderGuests() {
     var el = $("vGuests");
@@ -206,7 +233,7 @@
   $("vPrimarySenior").addEventListener("change", function () { renderGuests(); requestQuote(); });
   $("vName").addEventListener("input", function () { var f = $("vGuests").querySelector("input[readonly]"); if (f) f.value = $("vName").value || "Primary guest"; });
   ["vPets", "vDiscValue", "vDiscReason", "vKeepAmount"].forEach(function (id) { $(id).addEventListener("input", requestQuote); });
-  ["vDiscType", "vKeepTotal", "vOverCap"].forEach(function (id) { $(id).addEventListener("change", requestQuote); });
+  ["vDiscType", "vKeepTotal", "vOverCap", "vOnline"].forEach(function (id) { $(id).addEventListener("change", requestQuote); });
   $("vEmail").addEventListener("input", updateNotify);
   $("vStatus").addEventListener("change", updateNotify);
 
@@ -235,7 +262,7 @@
       return;
     }
     var seq = ++quoteSeq;
-    sb.rpc("quote_overnight", { p_check_in: a, p_check_out: b, p_villa_ids: picked, p_adults: c.adults, p_seniors: c.seniors, p_kids612: c.k612, p_kids05: c.k05, p_pets: parseInt($("vPets").value || "0", 10) || 0 })
+    sb.rpc("quote_overnight", { p_check_in: a, p_check_out: b, p_villa_ids: picked, p_adults: c.adults, p_seniors: c.seniors, p_kids612: c.k612, p_kids05: c.k05, p_pets: parseInt($("vPets").value || "0", 10) || 0, p_add_ons: addOnPayload(), p_online_bank: $("vOnline").checked })
       .then(function (res) {
         if (seq !== quoteSeq) return;
         if (res.error) { bill.innerHTML = '<p class="bill-note" style="color:#9b2c2c;">' + esc(res.error.message) + "</p>"; return; }
@@ -324,6 +351,7 @@
       notes: $("vNotes").value, staff_notes: $("vStaffNotes").value,
       keep_total: !$("vKeepWrap").hidden && $("vKeepTotal").checked, total_amount: $("vKeepAmount").value,
       allow_over_capacity: $("vOverCap").checked,
+      add_ons: addOnPayload(), online_bank: $("vOnline").checked,
     };
     var file = $("vPayFile").files && $("vPayFile").files[0];
     var r = editing;
@@ -356,6 +384,8 @@
           var namesNow = [payload.guest_name].concat(payload.companions.map(function (g) { return g.name || "(name to follow)"; })).join(", ");
           push("Guest names", r.guest_names || "", namesNow);
           push("Pets", String(r.pet_count || 0), String(payload.pet_count));
+          var aoText = function (list) { return (list || []).map(function (x) { var a = addOns.filter(function (o) { return o.slug === x.slug; })[0]; return x.qty + " × " + (a ? a.name : x.slug); }).join(", ") || "None"; };
+          push("Add-ons", aoText(r.add_ons), aoText(payload.add_ons));
           push("Total", r.total_amount != null ? peso(r.total_amount) : "", saved.total != null ? peso(saved.total) : "");
           push("Phone", r.guest_phone || "", payload.guest_phone);
           push("Email", r.guest_email || "", payload.guest_email);

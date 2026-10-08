@@ -43,12 +43,20 @@ def casita_page(slug, name, tagline, description, occupancy, beds, size, rate, f
     note_html = f'<p class="prose" style="margin-top:14px;">{note}</p>' if note else ""
 
     body = f"""
-<section class="page-hero">
-  <img src="../../assets/images/{hero_img}" alt="{name} at Virgin Beach Resort">
-  <div class="wrap page-hero-content">
-    <span class="eyebrow">Overnight &middot; Casita</span>
-    <h1>{name}</h1>
-    <p class="lede">{tagline}</p>
+<section class="casita-hero">
+  <figure class="casita-hero-media">
+    <img src="../../assets/images/{hero_img}" alt="{name} at Virgin Beach Resort">
+  </figure>
+  <div class="wrap casita-hero-text">
+    <div>
+      <span class="eyebrow">Overnight &middot; Casita</span>
+      <h1>{name}</h1>
+      <p class="lede">{tagline}</p>
+    </div>
+    <div class="casita-hero-cta">
+      <span class="casita-hero-rate">from <b>&#8369;{CASITA_RATES[slug][0]}</b> / night</span>
+      <a class="btn btn-primary" href="{stay_link("../../", slug)}">Book This Casita</a>
+    </div>
   </div>
 </section>
 

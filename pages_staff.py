@@ -589,7 +589,11 @@ html = """<!doctype html>
         <div class="modal-field" style="margin-bottom:0;"><label class="modal-check" style="margin-top:26px;"><input type="checkbox" id="vOverCap"> Allow over capacity</label></div>
       </div>
 
+      <h3 class="modal-subhead">Add-ons</h3>
+      <div class="villa-pick" id="vAddons"><span class="muted">Loading…</span></div>
+
       <h3 class="modal-subhead">Amount</h3>
+      <label class="modal-check"><input type="checkbox" id="vOnline"> 3% book-direct discount (booked on the website, paying by bank transfer)</label>
       <div id="vBill" class="bill-summary modal-bill"></div>
       <div class="modal-row three" style="margin:12px 0 0;">
         <div class="modal-field" style="margin-bottom:0;">

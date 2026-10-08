@@ -27,6 +27,9 @@
   var primarySeniorEl = $("primarySenior"), seniorIdWrap = $("seniorIdWrap"), seniorIdFilesEl = $("seniorIdFiles");
   var petCountEl = $("petCount"), petWrap = $("petWrap"), petVaxFilesEl = $("petVaxFiles"), petAgreeEl = $("petPolicyAgree");
   var billEl = $("billSummary"), formError = $("formError"), submitBtn = $("submitBtn");
+  var addonListEl = $("addonList");
+  var addOns = [];            // offered add-ons (from the add_ons table)
+  var addonQty = {};          // slug -> quantity
 
   var AGE_GROUPS = [
     ["", "Age group…"],
@@ -121,6 +124,7 @@
       var availEl = card.querySelector(".vt-avail");
       if (!datesReady()) availEl.textContent = "Pick your dates to check availability";
       else if (!all.length) availEl.textContent = "Not bookable online — please call us";
+      else if (all.length === 1) availEl.textContent = free.length ? "Available for your dates" : "Booked for these dates — try other dates";
       else if (!free.length) availEl.textContent = "Fully booked for these dates";
       else availEl.textContent = free.length === 1 ? "1 casita left for these dates" : free.length + " available for these dates";
       card.classList.toggle("is-full", datesReady() && !free.length);
@@ -305,6 +309,7 @@
     sb.rpc("quote_overnight", {
       p_check_in: checkInEl.value, p_check_out: checkOutEl.value, p_villa_ids: picked.map(function (v) { return v.id; }),
       p_adults: p.adults, p_seniors: p.seniors, p_kids612: p.kids612, p_kids05: p.kids05, p_pets: pets(),
+      p_add_ons: addOnPayload(), p_online_bank: true,
     }).then(function (res) {
       if (seq !== quoteSeq) return;
       if (res.error) throw res.error;
@@ -329,8 +334,44 @@
     billEl.innerHTML =
       '<div class="bill-lines">' + rows + "</div>" +
       (q.error ? '<p class="bill-warning">' + esc(q.error) + "</p>" : "") +
-      '<div class="bill-total"><span>Total</span><span>' + peso(q.total) + "</span></div>" +
+      '<div class="bill-total"><span>Total by bank transfer</span><span>' + peso(q.total) + "</span></div>" +
+      (Number(q.online_discount) > 0 ? '<p class="bill-pay-options">You save <b>' + peso(q.online_discount) + "</b> by booking direct and paying by bank transfer. " +
+        "Paying by card or e-wallet instead: " + peso(q.total_before_online) + ".</p>" : "") +
       '<p class="bill-sub">' + esc(nightsTxt) + " · " + q.guests + " guest" + (q.guests === 1 ? "" : "s") + " · full-board meals included. Payable in full to confirm.</p>";
+  }
+
+  // ---------------------------------------------------------------- add-ons
+  function addOnPayload() {
+    return Object.keys(addonQty).filter(function (k) { return addonQty[k] > 0; }).map(function (k) { return { slug: k, qty: addonQty[k] }; });
+  }
+  function loadAddOns() {
+    if (!sb) return Promise.resolve();
+    return sb.from("add_ons").select("slug,name,description,unit,price,sort").eq("active", true).not("price", "is", null).order("sort")
+      .then(function (res) {
+        addOns = res.error ? [] : (res.data || []);
+        renderAddOns();
+      });
+  }
+  function renderAddOns() {
+    if (!addonListEl) return;
+    if (!addOns.length) {
+      addonListEl.innerHTML = '<p class="field-hint" style="margin:0;">Massages, ATV rides and more can be arranged with our Front Office during your stay.</p>';
+      return;
+    }
+    addonListEl.innerHTML = "";
+    addOns.forEach(function (a) {
+      var q = addonQty[a.slug] || 0;
+      var el = document.createElement("div");
+      el.className = "addon-item" + (q ? " is-picked" : "");
+      el.innerHTML = "<div><h3>" + esc(a.name) + "</h3>" + (a.description ? "<p>" + esc(a.description) + "</p>" : "") +
+        '<div class="addon-price"><b>' + peso(a.price) + "</b>" + (a.unit ? " " + esc(a.unit) : "") + "</div></div>" +
+        '<div class="stepper"><button type="button" aria-label="Fewer">&minus;</button><output>' + q + '</output><button type="button" aria-label="More">+</button></div>';
+      var btns = el.querySelectorAll("button");
+      btns[0].disabled = q <= 0;
+      btns[0].addEventListener("click", function () { addonQty[a.slug] = Math.max(0, q - 1); renderAddOns(); requestQuote(); });
+      btns[1].addEventListener("click", function () { addonQty[a.slug] = Math.min(20, q + 1); renderAddOns(); requestQuote(); });
+      addonListEl.appendChild(el);
+    });
   }
 
   // ---------------------------------------------------------------- submit
@@ -402,6 +443,7 @@
       companions: companions.map(function (c) { return { name: c.name.trim().replace(/\s+/g, " "), age_group: c.age }; }),
       pet_count: pets(),
       pet_policy_agreed: pets() > 0 && petAgreeEl.checked,
+      add_ons: addOnPayload(),
       how_heard: $("hearAbout").value || null,
       occasion: $("occasion").value || null,
       notes: $("notes").value.trim() || null,
@@ -442,7 +484,7 @@
       "<p>Your Order ID is <strong>" + esc(row && row.order_code || "—") + "</strong>" + (row && row.total != null ? " · Total <strong>" + peso(row.total) + "</strong>" : "") + ".</p>" +
       "<p>We're holding " + esc(picked.map(function (v) { return v.room_type_name + " (" + v.unit_label + ")"; }).join(", ")) +
       " for " + fmtDay(payload.check_in) + " → " + fmtDay(payload.check_out) + ". Your quotation, bank details and next steps are on their way to <strong>" + esc(payload.guest_email) +
-      "</strong> — full payment within 24 hours confirms the booking.</p>" +
+      "</strong> — full payment by bank transfer within 24 hours confirms the booking (your 3% book-direct discount is already included).</p>" +
       "<p>Can't find the email? Check Spam or Promotions, or call us at +63 917 792 0712.</p>" +
       '<p><a class="btn btn-ghost" href="../pay/index.html?order=' + encodeURIComponent(row && row.order_code || "") + "&email=" + encodeURIComponent(payload.guest_email) + '">Upload payment proof</a></p>';
     window.scrollTo({ top: st.getBoundingClientRect().top + window.scrollY - 120, behavior: "smooth" });
@@ -456,5 +498,6 @@
   if (pre && typeCards[pre]) typeCards[pre].classList.add("is-picked");
   renderGuests();
   onPartyChanged();
+  loadAddOns();
   loadVillas().then(onDates);
 })();
