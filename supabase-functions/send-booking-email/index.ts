@@ -102,6 +102,12 @@ export const ACCOUNT_NAME = "NTQ Hospitality and Resort Management Inc.";
 // Rates — keep in sync with PRICING / PACKAGE_PRICING in assets/js/booking.js
 // (2026 Rate Sheet). Cabana prices for full-day come from the cabanas table.
 const SENIOR_DISCOUNT_RATE = 0.2;
+// RA 9994 / RA 10754 + RR 7-2010 — must match seniorPrice() in assets/js/pricing.js:
+// the senior's own share is VAT-exempt, 20% off the VAT-exclusive price, and the
+// 5% service charge (on the net) is kept. Prices include 12% VAT + 5% SC.
+function seniorPrice(price: number) {
+  return r2(price / 1.17 * (1 - SENIOR_DISCOUNT_RATE + 0.05));
+}
 const PRICING: Record<string, Any> = {
   day_trip: { adult: 1250, child612: 825, child05: 0, pet: 750, dining: 1500, lounge: 2000 },
   half_day: { adult: 800, child612: 550, child05: 0, pet: 375, dining: 750, lounge: 1000 },
@@ -288,7 +294,7 @@ export function buildQuote(record: Any, cabanas: Any[]): Quote | null {
   } else {
     const rate = PRICING[type] || PRICING.day_trip;
     add("Adult (13 y.o. +)", rate.adult, regular);
-    add("Senior Citizen / PWD (20% discount)", r2(rate.adult * (1 - SENIOR_DISCOUNT_RATE)), seniors, true);
+    add("Senior Citizen / PWD (VAT-exempt, 20% discount)", seniorPrice(rate.adult), seniors, true);
     add("Child (6–12 y.o.)", rate.child612, kids612);
     add("Child (0–5 y.o.)", 0, kids05);
     add("Pet fee", rate.pet, pets);
@@ -1009,7 +1015,10 @@ export function quoteFromOvernight(record: Any, oq: Any): Quote | null {
     total = r2(total - d);
   }
   const websiteTotal = record.total_amount === null || record.total_amount === undefined ? null : Number(record.total_amount);
-  const vatExemptSales = r2(lines.filter((l) => l.vatExempt).reduce((s, l) => s + l.amount, 0));
+  // The seniors' own share of the casita + their meals (computed in SQL).
+  const vatExemptSales = oq.vat_exempt_sales !== undefined && oq.vat_exempt_sales !== null
+    ? r2(Number(oq.vat_exempt_sales))
+    : r2(lines.filter((l) => l.vatExempt).reduce((s, l) => s + l.amount, 0));
   const gross = Math.max(0, r2(total - vatExemptSales));
   const vatableSales = r2(gross / 1.17);
   const vat = r2(vatableSales * 0.12);

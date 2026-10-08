@@ -237,7 +237,7 @@
       if (bill.seniors > 0) {
         lines.push(
           '<div class="bill-row"><span>' + bill.seniors + " senior citizen" + (bill.seniors === 1 ? "" : "s") +
-          " × " + peso(bill.seniorRate) + " <em>(20% off)</em></span><span>" + peso(bill.seniors * bill.seniorRate) + "</span></div>"
+          " × " + peso(bill.seniorRate) + " <em>(VAT-exempt, 20% off)</em></span><span>" + peso(bill.seniors * bill.seniorRate) + "</span></div>"
         );
       }
       if (bill.kids612 > 0) {

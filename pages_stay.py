@@ -9,14 +9,7 @@ server's own quote_overnight() result, the same numbers the quotation email
 and the staff dashboard use."""
 from build import page, PET_POLICY_ITEMS, COUNTRIES, CASITAS, CASITA_RATES, asset_v
 
-VILLA_IMG = {
-    "deluxe-king-casita": "casita-king-exterior.jpg",
-    "double-queen-casita": "casita-queen-exterior.jpg",
-    "sunrise-casita": "sunrise-casita-exterior-day.jpg",
-    "louver-window-casita": "casita-louver-exterior.jpg",
-    "bamboo-king-casita": "bamboo-casita-day.jpg",
-    "bamboo-casita": "bamboo-basita.jpg",
-}
+VILLA_IMG = {s: f"casitas/{s}-01.jpg" for s, _ in CASITAS}
 VILLA_BEDS = {
     "deluxe-king-casita": "King bed · bathtub · outdoor shower · 52 m²",
     "double-queen-casita": "2 queen beds · bathtub · outdoor shower · 52 m²",

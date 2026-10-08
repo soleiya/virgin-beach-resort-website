@@ -6,6 +6,13 @@
 // rates there in sync with this file).
 (function () {
   var SENIOR_DISCOUNT_RATE = 0.2; // 20% off a senior's own per-person fee only
+  // RA 9994 / RA 10754 + RR 7-2010: a senior's own share is VAT-exempt and the
+  // 20% comes off the VAT-exclusive price. Rates include 12% VAT + 5% service
+  // charge on the net (net = price / 1.17); the service charge is kept.
+  var VAT_RATE = 0.12, SERVICE_CHARGE_RATE = 0.05;
+  function seniorPrice(price) {
+    return r2(price / (1 + VAT_RATE + SERVICE_CHARGE_RATE) * (1 - SENIOR_DISCOUNT_RATE + SERVICE_CHARGE_RATE));
+  }
 
   var PRICING = {
     day_trip: { adult: 1250, child612: 825, child05: 0, pet: 750, dining: 1500, lounge: 2000 },
@@ -59,12 +66,12 @@
       });
     }
     var rate = PRICING[type] || PRICING.day_trip;
-    var seniorRate = rate.adult * (1 - SENIOR_DISCOUNT_RATE);
+    var seniorRate = seniorPrice(rate.adult);
     var subtotalPeople = regularAdults * rate.adult + seniors * seniorRate + kids612 * rate.child612 + kids05 * rate.child05;
     var petCost = pets * rate.pet;
     return Object.assign(base, {
       isPackage: false, rate: rate, seniorRate: seniorRate, subtotalPeople: subtotalPeople, petCost: petCost,
-      seniorDiscount: seniors * rate.adult * SENIOR_DISCOUNT_RATE,
+      seniorDiscount: r2(seniors * (rate.adult - seniorRate)),
       total: subtotalPeople + petCost + cabanaTotal,
     });
   }
@@ -80,7 +87,7 @@
   }
 
   window.VBRPricing = {
-    PRICING: PRICING, PACKAGE_PRICING: PACKAGE_PRICING, SENIOR_DISCOUNT_RATE: SENIOR_DISCOUNT_RATE,
+    PRICING: PRICING, PACKAGE_PRICING: PACKAGE_PRICING, SENIOR_DISCOUNT_RATE: SENIOR_DISCOUNT_RATE, seniorPrice: seniorPrice,
     hasRateSheet: hasRateSheet, cabanaPrice: cabanaPrice, compute: compute, discountAmount: discountAmount, r2: r2,
   };
 })();

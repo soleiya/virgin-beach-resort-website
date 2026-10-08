@@ -51,10 +51,11 @@ policies = [
      "<p>For cash payments, a refund check will be issued in 7 working days. For credit card payments, provided the credit card company has not "
      "yet issued a refund, a refund check net of credit card charges and fees will be issued in 14 working days.</p>"),
     ("Do you offer Senior Citizen or PWD discounts?",
-     "<p>Senior Citizens and PWD are entitled to a 20% discount on their accommodation and meals provided they present their OSCA Identification "
-     "Card. Discounts for accommodations and meals apply only to the individual with a valid OSCA ID. This discount cannot be combined with any "
-     "other discounts or promotions and is not available on our booking engine. Please secure your reservation through our reservations office "
-     "if you wish to avail of this discount. We also honor SC and PWD discounts for walk-in guests who pay upon check-in.</p>"),
+     "<p>Yes. Senior Citizens and PWDs are entitled to VAT exemption and a 20% discount on their own share of the accommodation and on "
+     "their own meals, upon presenting a valid OSCA or PWD ID. In a shared casita, the discount applies to the senior's or PWD's share of "
+     "the room (the room rate divided by the number of guests). You can avail of it when booking on our website &mdash; just upload a photo "
+     "of the ID &mdash; and please bring the ID at check-in. Per the law, it cannot be combined with other discounts or promotions on the "
+     "same share. We also honor SC and PWD discounts for walk-in guests who pay upon check-in.</p>"),
     ("Do you honor VAT exemption for foreign missions?",
      "<p>We grant VAT exemption to non-residents who are affiliated with foreign embassies in the Philippines and their dependents, provided "
      "they present a photocopy of their VAT Exemption certificate and Department of Foreign Affairs (DFA) issued Identification Card upon "

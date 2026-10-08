@@ -10,14 +10,22 @@ FINE_PRINT = """
 </div>
 """
 
-RELATED_IMG = {
-    "deluxe-king-casita": "casita-king-exterior.jpg",
-    "double-queen-casita": "casita-queen-exterior.jpg",
-    "sunrise-casita": "sunrise-casita-exterior-day.jpg",
-    "louver-window-casita": "casita-louver-exterior.jpg",
-    "bamboo-king-casita": "bamboo-casita-day.jpg",
-    "bamboo-casita": "bamboo-basita.jpg",
+GALLERY_COUNT = {
+    "deluxe-king-casita": 11,
+    "double-queen-casita": 11,
+    "sunrise-casita": 7,
+    "louver-window-casita": 8,
+    "bamboo-king-casita": 5,
+    "bamboo-casita": 5,
 }
+
+
+def gallery(slug):
+    """Photos from virginbeachresort.com, saved as assets/images/casitas/<slug>-NN.jpg (01 = exterior)."""
+    return [f"casitas/{slug}-{i:02d}.jpg" for i in range(1, GALLERY_COUNT[slug] + 1)]
+
+
+RELATED_IMG = {s: f"casitas/{s}-01.jpg" for s in GALLERY_COUNT}
 
 
 def related_rooms(current_slug):
@@ -35,9 +43,10 @@ def related_rooms(current_slug):
 
 def casita_page(slug, name, tagline, description, occupancy, beds, size, rate, features, images, note=None):
     hero_img, gallery_imgs = images[0], images[1:]
+    shown = gallery_imgs[0] if gallery_imgs else None
     gallery_html = "".join(
-        f'<div class="feature-media"><img src="../../assets/images/{img}" alt="{name} — interior view" loading="lazy"></div>'
-        for img in gallery_imgs
+        f'<a class="cg-item" href="../../assets/images/{img}"><img src="../../assets/images/{img}" alt="{name} — photo {i}" loading="lazy"></a>'
+        for i, img in enumerate(images, 1) if img != shown
     )
     feature_tags = "".join(f"<span>{f}</span>" for f in features)
     note_html = f'<p class="prose" style="margin-top:14px;">{note}</p>' if note else ""
@@ -82,7 +91,7 @@ def casita_page(slug, name, tagline, description, occupancy, beds, size, rate, f
       <div class="feature-media"><img src="../../assets/images/{gallery_imgs[0] if gallery_imgs else hero_img}" alt="{name} interior"></div>
     </div>
 
-    <div class="grid-2 mt-lg">{"".join(f'<div class="feature-media wide"><img src="../../assets/images/{img}" alt="{name} detail" loading="lazy"></div>' for img in gallery_imgs[1:])}
+    <div class="casita-gallery mt-lg" data-lightbox>{gallery_html}
     </div>
 
     {FINE_PRINT}
@@ -110,14 +119,7 @@ RATES = {
     "bamboo-king-casita": ("30 m&sup2;", "2 Persons"),
     "bamboo-casita": ("30 m&sup2;", "4 Persons"),
 }
-IMG = {
-    "deluxe-king-casita": "casita-king-exterior.jpg",
-    "double-queen-casita": "casita-queen-exterior.jpg",
-    "sunrise-casita": "sunrise-casita-exterior-day.jpg",
-    "louver-window-casita": "casita-louver-exterior.jpg",
-    "bamboo-king-casita": "bamboo-casita-day.jpg",
-    "bamboo-casita": "bamboo-basita.jpg",
-}
+IMG = RELATED_IMG
 BLURB = {
     "deluxe-king-casita": "Perfect for couples out for a romantic getaway — sublime wooden furniture, a bathtub, and a private outdoor shower.",
     "double-queen-casita": "A quaint elegance for a small group or family, with a subtle modern touch.",
@@ -194,7 +196,7 @@ casita_page(
     ["Private Outdoor Shower", "Elevated Patio with sofa", "Daybed", "Bathtub", "Air-conditioning", "Satellite TV",
      "Writing Desk", "In-room Safe", "Mini-bar &amp; Refrigerator", "Complimentary Coffee and Tea", "Power Outlets (220v)",
      "Extra Person may be Added, Charges Apply"],
-    ["casita-king-exterior.jpg", "deluxe-room.jpg", "casita-king-patio.jpg", "casita-king-bathtub.jpg"],
+    gallery("deluxe-king-casita"),
 )
 
 casita_page(
@@ -205,7 +207,7 @@ casita_page(
     ["Private Outdoor Shower", "Elevated Patio with sofa", "Bathtub", "Air-conditioning", "Satellite TV",
      "Writing Desk", "In-room Safe", "Mini-bar &amp; Refrigerator", "Complimentary Coffee and Tea", "Power Outlets (220v)",
      "Extra Person may be Added, Charges Apply"],
-    ["casita-queen-exterior.jpg", "casita-queen-interior.jpg", "casita-queen-interior-2.jpg", "casita-queen-bathroom.jpg"],
+    gallery("double-queen-casita"),
 )
 
 casita_page(
@@ -214,7 +216,7 @@ casita_page(
     "With sliding glass doors in front, along with its window treatment, this casita is suited for early risers who can't wait to get to the beach.",
     "4 Persons", "2 Queen-sized Beds", "35 m&sup2;", "15,525",
     ["Elevated Patio with sofa", "Air-conditioning", "Writing Desk", "In-room Safe", "Complimentary Coffee and Tea", "Power Outlets (220v)"],
-    ["sunrise-casita-exterior-day.jpg", "casita-sunrise-interior.jpg", "casita-sunrise-bathroom.jpg"],
+    gallery("sunrise-casita"),
 )
 
 casita_page(
@@ -223,7 +225,7 @@ casita_page(
     "For late risers and those who want a bit more privacy, our Louver-Window Casita comes with a wooden door and wooden jalousies that provide a cozier ambiance.",
     "4 Persons", "2 Queen-sized Beds", "35 m&sup2;", "14,525",
     ["Elevated Patio with sofa", "Air-conditioning", "Writing Desk", "In-room Safe", "Complimentary Coffee and Tea", "Power Outlets (220v)", "Extra Person may be Added, Charges Apply"],
-    ["casita-louver-exterior.jpg", "casita-louver-interior.jpg", "casita-louver-interior-2.jpg", "casita-louver-bathroom.jpg"],
+    gallery("louver-window-casita"),
 )
 
 casita_page(
@@ -232,7 +234,7 @@ casita_page(
     "Inspired by traditional Filipino architecture with its bamboo build and cozy interiors, popular among our guests. Its wide floor-to-ceiling sliding doors can either be enclosed or left open to provide a view of the sea. Its elevated patio is the perfect spot to lounge.",
     "2 Persons", "1 King Bed", "30 m&sup2;", "9,225",
     ["Elevated Patio with sofa", "In-room Safe", "Complimentary Coffee and Tea", "Power Outlets (220v)", "Air-conditioning"],
-    ["bamboo-casita-day.jpg", "bamboo-casita-romantic.jpg", "casita-bamboo-exterior-detail.jpg"],
+    gallery("bamboo-king-casita"),
 )
 
 casita_page(
@@ -241,5 +243,5 @@ casita_page(
     "Inspired by traditional Filipino architecture with its bamboo build and cozy interiors, popular among our guests. Its wide floor-to-ceiling sliding doors can either be enclosed or left open to provide a view of the sea. Its elevated patio is the perfect spot to lounge.",
     "4 Persons", "2 Queen Beds", "30 m&sup2;", "9,225",
     ["Elevated Patio with sofa", "In-room Safe", "Complimentary Coffee and Tea", "Power Outlets (220v)", "Air-conditioning"],
-    ["bamboo-basita.jpg", "casita-bamboo-interior.jpg", "casita-bamboo-interior-2.jpg", "casita-bamboo-shower.jpg"],
+    gallery("bamboo-casita"),
 )

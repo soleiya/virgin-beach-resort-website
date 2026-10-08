@@ -193,7 +193,7 @@ def booking_form_section(default_type="day_trip"):
     <div>
       <label for="seniorCount">How many are Senior Citizens or PWDs?</label>
       <input id="seniorCount" type="number" min="0" value="0">
-      <p class="field-hint">Included in your Adults count above &mdash; each gets 20% off their own share.</p>
+      <p class="field-hint">Included in your Adults count above &mdash; their own share is VAT-exempt with 20% off (valid ID required).</p>
     </div>
     <div>
       <label for="petCount">Bringing any pets?</label>

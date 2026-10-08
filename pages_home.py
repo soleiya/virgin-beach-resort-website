@@ -1,14 +1,7 @@
 # -*- coding: utf-8 -*-
 from build import page, CASITAS, book_link, stay_link, rate_lines
 
-CASITA_IMG = {
-    "deluxe-king-casita": "casita-king-exterior.jpg",
-    "double-queen-casita": "casita-queen-exterior.jpg",
-    "sunrise-casita": "sunrise-casita-exterior-day.jpg",
-    "louver-window-casita": "casita-louver-exterior.jpg",
-    "bamboo-king-casita": "bamboo-casita-day.jpg",
-    "bamboo-casita": "bamboo-basita.jpg",
-}
+CASITA_IMG = {s: f"casitas/{s}-01.jpg" for s, _ in CASITAS}
 CASITA_META = {
     "deluxe-king-casita": "2 Persons · King Bed",
     "double-queen-casita": "4 Persons · 2 Queen Beds",

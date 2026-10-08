@@ -1001,7 +1001,7 @@
       if (b.extraCabanas) L.push(billRow(b.extraCabanas + " extra cabana" + (b.extraCabanas === 1 ? "" : "s"), peso(b.extraCabanaCost)));
     } else {
       if (b.regularAdults) L.push(billRow(b.regularAdults + " adult" + (b.regularAdults === 1 ? "" : "s") + " × " + peso(b.rate.adult), peso(b.regularAdults * b.rate.adult)));
-      if (b.seniors) L.push(billRow(b.seniors + " senior/PWD × " + peso(b.seniorRate) + " <em>(20% off)</em>", peso(b.seniors * b.seniorRate)));
+      if (b.seniors) L.push(billRow(b.seniors + " senior/PWD × " + peso(b.seniorRate) + " <em>(VAT-exempt, 20% off)</em>", peso(b.seniors * b.seniorRate)));
       if (b.kids612) L.push(billRow(b.kids612 + " child" + (b.kids612 === 1 ? "" : "ren") + " (6–12) × " + peso(b.rate.child612), peso(b.kids612 * b.rate.child612)));
       if (b.kids05) L.push(billRow(b.kids05 + " child" + (b.kids05 === 1 ? "" : "ren") + " (0–5)", "Free"));
       if (b.pets) L.push(billRow(b.pets + " pet" + (b.pets === 1 ? "" : "s") + " × " + peso(b.rate.pet), peso(b.petCost)));
