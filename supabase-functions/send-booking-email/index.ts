@@ -876,14 +876,14 @@ ${statusBox([
     ["Amount due", q ? esc(peso(q.total)) : "To follow"],
     ["Please pay by", esc(dl.label)],
   ])}
-${q && q.onlineDiscount ? p(`<strong>Thank you for booking direct!</strong> The amount due already includes your <strong>3% book-direct discount (${esc(peso(q.onlineDiscount))})</strong> for booking on our website and paying by bank transfer.`, `background:${C.tint};border-radius:8px;padding:10px 14px;font-size:14px;`) : ""}
+${q && q.onlineDiscount ? p(`The amount due already includes your <strong>3% Convenience Discount (${esc(peso(q.onlineDiscount))})</strong> for paying by bank transfer.`, `background:${C.tint};border-radius:8px;padding:10px 14px;font-size:14px;`) : ""}
 ${h2("Your reservation")}${kv(overnightRows(r, villas))}${cabanaNote(villas)}
 ${h2("Guest list")}${rosterTable(r)}
 ${q ? h2("Quotation") + quoteTable(q) + p("The full-board meal package (lunch, dinner and breakfast) is mandatory for every guest and is charged per guest, per night. Children 0–5 eat free.", `font-size:12.5px;color:${C.soft};margin-top:8px;`) : ""}
 ${h2("How to pay")}
 ${p(`<strong>Option 1 — Bank deposit or online transfer</strong> (InstaPay / PESONet) to any of these accounts. Please put <strong>${esc(r.order_code)}</strong> and your name in the reference / remarks.`)}
 ${bankTable()}
-${p(`<strong>Option 2 — Credit/debit card or e-wallet.</strong> Reply to this email and we'll send you a secure Xendit payment link${q ? ` for ${esc(peso(q.cardTotal ?? q.total))}` : ""}${q && q.onlineDiscount ? " (the 3% discount applies to bank transfers only)" : ""}.`, "margin-top:14px;")}
+${p(`<strong>Option 2 — Credit/debit card or e-wallet.</strong> Reply to this email and we'll send you a secure Xendit payment link${q ? ` for ${esc(peso(q.cardTotal ?? q.total))}` : ""}${q && q.onlineDiscount ? " (the Convenience Discount applies to bank transfers)" : ""}.`, "margin-top:14px;")}
 ${h2("After you pay")}
 <ol style="margin:0 0 12px;padding-left:20px;font-size:14px;">
 <li style="margin:0 0 8px;"><strong>Send us your proof of payment</strong> — upload the screenshot or transaction slip using the button below, or simply reply to this email with it attached.</li>
@@ -954,7 +954,7 @@ ${q ? h2("Quotation sent") + quoteTable(q) : ""}
 ${h2("Follow-up checklist")}
 <ol style="margin:0 0 14px;padding-left:20px;font-size:14px;">
 <li>Watch the guest thread (search the Order ID) for proof of payment, the signed agreement and a valid ID. Website uploads also alert this inbox.</li>
-<li>Guest asks for card / e-wallet? Create a Xendit invoice for <strong>${q ? esc(peso(q.cardTotal ?? q.total)) : "the quoted amount"}</strong>${q && q.onlineDiscount ? " (no 3% book-direct discount on card payments)" : ""} with description <strong>Booking# ${esc(r.order_code)}</strong>, and reply in the guest's thread with the link and the same pay-by time.</li>
+<li>Guest asks for card / e-wallet? Create a Xendit invoice for <strong>${q ? esc(peso(q.cardTotal ?? q.total)) : "the quoted amount"}</strong>${q && q.onlineDiscount ? " (no Convenience Discount on card payments)" : ""} with description <strong>Booking# ${esc(r.order_code)}</strong>, and reply in the guest's thread with the link and the same pay-by time.</li>
 <li>Verify the deposit against the bank statement, then set the booking to <strong>Confirmed</strong> in the dashboard — the guest gets the confirmation email automatically.</li>
 <li>No payment by ${esc(dl.label)}? The booking automatically turns <strong>Expired</strong> and the casita(s) are released.</li>
 <li>Share the guest count with the kitchen (full board, ${plural(nightsOf(r), "night")}) and any extra mattress with Housekeeping once confirmed.</li>

@@ -334,9 +334,7 @@
     billEl.innerHTML =
       '<div class="bill-lines">' + rows + "</div>" +
       (q.error ? '<p class="bill-warning">' + esc(q.error) + "</p>" : "") +
-      '<div class="bill-total"><span>Total by bank transfer</span><span>' + peso(q.total) + "</span></div>" +
-      (Number(q.online_discount) > 0 ? '<p class="bill-pay-options">You save <b>' + peso(q.online_discount) + "</b> by booking direct and paying by bank transfer. " +
-        "Paying by card or e-wallet instead: " + peso(q.total_before_online) + ".</p>" : "") +
+      '<div class="bill-total"><span>Total</span><span>' + peso(q.total) + "</span></div>" +
       '<p class="bill-sub">' + esc(nightsTxt) + " · " + q.guests + " guest" + (q.guests === 1 ? "" : "s") + " · full-board meals included. Payable in full to confirm.</p>";
   }
 
@@ -484,7 +482,7 @@
       "<p>Your Order ID is <strong>" + esc(row && row.order_code || "—") + "</strong>" + (row && row.total != null ? " · Total <strong>" + peso(row.total) + "</strong>" : "") + ".</p>" +
       "<p>We're holding " + esc(picked.map(function (v) { return v.room_type_name + " (" + v.unit_label + ")"; }).join(", ")) +
       " for " + fmtDay(payload.check_in) + " → " + fmtDay(payload.check_out) + ". Your quotation, bank details and next steps are on their way to <strong>" + esc(payload.guest_email) +
-      "</strong> — full payment by bank transfer within 24 hours confirms the booking (your 3% book-direct discount is already included).</p>" +
+      "</strong> — full payment by bank transfer within 24 hours confirms the booking (your 3% Convenience Discount is already included).</p>" +
       "<p>Can't find the email? Check Spam or Promotions, or call us at +63 917 792 0712.</p>" +
       '<p><a class="btn btn-ghost" href="../pay/index.html?order=' + encodeURIComponent(row && row.order_code || "") + "&email=" + encodeURIComponent(payload.guest_email) + '">Upload payment proof</a></p>';
     window.scrollTo({ top: st.getBoundingClientRect().top + window.scrollY - 120, behavior: "smooth" });

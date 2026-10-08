@@ -63,7 +63,7 @@ body = f"""
   <div class="wrap" style="max-width:820px;">
     <div class="book-direct-note">
       <span class="bdn-badge">3% off</span>
-      <div><strong>Thank you for booking direct.</strong> Book here on our official website and pay by bank transfer, and we take <strong>3% off your whole stay</strong> &mdash; casita, meals and any add-ons. It's our way of passing on what we'd otherwise lose to card and booking-site fees.</div>
+      <div><strong>Enjoy a 3% Convenience Discount.</strong> Book here on our official website and pay by bank transfer, and 3% comes off your whole stay &mdash; casita, meals and any add-ons.</div>
     </div>
     <div id="stayFormWrap">
       <form class="inquiry" id="stayForm" novalidate>
@@ -171,13 +171,13 @@ body = f"""
         </div>
 
         <div class="stay-step">
-          <div class="stay-step-head"><span class="stay-step-num">6</span><div><h2>Your quotation</h2><p>All prices include 12% VAT and service charge. Your 3% book-direct discount is already taken off.</p></div></div>
+          <div class="stay-step-head"><span class="stay-step-num">6</span><div><h2>Your quotation</h2><p>All prices include 12% VAT and service charge. Your 3% Convenience Discount is already taken off.</p></div></div>
           <div id="billSummary" class="bill-summary"><div class="bill-lines"><div class="bill-row"><span>Choose dates, casita(s) and guests to see your total</span><span>&mdash;</span></div></div></div>
           <label class="inline-check"><input type="checkbox" id="agreeTerms"> I understand the full-board meal package is required for every guest, and I agree to the <a class="text-link" href="../assets/docs/VBR-Reservations-Agreement.pdf" target="_blank" rel="noopener">Reservations Agreement</a> (cancellation: free 15+ days before arrival; 50% within 14 days; 100% within 7 days or no-show).</label>
           <label class="inline-check" style="font-size:0.85rem !important; color:var(--ink-soft) !important;"><input type="checkbox" id="marketingOptIn" checked> Send me occasional promos and updates from Virgin Beach Resort.</label>
           <div class="form-error-box" id="formError" hidden></div>
           <button class="btn btn-primary" type="submit" id="submitBtn">Request Booking</button>
-          <p class="field-hint">Your casita is held while you pay: you'll get the quotation and bank details by email right away, and full payment within 24 hours confirms the booking. Prefer card or e-wallet? We can send a secure payment link instead, at the regular price (without the 3% bank-transfer discount).</p>
+          <p class="field-hint">Your casita is held while you pay: you'll get the quotation and bank details by email right away, and full payment within 24 hours confirms the booking. Prefer card or e-wallet? We can send a secure payment link instead (the Convenience Discount applies to bank transfers).</p>
         </div>
       </form>
     </div>

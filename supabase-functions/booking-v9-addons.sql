@@ -153,7 +153,7 @@ begin
   if coalesce(p_online_bank, false) and rt.online_bank_discount_rate > 0 then
     v_online := round(v_before * rt.online_bank_discount_rate, 2);
     lines := lines || jsonb_build_object('kind', 'online_discount',
-      'desc', 'Book-direct discount — ' || trim(to_char(rt.online_bank_discount_rate * 100, 'FM990.##')) || '% off for booking on our website and paying by bank transfer',
+      'desc', 'Convenience Discount (' || trim(to_char(rt.online_bank_discount_rate * 100, 'FM990.##')) || '%)',
       'rate', -v_online, 'qty', 1, 'amount', -v_online, 'vat_exempt', false);
   end if;
 
