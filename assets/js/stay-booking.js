@@ -350,6 +350,19 @@
         renderAddOns();
       });
   }
+  // Add-ons are grouped into collapsible categories (by slug prefix) so the
+  // list stays short; a category shows how many items are picked in it.
+  var ADDON_GROUPS = [
+    { key: "massage", title: "Massage", match: /^massage/ },
+    { key: "water", title: "Water Sports", match: /^(jetski|banana|disco|flying)/ },
+    { key: "boat", title: "Boat Rides & Snorkeling", match: /^boat/ },
+    { key: "atv", title: "ATV Rides", match: /^atv/ },
+    { key: "other", title: "More Activities", match: /./ }
+  ];
+  function addonGroupOf(slug) {
+    for (var i = 0; i < ADDON_GROUPS.length; i++) if (ADDON_GROUPS[i].match.test(slug)) return ADDON_GROUPS[i];
+    return ADDON_GROUPS[ADDON_GROUPS.length - 1];
+  }
   function renderAddOns() {
     if (!addonListEl) return;
     if (!addOns.length) {
@@ -357,18 +370,42 @@
       return;
     }
     addonListEl.innerHTML = "";
-    addOns.forEach(function (a) {
-      var q = addonQty[a.slug] || 0;
-      var el = document.createElement("div");
-      el.className = "addon-item" + (q ? " is-picked" : "");
-      el.innerHTML = "<div><h3>" + esc(a.name) + "</h3>" + (a.description ? "<p>" + esc(a.description) + "</p>" : "") +
-        '<div class="addon-price"><b>' + peso(a.price) + "</b>" + (a.unit ? " " + esc(a.unit) : "") + "</div></div>" +
-        '<div class="stepper"><button type="button" aria-label="Fewer">&minus;</button><output>' + q + '</output><button type="button" aria-label="More">+</button></div>';
-      var btns = el.querySelectorAll("button");
-      btns[0].disabled = q <= 0;
-      btns[0].addEventListener("click", function () { addonQty[a.slug] = Math.max(0, q - 1); renderAddOns(); requestQuote(); });
-      btns[1].addEventListener("click", function () { addonQty[a.slug] = Math.min(20, q + 1); renderAddOns(); requestQuote(); });
-      addonListEl.appendChild(el);
+    ADDON_GROUPS.forEach(function (g) {
+      var items = addOns.filter(function (a) { return addonGroupOf(a.slug) === g; });
+      if (!items.length) return;
+      var min = Math.min.apply(null, items.map(function (a) { return Number(a.price); }));
+      var det = document.createElement("details");
+      det.className = "addon-group";
+      det.innerHTML = '<summary><span class="ag-title">' + esc(g.title) + '</span>' +
+        '<span class="ag-meta"><span class="ag-picked" hidden></span><span class="ag-from">from ' + peso(min) + '</span></span></summary>' +
+        '<div class="ag-body"></div>';
+      var body = det.querySelector(".ag-body"), pickedEl = det.querySelector(".ag-picked");
+      function updateGroup() {
+        var n = items.reduce(function (t, a) { return t + (addonQty[a.slug] || 0); }, 0);
+        pickedEl.hidden = !n;
+        pickedEl.textContent = n + " added";
+        det.classList.toggle("has-picked", n > 0);
+      }
+      items.forEach(function (a) {
+        var el = document.createElement("div");
+        el.innerHTML = "<div><h3>" + esc(a.name) + "</h3>" + (a.description ? "<p>" + esc(a.description) + "</p>" : "") +
+          '<div class="addon-price"><b>' + peso(a.price) + "</b>" + (a.unit ? " " + esc(a.unit) : "") + "</div></div>" +
+          '<div class="stepper"><button type="button" aria-label="One fewer ' + esc(a.name) + '">&minus;</button><output>0</output><button type="button" aria-label="One more ' + esc(a.name) + '">+</button></div>';
+        var btns = el.querySelectorAll("button"), out = el.querySelector("output");
+        function sync() {
+          var q = addonQty[a.slug] || 0;
+          out.textContent = q;
+          btns[0].disabled = q <= 0;
+          el.className = "addon-item" + (q ? " is-picked" : "");
+          updateGroup();
+        }
+        btns[0].addEventListener("click", function () { addonQty[a.slug] = Math.max(0, (addonQty[a.slug] || 0) - 1); sync(); requestQuote(); });
+        btns[1].addEventListener("click", function () { addonQty[a.slug] = Math.min(20, (addonQty[a.slug] || 0) + 1); sync(); requestQuote(); });
+        body.appendChild(el);
+        sync();
+      });
+      if (det.classList.contains("has-picked")) det.open = true;
+      addonListEl.appendChild(det);
     });
   }
 
