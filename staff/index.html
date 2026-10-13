@@ -80,6 +80,22 @@
   .log-change b { color: var(--ink-soft); }
   .log-booking-filter { font-size: 0.82rem; color: var(--ink-soft); margin-bottom: 12px; }
   .log-booking-filter a { color: var(--lagoon-deep); cursor: pointer; }
+  table.team-table { min-width: 0; }
+  table.team-table td { font-size: 0.84rem; }
+  table.team-table td:nth-child(n+2):nth-child(-n+4) { white-space: nowrap; }
+  table.team-table tbody tr { cursor: pointer; }
+  table.team-table tbody tr:hover, table.team-table tbody tr.is-selected { background: var(--lagoon-tint); }
+  table.log-table th.num, table.log-table td.num { text-align: right; }
+  .presence { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 7px; background: #cfc6bb; vertical-align: 1px; }
+  .presence.now { background: #2e9d6a; box-shadow: 0 0 0 3px rgba(46,157,106,.18); }
+  .presence.today { background: #7fbf9c; }
+  .presence.week { background: #e0b765; }
+  .rel { display: block; font-size: 0.74rem; color: var(--ink-soft); margin-top: 2px; }
+  .kind-pill { display: inline-block; padding: 3px 9px; border-radius: 999px; font-size: 0.72rem; font-weight: 700; white-space: nowrap; background: var(--sand-deep); color: var(--ink-soft); }
+  .kind-pill.k-active { background: var(--lagoon-tint); color: var(--lagoon-deep); }
+  .kind-pill.k-open { background: #eef0e6; color: #5b6b3a; }
+  .kind-pill.k-sign_in { background: #f6e9d6; color: #9a6421; }
+  .kind-pill.k-change { background: #ece4f2; color: #6b4a85; }
 
   .count-line { font-size: 0.82rem; color: var(--ink-soft); margin-bottom: 12px; }
 
@@ -264,6 +280,7 @@
         <button class="btn-sm ghost" id="villaCalBtn">Villa Calendar</button>
         <button class="btn-sm ghost" id="plannerBtn">Cabana Map</button>
         <button class="btn-sm ghost" id="logBtn">Activity Log</button>
+        <button class="btn-sm ghost" id="teamBtn">Team Activity</button>
         <button class="btn-sm ghost" id="exportBtn">Export CSV</button>
         <button class="btn-sm primary" id="addVillaBtn">+ Villa Booking</button>
         <button class="btn-sm primary" id="addBtn">+ Day Trip Booking</button>
@@ -719,11 +736,54 @@
   </div>
 </div>
 
+<div class="modal-backdrop" id="teamModalBackdrop">
+  <div class="modal modal-wide">
+    <h2>Team Activity</h2>
+    <p style="color:var(--ink-soft); font-size:0.85rem; margin:-10px 0 20px;"><b>Last active</b> is the last time someone actually used the dashboard &mdash; not when they last typed their password (staff stay signed in for days, so &ldquo;last sign-in&rdquo; can be weeks old). Click a name to see their history.</p>
+    <div class="log-scroll" style="max-height:none;">
+      <table class="log-table team-table">
+        <thead>
+          <tr><th>Staff</th><th>Last active</th><th>Last signed in</th><th>Last booking change</th><th class="num" title="Days the dashboard was open, last 30 days">Days used<br>(30 d)</th><th class="num" title="Bookings created or edited, last 30 days">Changes<br>(30 d)</th></tr>
+        </thead>
+        <tbody id="teamBody"><tr><td colspan="6" style="padding:24px;text-align:center;color:var(--ink-soft);">Loading&hellip;</td></tr></tbody>
+      </table>
+    </div>
+    <div class="log-filters" style="margin-top:22px;">
+      <div class="filter-field">
+        <label for="teamHistStaff">History for</label>
+        <select id="teamHistStaff"><option value="">Everyone</option></select>
+      </div>
+      <div class="filter-field">
+        <label for="teamHistDays">Period</label>
+        <select id="teamHistDays"><option value="7">Last 7 days</option><option value="30" selected>Last 30 days</option><option value="90">Last 90 days</option><option value="365">Last 12 months</option></select>
+      </div>
+      <div class="filter-field">
+        <label for="teamHistKind">Show</label>
+        <select id="teamHistKind"><option value="">Everything</option><option value="use">Dashboard use only</option><option value="sign_in">Sign-ins only</option><option value="change">Booking changes only</option></select>
+      </div>
+      <div class="filter-field">
+        <button class="btn-sm ghost" type="button" id="teamRefreshBtn">Refresh</button>
+      </div>
+    </div>
+    <div class="log-scroll">
+      <table class="log-table">
+        <thead><tr><th>When</th><th>Staff</th><th>What</th><th>Details</th></tr></thead>
+        <tbody id="teamHistBody"></tbody>
+      </table>
+    </div>
+    <p class="field-hint" style="margin-top:12px;">&ldquo;Using the dashboard&rdquo; is recorded from now on whenever someone clicks or types with the dashboard on screen. &ldquo;Dashboard open&rdquo; periods go further back: they come from the sign-in system, which renews each person's login about every hour while the dashboard is open in their browser.</p>
+    <div class="modal-actions">
+      <button type="button" class="btn-sm ghost" id="closeTeamBtn">Close</button>
+    </div>
+  </div>
+</div>
+
 <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
 <script src="../assets/js/booking-config.js?v=c116a3a0ae"></script>
 <script src="../assets/js/cabana-map.js?v=8f4f80dcb3"></script>
 <script src="../assets/js/pricing.js?v=89ca03abac"></script>
-<script src="../assets/js/staff-dashboard.js?v=e414575d16"></script>
+<script src="../assets/js/staff-dashboard.js?v=41f06ed68e"></script>
 <script src="../assets/js/staff-villas.js?v=83251f4d18"></script>
+<script src="../assets/js/staff-activity.js?v=2ed22c66bb"></script>
 </body>
 </html>

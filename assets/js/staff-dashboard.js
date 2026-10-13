@@ -1610,6 +1610,7 @@
     reload: loadBookings,
     render: render,
     staffName: function () { return currentStaffName; },
+    staffLabel: staffLabelForLogEmail,
     openLog: openLogModal,
     esc: esc, peso: peso, fmtDate: fmtDate, fmtDateTime: fmtDateTime,
     proofLinks: proofLinks, openSignedUrl: openSignedUrl, uploadProof: uploadProof,
