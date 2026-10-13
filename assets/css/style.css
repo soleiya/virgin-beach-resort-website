@@ -682,3 +682,24 @@ form.inquiry .field-hint { font-size: 0.8rem; color: var(--ink-soft); margin-top
 .addon-group .ag-body { display: grid; gap: 8px; padding: 0 12px 12px; }
 .addon-group .addon-item { background: var(--bg, #fff); }
 @media (max-width: 480px) { .addon-group .ag-from { display: none; } .addon-group .addon-item { grid-template-columns: 1fr; } }
+
+/* ---- Casita page: room + full-board cost box ---- */
+.stay-cost { margin-top: 26px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface); padding: 20px 22px; }
+.stay-cost h3 { font-size: 1.15rem; margin: 0 0 12px; }
+.stay-cost .sc-rows { display: grid; gap: 10px; }
+.stay-cost .sc-row { display: grid; gap: 4px; padding-bottom: 10px; border-bottom: 1px solid var(--line); font-size: 0.92rem; }
+.stay-cost .sc-row span { color: var(--ink-soft); }
+.stay-cost .sc-row em { font-style: normal; font-size: 0.82rem; margin-left: 6px; }
+.stay-cost .sc-row b { font-weight: 600; }
+.stay-cost .sc-row small { font-weight: 400; color: var(--ink-soft); }
+.stay-cost .sc-example { margin: 12px 0 0; font-size: 0.92rem; }
+.stay-cost .sc-note { margin: 6px 0 0; font-size: 0.8rem; color: var(--ink-soft); }
+.casita-hero-rate small { display: block; font-size: 0.78rem; color: var(--ink-soft); font-weight: 400; }
+
+/* ---- Half-day snack sets ---- */
+.snack-sets { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.snack-sets li { display: grid; grid-template-columns: 56px 1fr; gap: 10px; align-items: baseline; padding-bottom: 10px; border-bottom: 1px solid var(--line); font-size: 0.92rem; }
+.snack-sets li:last-child { border-bottom: 0; padding-bottom: 0; }
+.snack-sets b { font-family: var(--font-display); font-weight: 600; color: var(--lagoon); }
+.casita-gallery.gallery-4 { grid-template-columns: repeat(4, 1fr); }
+@media (max-width: 720px) { .casita-gallery.gallery-4 { grid-template-columns: repeat(2, 1fr); } }

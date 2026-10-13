@@ -4,7 +4,7 @@ from build import page, CASITAS, stay_link, CASITA_RATES, rate_lines
 FINE_PRINT = """
 <div class="fine-print">
   <p>All prices are inclusive of 12% VAT and Service Charge.</p>
-  <p>Room rates are exclusive of mandatory meal package.</p>
+  <p>Casita rates do not include the full-board meal package, which is required for every guest (&#8369;2,695 per adult, &#8369;1,347.50 per child aged 6&ndash;12, free for ages 0&ndash;5, per night).</p>
   <p>Peak season weekend rates will apply a day preceding long weekends, government declared holidays and holidays.</p>
   <p>Prices may be subject to change without prior notice.</p>
 </div>
@@ -41,6 +41,31 @@ def related_rooms(current_slug):
     return cards
 
 
+BASE_GUESTS = {
+    "deluxe-king-casita": 2, "double-queen-casita": 4, "sunrise-casita": 4,
+    "louver-window-casita": 4, "bamboo-king-casita": 2, "bamboo-casita": 4,
+}
+MEAL_ADULT, MEAL_CHILD = 2695, "1,347.50"
+
+
+def stay_cost_box(slug):
+    """Room rate + the mandatory full-board meals, so guests see the real nightly cost up front."""
+    wd, we = CASITA_RATES[slug]
+    n = BASE_GUESTS[slug]
+    wd_num = int(wd.replace(",", ""))
+    meals = n * MEAL_ADULT
+    return f"""
+        <div class="stay-cost">
+          <h3>What a night costs</h3>
+          <div class="sc-rows">
+            <div class="sc-row"><span>Casita rate</span><b>&#8369;{wd} <small>weekday</small> &middot; &#8369;{we} <small>Fri/Sat &amp; holiday eves</small></b></div>
+            <div class="sc-row"><span>Full-board meals <em>buffet breakfast, lunch &amp; dinner</em></span><b>&#8369;{MEAL_ADULT:,} <small>per adult</small> &middot; &#8369;{MEAL_CHILD} <small>age 6&ndash;12</small> &middot; free <small>age 0&ndash;5</small></b></div>
+          </div>
+          <p class="sc-example">Example: {n} adults on a weekday night &mdash; &#8369;{wd} casita + &#8369;{meals:,} meals = <b>&#8369;{wd_num + meals:,}</b> per night, all three buffet meals included.</p>
+          <p class="sc-note">Full board is part of every overnight stay and is charged per guest, per night. Prices include 12% VAT and service charge.</p>
+        </div>"""
+
+
 def casita_page(slug, name, tagline, description, occupancy, beds, size, rate, features, images, note=None):
     hero_img, gallery_imgs = images[0], images[1:]
     shown = gallery_imgs[0] if gallery_imgs else None
@@ -63,7 +88,7 @@ def casita_page(slug, name, tagline, description, occupancy, beds, size, rate, f
       <p class="lede">{tagline}</p>
     </div>
     <div class="casita-hero-cta">
-      <span class="casita-hero-rate">from <b>&#8369;{CASITA_RATES[slug][0]}</b> / night</span>
+      <span class="casita-hero-rate">from <b>&#8369;{CASITA_RATES[slug][0]}</b> / night <small>+ full-board meals &#8369;2,695 / adult</small></span>
       <a class="btn btn-primary" href="{stay_link("../../", slug)}">Book This Casita</a>
     </div>
   </div>
@@ -83,6 +108,7 @@ def casita_page(slug, name, tagline, description, occupancy, beds, size, rate, f
           <li><span class="k">Size</span><span class="v">{size}</span></li>
         </ul>
         <div class="feature-tags">{feature_tags}</div>
+        {stay_cost_box(slug)}
         <div class="hero-actions" style="margin-top:30px;">
           <a class="btn btn-primary" href="{stay_link("../../", slug)}">Book This Casita</a>
           <a class="btn btn-ghost" href="../../terms-and-conditions.html">See Terms and Conditions</a>
@@ -125,8 +151,8 @@ BLURB = {
     "double-queen-casita": "A quaint elegance for a small group or family, with a subtle modern touch.",
     "sunrise-casita": "Sliding glass doors in front make this casita suited for early risers who can't wait to get to the beach.",
     "louver-window-casita": "A wooden door and wooden jalousies provide a cozier ambiance for late risers.",
-    "bamboo-king-casita": "Canopied and inspired by traditional Filipino architecture, with wide sliding doors toward the sea.",
-    "bamboo-casita": "Canopied and inspired by traditional Filipino architecture, sized for a small family.",
+    "bamboo-king-casita": "Canopied, air-conditioned and inspired by traditional Filipino architecture, with wide sliding doors toward the sea.",
+    "bamboo-casita": "Canopied, air-conditioned and inspired by traditional Filipino architecture, sized for a small family.",
 }
 
 rows = ""
@@ -231,17 +257,17 @@ casita_page(
 casita_page(
     "bamboo-king-casita", "Bamboo King Casita",
     "Transport yourself to simpler days in our canopied bamboo casita.",
-    "Inspired by traditional Filipino architecture with its bamboo build and cozy interiors, popular among our guests. Its wide floor-to-ceiling sliding doors can either be enclosed or left open to provide a view of the sea. Its elevated patio is the perfect spot to lounge.",
+    "Inspired by traditional Filipino architecture with its bamboo build and cozy interiors, popular among our guests &mdash; and fully air-conditioned, so it stays cool and comfortable day and night. Its wide floor-to-ceiling sliding doors can either be enclosed or left open to provide a view of the sea. Its elevated patio is the perfect spot to lounge.",
     "2 Persons", "1 King Bed", "30 m&sup2;", "9,225",
-    ["Elevated Patio with sofa", "In-room Safe", "Complimentary Coffee and Tea", "Power Outlets (220v)", "Air-conditioning"],
+    ["Air-conditioned", "Elevated Patio with sofa", "In-room Safe", "Complimentary Coffee and Tea", "Power Outlets (220v)"],
     gallery("bamboo-king-casita"),
 )
 
 casita_page(
     "bamboo-casita", "Bamboo Casita",
     "Transport yourself to simpler days in our canopied bamboo casitas.",
-    "Inspired by traditional Filipino architecture with its bamboo build and cozy interiors, popular among our guests. Its wide floor-to-ceiling sliding doors can either be enclosed or left open to provide a view of the sea. Its elevated patio is the perfect spot to lounge.",
+    "Inspired by traditional Filipino architecture with its bamboo build and cozy interiors, popular among our guests &mdash; and fully air-conditioned, so it stays cool and comfortable day and night. Its wide floor-to-ceiling sliding doors can either be enclosed or left open to provide a view of the sea. Its elevated patio is the perfect spot to lounge.",
     "4 Persons", "2 Queen Beds", "30 m&sup2;", "9,225",
-    ["Elevated Patio with sofa", "In-room Safe", "Complimentary Coffee and Tea", "Power Outlets (220v)", "Air-conditioning"],
+    ["Air-conditioned", "Elevated Patio with sofa", "In-room Safe", "Complimentary Coffee and Tea", "Power Outlets (220v)"],
     gallery("bamboo-casita"),
 )

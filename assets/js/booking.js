@@ -303,7 +303,7 @@
   var halfDayOpt = stayTypeEl.querySelector('option[value="half_day"]');
   var halfDayNote = document.createElement("p");
   halfDayNote.className = "field-hint";
-  halfDayNote.textContent = "Visiting today? Same-day walk-ins can choose a Half-Day Trip (1:00 PM – 5:00 PM).";
+  halfDayNote.textContent = "Visiting today? Same-day walk-ins can choose a Half-Day Trip (1:00 PM – 5:00 PM), afternoon snacks included.";
   if (stayTypeField) stayTypeField.appendChild(halfDayNote);
   function refreshHalfDay() {
     if (!halfDayOpt) return;

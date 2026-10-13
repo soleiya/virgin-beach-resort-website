@@ -54,13 +54,13 @@ day_body = """
   <div class="wrap">
     <div class="two-col-head">
       <div><span class="eyebrow">Walk-Ins</span><h2>Half-Day Trip</h2></div>
-      <p class="prose" style="max-width:44ch;">For same-day walk-ins only &mdash; available when you book or arrive on the day itself, 1:00 PM &ndash; 5:00 PM. Choose your date as today on the form below and the Half-Day option will appear.</p>
+      <p class="prose" style="max-width:44ch;">Inclusive of entrance and afternoon snacks, 1:00 PM &ndash; 5:00 PM. For same-day walk-ins only &mdash; choose today's date on the form below and the Half-Day option will appear.</p>
     </div>
     <div class="grid-2 mt-lg">
       <div class="card">
         <div class="card-body">
           <h3>Half-Day Trip <span class="field-hint" style="font-weight:400;">(same-day only)</span></h3>
-          <p class="prose" style="margin:10px 0 16px; font-size:0.92rem;">A shorter afternoon at the same beach, same cabanas &mdash; subject to availability on the day.</p>
+          <p class="prose" style="margin:10px 0 16px; font-size:0.92rem;">A shorter afternoon at the same beach, same cabanas &mdash; with afternoon snacks included for every guest. Subject to availability on the day.</p>
           <div class="table-wrap">
             <table class="rate-table">
               <tbody>
@@ -72,6 +72,17 @@ day_body = """
               </tbody>
             </table>
           </div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-body">
+          <h3>Afternoon Snacks <span class="field-hint" style="font-weight:400;">(included)</span></h3>
+          <p class="prose" style="margin:10px 0 16px; font-size:0.92rem;">Every Half-Day guest enjoys one snack set &mdash; a savoury dish, a sandwich and a classic Filipino cold dessert.</p>
+          <ul class="snack-sets">
+            <li><b>Set A</b><span>Penne Salsiccia &middot; Ham &amp; Cheese Sandwich &middot; Mais con Hielo</span></li>
+            <li><b>Set B</b><span>Canton Guisado &middot; Tuna Sandwich &middot; Saba con Hielo</span></li>
+            <li><b>Set C</b><span>Bihon Guisado &middot; Chicken Sandwich &middot; Halo-Halo</span></li>
+          </ul>
         </div>
       </div>
     </div>

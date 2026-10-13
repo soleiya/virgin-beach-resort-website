@@ -306,7 +306,7 @@ export function buildQuote(record: Any, cabanas: Any[]): Quote | null {
       add(`${cabanaName(kind, group[0].capacity)} — ${group.map(shortLabel).join(", ")}`, price, group.length);
     }
     heading = type === "half_day"
-      ? "HALF-DAY TRIP AREA"
+      ? "HALF-DAY TRIP AREA — Inclusive of entrance fee and afternoon snacks"
       : "DAY TRIP AREA — Inclusive of entrance fee and lunch";
   }
 
@@ -459,12 +459,18 @@ function rebookNote(paid = false) {
     `font-size:13.5px;color:${C.soft};margin-top:14px;`);
 }
 
-function goodToKnow() {
+const HALF_DAY_SNACKS = "Set A — Penne Salsiccia, Ham &amp; Cheese Sandwich and Mais con Hielo · Set B — Canton Guisado, Tuna Sandwich and Saba con Hielo · Set C — Bihon Guisado, Chicken Sandwich and Halo-Halo";
+function mealNote(type?: string) {
+  return type === "half_day"
+    ? `<strong>Afternoon snacks</strong> are included for every guest — one set each: ${HALF_DAY_SNACKS}.`
+    : "<strong>Lunch</strong> is served from 12:00 NN to 2:00 PM only.";
+}
+function goodToKnow(type?: string) {
   const li = (t: string) => `<li style="margin:0 0 6px;">${t}</li>`;
   return `${h2("Good to know before your visit")}
 <ul style="margin:0;padding-left:20px;font-size:14px;">
 ${li("<strong>Tourism Ecological Fee:</strong> ₱50.00 per visitor, collected by the Municipality of San Juan at its ticketing booth at Km 3, Buhay na Sapa, San Juan. Missed the booth? Settle it at our Front Office and we'll issue the ticket.")}
-${li("<strong>Lunch</strong> is served from 12:00 NN to 2:00 PM only.")}
+${li(mealNote(type))}
 ${li("<strong>Valid government ID</strong> for the primary guest and every companion at check-in.")}
 ${li("<strong>Resort attire:</strong> no swimming in jersey shirts/shorts, denim or similar clothing.")}
 ${li("<strong>Outside food &amp; drinks</strong> are not allowed, except chips, biscuits and bottled water. Corkage applies to specific beverages.")}
@@ -570,7 +576,7 @@ ${int(r.pet_count) && !need.pets ? `<li style="margin:0 0 8px;"><strong>Bringing
 </ol>
 ${button(payUrl, need.any ? "Upload payment & documents" : "Upload proof of payment")}
 <p style="margin:14px 0 0;padding:12px 14px;background:${C.sand};border-radius:8px;font-size:13px;color:${C.soft};">This is a quotation, not yet a confirmed booking. Reservations are on a first-come, first-served basis and are confirmed only once payment is received. In the absence of a signed agreement, guests are not relieved of the resort rules, regulations and conditions.</p>
-${goodToKnow()}
+${goodToKnow(r.stay_type)}
 ${rebookNote()}
 ${signature(c)}`;
 
@@ -701,10 +707,10 @@ ${h2("Your reservation")}${kv([
     ...reservationRows(r, cabanas).slice(1),
     ...(q ? [["Amount paid", `<strong>${esc(peso(q.total))}</strong>`] as [string, string]] : []),
   ])}${cabanaNote(cabanas)}
-${p(`Kindly present this confirmation, your proof of payment, and one (1) valid ID upon check-in at the Resort. Check-in is from <strong>${t.in}</strong>; check-out is at <strong>${t.out}</strong>. Lunch is served from 12:00 NN to 2:00 PM only.`, "margin-top:14px;")}
+${p(`Kindly present this confirmation, your proof of payment, and one (1) valid ID upon check-in at the Resort. Check-in is from <strong>${t.in}</strong>; check-out is at <strong>${t.out}</strong>. ${r.stay_type === "half_day" ? "Afternoon snacks are included for every guest." : "Lunch is served from 12:00 NN to 2:00 PM only."}`, "margin-top:14px;")}
 ${p("If you haven't sent it yet, please reply with a signed copy of the Reservations Agreement. Once you receive this email, we'd appreciate a quick reply to acknowledge it.", `font-size:13.5px;color:${C.soft};`)}
 ${button(map, "Directions to the resort")}
-${goodToKnow()}
+${goodToKnow(r.stay_type)}
 ${rebookNote(true)}
 ${signature(c)}`;
   return {

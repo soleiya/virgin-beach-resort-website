@@ -84,7 +84,7 @@ def book_link(base, **params):
 
 BOOKING_TYPE_LABELS = [
     ("day_trip", "Day Trip (Full Day)"),
-    ("half_day", "Half-Day Trip (1:00 PM – 5:00 PM)"),
+    ("half_day", "Half-Day Trip (1:00 PM – 5:00 PM, with afternoon snacks)"),
 ]
 
 COUNTRIES = [

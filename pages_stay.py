@@ -15,8 +15,8 @@ VILLA_BEDS = {
     "double-queen-casita": "2 queen beds · bathtub · outdoor shower · 52 m²",
     "sunrise-casita": "2 queen beds · glass sliding doors · 35 m²",
     "louver-window-casita": "2 queen beds · wooden jalousies · 35 m²",
-    "bamboo-king-casita": "King bed · bamboo build · 30 m²",
-    "bamboo-casita": "2 queen beds · bamboo build · 30 m²",
+    "bamboo-king-casita": "King bed · air-conditioned · bamboo build · 30 m²",
+    "bamboo-casita": "2 queen beds · air-conditioned · bamboo build · 30 m²",
 }
 
 country_options = "\n".join(
