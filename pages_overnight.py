@@ -11,12 +11,12 @@ FINE_PRINT = """
 """
 
 GALLERY_COUNT = {
-    "deluxe-king-casita": 11,
+    "deluxe-king-casita": 13,
     "double-queen-casita": 11,
-    "sunrise-casita": 7,
-    "louver-window-casita": 8,
-    "bamboo-king-casita": 5,
-    "bamboo-casita": 5,
+    "sunrise-casita": 11,
+    "louver-window-casita": 10,
+    "bamboo-king-casita": 12,
+    "bamboo-casita": 11,
 }
 
 
