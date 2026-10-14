@@ -405,7 +405,9 @@ async function pushStatus(bookingId: string) {
 // Our Cloudbeds webhook subscriptions, keyed "entity/action".
 const hookKey = (w: Any) => `${w.event?.entity ?? w.object ?? ""}/${w.event?.action ?? w.action ?? ""}`.toLowerCase();
 const hookUrl = (w: Any) => String(w.subscriptionData?.endpoint ?? w.endpointUrl ?? w.endpoint ?? "");
-const isOurs = (w: Any) => hookUrl(w).includes("/functions/v1/cloudbeds-sync");
+// getWebhooks doesn't always return the endpoint; subscriptions made with this
+// API key are ours, so an empty URL counts as ours.
+const isOurs = (w: Any) => !hookUrl(w) || hookUrl(w).includes("/functions/v1/cloudbeds-sync");
 
 // List our webhooks; with dedupe, keep one per event and delete the rest.
 async function webhooks(dedupe: boolean) {
@@ -514,6 +516,12 @@ export async function handle(req: Request): Promise<Response> {
       case "sync_one": return json(await syncOne(String(body.reservation_id)));
       case "setup": return json(await setup());
       case "webhooks": return json(await webhooks(body.dedupe === true));
+      case "fields": {
+        // field names (no values) Cloudbeds returns for one reservation — for diagnostics
+        const r = await cb("GET", "getReservation", { reservationID: String(body.reservation_id) });
+        const d = r.data || {};
+        return json({ keys: Object.keys(d), ids: Object.fromEntries(Object.entries(d).filter(([k, v]) => /id$/i.test(k) && typeof v !== "object")) });
+      }
       case "test": {
         const r = await cb("GET", "getRooms", { propertyIDs: PROPERTY(), pageSize: 1 });
         return json({ ok: true, rooms_total: r.total ?? null });

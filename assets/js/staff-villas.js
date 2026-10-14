@@ -80,7 +80,7 @@
       lockEl($("vNotify"));
     }
     var url = D.cbUrl ? D.cbUrl(r) : null;
-    var link = url ? ' <a href="' + url + '" target="_blank" rel="noopener">Open in Cloudbeds ↗</a>' : "";
+    var link = url ? ' <a class="cb-link" data-cb="' + esc(r.cb_reservation_id) + '" href="' + url + '" target="_blank" rel="noopener">Open in Cloudbeds ↗</a> <small>(copies #' + esc(r.cb_reservation_id) + " for its search box)</small>" : "";
     var banner = $("vCbBanner");
     if (banner) {
       banner.hidden = cbLock === "none";

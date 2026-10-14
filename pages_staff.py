@@ -295,6 +295,7 @@ html = """<!doctype html>
   .cb-link { font-size: 0.75rem; color: var(--teal, #1f7a72); text-decoration: none; white-space: nowrap; }
   .cb-link:hover { text-decoration: underline; }
   .cb-status { color: var(--ink-soft); }
+  .cb-copied { display: inline-block; margin-left: 6px; font-size: 0.72rem; background: #1f7a72; color: #fff; border-radius: 6px; padding: 2px 8px; }
   .cb-banner { background: #eef6f4; border: 1px solid #b9dcd5; color: #1d4b45; border-radius: 10px; padding: 10px 14px; font-size: 0.86rem; margin: -6px 0 16px; }
   .cb-banner a { color: #1f7a72; font-weight: 600; }
   .cal-bk.cont-l { border-top-left-radius: 0; border-bottom-left-radius: 0; margin-left: 0; }

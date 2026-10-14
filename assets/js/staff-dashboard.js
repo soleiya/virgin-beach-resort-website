@@ -123,13 +123,28 @@
   function isVillaRow(r) { return r.stay_type === "overnight"; }
 
   // ---------- Cloudbeds (master for villas; see booking-v14-cloudbeds-sync.sql) ----------
-  var CB_RES_URL = "https://hotels.cloudbeds.com/connect/208402#/reservations/";
+  // Cloudbeds' reservation pages use an internal id its API doesn't expose, so
+  // links open the Reservations list and copy the reservation number to paste
+  // into Cloudbeds' search box.
+  var CB_RES_URL = "https://hotels.cloudbeds.com/connect/208402#/reservations";
   var CB_STATUS = { not_confirmed: "Not confirmed", confirmed: "Confirmed", checked_in: "Checked in", checked_out: "Checked out",
     canceled: "Cancelled", no_show: "No-show", deleted: "Deleted", in_progress: "In progress" };
-  function cbUrl(r) { return r && r.cb_reservation_id ? CB_RES_URL + encodeURIComponent(r.cb_reservation_id) : null; }
+  function cbUrl(r) { return r && r.cb_reservation_id ? CB_RES_URL : null; }
   function cbLinkHtml(r) {
-    return r.cb_reservation_id ? '<a class="cb-link" href="' + cbUrl(r) + '" target="_blank" rel="noopener" title="Open this reservation in Cloudbeds">Cloudbeds #' + esc(r.cb_reservation_id) + " ↗</a>" : "";
+    return r.cb_reservation_id ? '<a class="cb-link" data-cb="' + esc(r.cb_reservation_id) + '" href="' + CB_RES_URL + '" target="_blank" rel="noopener" title="Copies the number and opens Cloudbeds — paste it into Cloudbeds\' search">Cloudbeds #' + esc(r.cb_reservation_id) + " ↗</a>" : "";
   }
+  // any .cb-link with data-cb: copy the reservation number on the way to Cloudbeds
+  document.addEventListener("click", function (e) {
+    var a = e.target.closest && e.target.closest("a[data-cb]");
+    if (!a) return;
+    var n = a.getAttribute("data-cb");
+    try { navigator.clipboard.writeText(n); } catch (err) {}
+    var tip = document.createElement("span");
+    tip.className = "cb-copied";
+    tip.textContent = "#" + n + " copied — paste in Cloudbeds search";
+    a.insertAdjacentElement("afterend", tip);
+    setTimeout(function () { tip.remove(); }, 4000);
+  }, true);
   // a website villa booking that hasn't reached Cloudbeds yet
   function cbWaiting(r) {
     return isVillaRow(r) && !r.cb_owned && !r.cb_reservation_id && ["declined", "expired", "completed"].indexOf(r.status) === -1 &&
@@ -1857,7 +1872,7 @@
       if (ci.balance != null) CL.push(billRow("<b>Balance</b>", "<b>" + peso(ci.balance) + "</b>"));
       bdBody.innerHTML = '<div class="bill-lines">' + CL.join("") + "</div>" +
         '<p class="bill-note">This stay was booked in Cloudbeds, so it\'s priced there (rate plans, promos, OTA prices). ' +
-        (cbUrl(r) ? '<a href="' + cbUrl(r) + '" target="_blank" rel="noopener">Open the folio in Cloudbeds ↗</a>' : "") + "</p>";
+        (cbUrl(r) ? '<a class="cb-link" data-cb="' + esc(r.cb_reservation_id) + '" href="' + cbUrl(r) + '" target="_blank" rel="noopener">Open the folio in Cloudbeds ↗</a> (copies #' + esc(r.cb_reservation_id) + ")" : "") + "</p>";
       bdBackdrop.classList.add("open");
       return;
     }
