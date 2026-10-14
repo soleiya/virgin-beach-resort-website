@@ -184,7 +184,46 @@ html = """<!doctype html>
   .modal-row.three { grid-template-columns: 1fr 1fr 1fr; }
   .modal-field { margin-bottom: 14px; }
   .modal-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px; }
-  .modal.modal-booking { max-width: 860px; }
+  .modal.modal-booking, .modal.modal-villa { max-width: 1340px; }
+  .bk-grid { display: grid; grid-template-columns: minmax(0, 1fr) 440px; gap: 26px; align-items: start; }
+  .bk-grid:has(.mail-wide) { grid-template-columns: minmax(0, 1fr) 660px; }
+  .bk-mail { position: sticky; top: 0; }
+  @media (max-width: 1120px) { .bk-grid, .bk-grid:has(.mail-wide) { grid-template-columns: 1fr; } .bk-mail { position: static; } }
+  .mail-panel { border: 2px solid var(--lagoon); border-radius: 14px; background: var(--lagoon-tint); padding: 16px 16px 14px; }
+  .mail-panel.is-off { background: var(--sand); border-color: var(--line); border-style: dashed; }
+  .mail-head { display: flex; gap: 12px; align-items: flex-start; }
+  .mail-ico { flex: none; width: 34px; height: 34px; border-radius: 50%; background: var(--lagoon); color: #fff; display: grid; place-items: center; font-size: 1rem; }
+  .mail-panel.is-off .mail-ico { background: var(--ink-soft); }
+  .mail-head h3 { font-family: var(--font-display); font-size: 1.12rem; margin: 2px 0 2px; }
+  .mail-sub { font-size: 0.78rem; color: var(--ink-soft); margin: 0; }
+  .mail-send { margin: 12px 0 4px; padding: 10px 12px; background: var(--surface); border-radius: 10px; }
+  .mail-send .modal-check { margin: 0; font-size: 0.9rem; }
+  .mail-send .modal-hint { margin-top: 6px; }
+  .mail-body { margin-top: 12px; }
+  .mail-field { margin-bottom: 10px; }
+  .mail-tip { font-size: 0.7rem; font-weight: 400; text-transform: none; letter-spacing: 0; color: var(--ink-soft); }
+  .mail-panel textarea { resize: vertical; background: var(--surface) !important; line-height: 1.45; }
+  .mail-panel input, .mail-panel select { background: var(--surface) !important; }
+  .mail-preview-head { display: flex; justify-content: space-between; align-items: center; font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--ink-soft); margin: 4px 0 6px; }
+  .mail-frame-wrap { position: relative; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: #f4f1ea; }
+  .mail-frame { display: block; width: 100%; height: 460px; border: 0; background: #f4f1ea; }
+  .mail-wide .mail-frame { height: 72vh; }
+  .mail-status { position: absolute; left: 0; right: 0; top: 0; padding: 8px 12px; font-size: 0.78rem; background: rgba(255,255,255,.92); color: var(--ink-soft); }
+  .mail-status:empty { display: none; }
+  /* Sections: Day Trips / Villas */
+  .section-tabs { display: flex; gap: 6px; margin: 0 0 14px; border-bottom: 2px solid var(--line); }
+  .sec-tab { appearance: none; border: 0; background: none; padding: 12px 20px 10px; font: 700 1rem var(--font-body); color: var(--ink-soft); cursor: pointer; border-bottom: 3px solid transparent; margin-bottom: -2px; display: flex; align-items: center; gap: 8px; }
+  .sec-tab:hover { color: var(--ink); }
+  .sec-tab.active { color: var(--lagoon-deep); border-bottom-color: var(--lagoon); }
+  .sec-count { font-size: 0.75rem; font-weight: 700; background: var(--sand-deep); color: var(--ink-soft); border-radius: 999px; padding: 2px 9px; }
+  .sec-tab.active .sec-count { background: var(--lagoon-tint); color: var(--lagoon-deep); }
+  .mode-villas .col-type { display: none; }
+  td.col-total { cursor: pointer; }
+  td.col-total .bd-link { display: block; font-size: 0.72rem; font-weight: 600; color: var(--lagoon-deep); margin-top: 3px; white-space: nowrap; }
+  td.col-total:hover .bd-link { text-decoration: underline; }
+  .bill-row .bd-qty { color: var(--ink-soft); font-size: 0.82rem; margin-left: 6px; white-space: nowrap; }
+  .bill-sec { font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--ink-soft); margin: 10px 0 2px; }
+  .bill-sec:first-child { margin-top: 0; }
   .modal-map-status { font-size: 0.82rem; color: var(--ink-soft); margin: 0 0 10px; }
   .modal-map-selected { margin-top: 12px; font-size: 0.85rem; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
   .modal-map-selected .cabana-mini-chip { background: var(--lagoon-tint); }
@@ -208,7 +247,7 @@ html = """<!doctype html>
 
   /* ---------- villas (overnight) ---------- */
   .villa-chip { background: #e8e2f4 !important; }
-  .modal.modal-villa { max-width: 900px; }
+  .modal.modal-villa { max-width: 1340px; }
   .villa-pick { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 8px; }
   .villa-pick-group { grid-column: 1 / -1; font-size: 0.7rem; text-transform: uppercase; letter-spacing: .06em; color: var(--ink-soft); font-weight: 700; margin-top: 6px; }
   .villa-opt { display: flex !important; align-items: flex-start; gap: 8px; border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; background: var(--sand); cursor: pointer; text-transform: none !important; letter-spacing: 0 !important; font-size: 0.84rem !important; color: var(--ink) !important; font-weight: 600 !important; margin: 0 !important; }
@@ -286,26 +325,28 @@ html = """<!doctype html>
   </div>
 
   <div id="dashScreen">
+    <div class="section-tabs" role="tablist" id="sectionTabs">
+      <button type="button" class="sec-tab active" role="tab" data-section="daytrip"><span class="sec-ico">☀</span> Day Trips <span class="sec-count" id="secCountDaytrip"></span></button>
+      <button type="button" class="sec-tab" role="tab" data-section="villas"><span class="sec-ico">⌂</span> Villas <span class="sec-count" id="secCountVillas"></span></button>
+    </div>
     <div class="toolbar">
       <div class="toolbar-left" id="filterPills">
         <button class="pill active" data-filter="all">All</button>
         <button class="pill" data-filter="today">Today</button>
         <button class="pill" data-filter="week">This Week</button>
         <button class="pill" data-filter="month">This Month</button>
+        <button class="pill" data-filter="year">This Year</button>
         <button class="pill" data-filter="unpaid">Unpaid</button>
-        <button class="pill" data-filter="overnight">Overnight</button>
-        <button class="pill" data-filter="daytrip">Day Trips</button>
-        <button class="pill" data-filter="imported">Imported (2026 Sheet)</button>
         <input class="search" id="searchBox" type="text" placeholder="Search guest, contact, notes&hellip;">
       </div>
       <div class="toolbar-right">
-        <button class="btn-sm ghost" id="villaCalBtn">Villa Calendar</button>
-        <button class="btn-sm ghost" id="plannerBtn">Cabana Map</button>
+        <button class="btn-sm ghost" id="villaCalBtn" data-section="villas">Villa Calendar</button>
+        <button class="btn-sm ghost" id="plannerBtn" data-section="daytrip">Cabana Map</button>
         <button class="btn-sm ghost" id="logBtn">Activity Log</button>
         <button class="btn-sm ghost" id="teamBtn">Team Activity</button>
         <button class="btn-sm ghost" id="exportBtn">Export CSV</button>
-        <button class="btn-sm primary" id="addVillaBtn">+ Villa Booking</button>
-        <button class="btn-sm primary" id="addBtn">+ Day Trip Booking</button>
+        <button class="btn-sm primary" id="addVillaBtn" data-section="villas">+ Villa Booking</button>
+        <button class="btn-sm primary" id="addBtn" data-section="daytrip">+ Day Trip Booking</button>
       </div>
     </div>
 
@@ -330,7 +371,7 @@ html = """<!doctype html>
         <label for="filterStatus">Status</label>
         <select id="filterStatus"><option value="">All statuses</option></select>
       </div>
-      <div class="filter-field">
+      <div class="filter-field" data-section="daytrip">
         <label for="filterType">Type</label>
         <select id="filterType"><option value="">All types</option></select>
       </div>
@@ -341,6 +382,10 @@ html = """<!doctype html>
       <div class="filter-field">
         <label for="filterSource">Source</label>
         <select id="filterSource"><option value="">All sources</option></select>
+      </div>
+      <div class="filter-field">
+        <label for="filterLoadFrom">Bookings loaded</label>
+        <select id="filterLoadFrom"></select>
       </div>
       <div class="filter-field">
         <button class="btn-sm ghost" id="clearFiltersBtn" type="button">Clear Filters</button>
@@ -358,10 +403,10 @@ html = """<!doctype html>
             <th class="sortable" data-sort="order_code">Order ID<span class="sort-arrow">&#9662;</span></th>
             <th class="sortable" data-sort="guest_name">Guest<span class="sort-arrow">&#9662;</span></th>
             <th>Contact</th>
-            <th class="sortable" data-sort="stay_type">Type<span class="sort-arrow">&#9662;</span></th>
+            <th class="sortable col-type" data-sort="stay_type">Type<span class="sort-arrow">&#9662;</span></th>
             <th class="sortable" data-sort="booked_by">Booked By<span class="sort-arrow">&#9662;</span></th>
-            <th class="sortable" data-sort="check_in">Date / Check-in<span class="sort-arrow">&#9662;</span></th>
-            <th>Cabana / Villa</th>
+            <th class="sortable" data-sort="check_in"><span id="thDate">Date</span><span class="sort-arrow">&#9662;</span></th>
+            <th id="thUnits">Cabana(s)</th>
             <th class="sortable" data-sort="party">Party<span class="sort-arrow">&#9662;</span></th>
             <th class="sortable" data-sort="total_amount">Total<span class="sort-arrow">&#9662;</span></th>
             <th class="sortable" data-sort="status">Status<span class="sort-arrow">&#9662;</span></th>
@@ -386,6 +431,7 @@ html = """<!doctype html>
     <h2 id="bookingModalTitle">Add a Booking</h2>
     <p id="bookingModalSub" style="color:var(--ink-soft); font-size:0.85rem; margin:-10px 0 20px;">For a request that came in outside the website — Messenger, phone, walk-in, etc.</p>
     <form id="addForm">
+      <div class="bk-grid"><div class="bk-main">
       <div class="modal-row three">
         <div class="modal-field" style="margin-bottom:0;">
           <label for="addChannel">Came in via</label>
@@ -519,6 +565,7 @@ html = """<!doctype html>
         <label for="addStaffNotes">Staff Notes</label>
         <textarea id="addStaffNotes" rows="2"></textarea>
       </div>
+      </div><aside class="bk-mail" id="addMail"></aside></div>
       <label class="modal-check" id="addNotifyWrap"><input type="checkbox" id="addNotify" checked> <span id="addNotifyText">Email the guest a summary of these changes</span></label>
       <p class="modal-hint" id="addNotifyHint" hidden></p>
       <p class="modal-error" id="addError"></p>
@@ -536,6 +583,7 @@ html = """<!doctype html>
     <h2 id="villaModalTitle">New Villa Booking</h2>
     <p id="villaModalSub" style="color:var(--ink-soft); font-size:0.85rem; margin:-10px 0 20px;">Overnight stay in one or more casitas. Priced from the same rate sheet as the website.</p>
     <form id="villaForm">
+      <div class="bk-grid"><div class="bk-main">
       <div class="modal-row three">
         <div class="modal-field" style="margin-bottom:0;">
           <label for="vChannel">Came in via</label>
@@ -620,7 +668,6 @@ html = """<!doctype html>
         <div class="modal-field" style="margin-bottom:0;"><label for="vDiscValue">Value</label><input id="vDiscValue" type="number" min="0" step="0.01" disabled></div>
         <div class="modal-field" style="margin-bottom:0;"><label for="vDiscReason">Reason <span class="modal-lock">&middot; shown to guest</span></label><input id="vDiscReason" type="text" maxlength="80" disabled></div>
       </div>
-      <label class="modal-check" id="vKeepWrap" hidden><input type="checkbox" id="vKeepTotal"> Keep the price agreed elsewhere: <input id="vKeepAmount" type="number" step="0.01" style="width:140px; margin-left:6px;"></label>
 
       <h3 class="modal-subhead">Notes &amp; payment</h3>
       <div class="modal-field"><label for="vNotes">Guest requests</label><textarea id="vNotes" rows="2"></textarea></div>
@@ -631,6 +678,7 @@ html = """<!doctype html>
         <input id="vPayFile" type="file" accept="image/*,application/pdf">
         <p class="modal-hint">Uploading a proof marks a Pending booking as Confirmed when you save (the guest gets the confirmation email).</p>
       </div>
+      </div><aside class="bk-mail" id="vMail"></aside></div>
       <label class="modal-check" id="vNotifyWrap"><input type="checkbox" id="vNotify"> <span id="vNotifyText">Email the guest</span></label>
       <p class="modal-error" id="vError"></p>
       <div class="modal-actions">
@@ -800,11 +848,25 @@ html = """<!doctype html>
   </div>
 </div>
 
+<div class="modal-backdrop" id="bdBackdrop">
+  <div class="modal" style="max-width:620px;">
+    <h2 id="bdTitle">Price breakdown</h2>
+    <p id="bdSub" style="color:var(--ink-soft); font-size:0.85rem; margin:-10px 0 16px;"></p>
+    <div id="bdBody" class="bill-summary modal-bill"></div>
+    <p id="bdNote" class="modal-hint"></p>
+    <div class="modal-actions">
+      <button type="button" class="btn-sm ghost" id="bdEdit">Edit booking</button>
+      <button type="button" class="btn-sm primary" id="bdClose">Close</button>
+    </div>
+  </div>
+</div>
+
 <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
 <script src="../assets/js/booking-config.js?v=__V_CFG__"></script>
 <script src="../assets/js/cabana-map.js?v=__V_MAP__"></script>
 <script src="../assets/js/pricing.js?v=__V_PRICE__"></script>
 <script src="../assets/js/staff-dashboard.js?v=__V_DASH__"></script>
+<script src="../assets/js/staff-email.js?v=__V_MAIL__"></script>
 <script src="../assets/js/staff-villas.js?v=__V_VILLAS__"></script>
 <script src="../assets/js/staff-activity.js?v=__V_ACT__"></script>
 </body>
@@ -817,7 +879,8 @@ html = (html.replace("__V_CSS__", v("assets/css/style.css"))
             .replace("__V_PRICE__", v("assets/js/pricing.js"))
             .replace("__V_DASH__", v("assets/js/staff-dashboard.js"))
             .replace("__V_VILLAS__", v("assets/js/staff-villas.js"))
-            .replace("__V_ACT__", v("assets/js/staff-activity.js")))
+            .replace("__V_ACT__", v("assets/js/staff-activity.js"))
+            .replace("__V_MAIL__", v("assets/js/staff-email.js")))
 
 os.makedirs(os.path.join(ROOT, "staff"), exist_ok=True)
 with open(os.path.join(ROOT, "staff", "index.html"), "w", encoding="utf-8") as f:

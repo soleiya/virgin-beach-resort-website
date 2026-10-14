@@ -510,6 +510,8 @@ function statusBox(rows: [string, string][], tone: "info" | "ok" = "info") {
 // ---------- subjects (shared so Gmail threads each booking) ------------------
 
 export function guestSubject(r: Any, c: ReturnType<typeof cfg>) {
+  const own = customOf(r, "quote");
+  if (own && String(own.subject || "").trim()) return `${c.testMode ? "[TEST] " : ""}${fillTokens(String(own.subject).trim(), r).slice(0, 180)}`;
   // Overnight: arrival date only, so a date change email (built from the
   // original arrival) still lands in the same Gmail thread.
   if (isOvernight(r)) return `${c.testMode ? "[TEST] " : ""}Virgin Beach Resort Overnight Stay — ${r.order_code || "Booking"} (Arrival ${fmtDate(r.check_in, "short").replace(/^\w+, /, "")})`;
@@ -520,6 +522,40 @@ export function staffSubject(r: Any, c: ReturnType<typeof cfg>) {
   const kind = r.stay_type === "corporate" ? "Corporate Inquiry" : isOvernight(r) ? "Overnight Booking" : "Day Trip Booking";
   return `${c.testMode ? "[TEST] " : ""}New ${kind} from ${r.guest_name || "Guest"} — ${r.order_code || ""} (${fmtDate(r.check_in, "short").replace(/^\w+, /, "")})`;
 }
+// ---------- staff-edited guest emails ------------------------------------------
+// Staff can rewrite the opening message (and the subject of the first email in
+// a thread) from the dashboard before a guest email goes out. Saved on the
+// booking as email_custom = { quote: {subject, message}, confirmed: {...} };
+// change emails pass theirs with the CHANGE webhook. Everything below the
+// opening (amounts, bank details, links, policies) is always generated, so it
+// can't drift from the booking. Tokens: {first} {name} {order} {date}
+// {checkout} {nights}.
+export type Custom = { subject?: string; message?: string } | null;
+export function customOf(r: Any, kind: string): Custom {
+  const all = r && r.email_custom && typeof r.email_custom === "object" ? r.email_custom : null;
+  const x = all ? all[kind] : null;
+  return x && typeof x === "object" ? x : null;
+}
+export function fillTokens(text: string, r: Any) {
+  const first = String(r.guest_name || "there").trim().split(/\s+/)[0];
+  const n = isOvernight(r) && r.check_out ? Math.round((new Date(r.check_out + "T00:00:00Z").getTime() - new Date(r.check_in + "T00:00:00Z").getTime()) / 86400000) : 0;
+  const map: Record<string, string> = {
+    first, name: String(r.guest_name || ""), order: String(r.order_code || ""),
+    date: r.check_in ? fmtDate(r.check_in) : "", checkout: r.check_out ? fmtDate(r.check_out) : "", nights: n ? String(n) : "",
+  };
+  return text.replace(/\{(first|name|order|date|checkout|nights)\}/g, (_m, k) => map[k] || "");
+}
+export function messageHtml(text: string, r: Any) {
+  const paras = fillTokens(String(text || ""), r).replace(/\r/g, "").trim().split(/\n\s*\n/).map((x) => x.trim()).filter(Boolean);
+  return paras.map((t) => p(esc(t).replace(/\n/g, "<br>"))).join("\n");
+}
+// Swap the generated greeting + opening paragraph for the staff's message.
+export function applyIntro(body: string, custom: Custom, r: Any) {
+  if (!custom || !String(custom.message || "").trim()) return body;
+  const rest = body.replace(/^\s*<p[^>]*>[\s\S]*?<\/p>\s*<p[^>]*>[\s\S]*?<\/p>/, "");
+  return messageHtml(String(custom.message), r) + "\n" + rest;
+}
+
 const msgId = (r: Any, who: "guest" | "staff") =>
   `<${String(r.order_code || r.id).toLowerCase()}.${who}@${MSGID_DOMAIN}>`;
 
@@ -582,7 +618,7 @@ ${signature(c)}`;
 
   return {
     subject: guestSubject(r, c),
-    html: shell({ preheader: `${r.order_code} · ${peso(q.total)} due · Bank details inside`, body, c }),
+    html: shell({ preheader: `${r.order_code} · ${peso(q.total)} due · Bank details inside`, body: applyIntro(body, customOf(r, "quote"), r), c }),
   };
 }
 
@@ -715,7 +751,7 @@ ${rebookNote(true)}
 ${signature(c)}`;
   return {
     subject: "Re: " + guestSubject(r, c),
-    html: shell({ preheader: `Confirmed: ${fmtDate(r.check_in, "short")} · ${r.order_code}`, body, c }),
+    html: shell({ preheader: `Confirmed: ${fmtDate(r.check_in, "short")} · ${r.order_code}`, body: applyIntro(body, customOf(r, "confirmed"), r), c }),
   };
 }
 
@@ -770,7 +806,7 @@ ${signature(c)}`;
     // Same subject as the guest's existing thread (built from the ORIGINAL
     // date if the date itself changed), so it lands in that conversation.
     subject: "Re: " + guestSubject(threadRecord, c),
-    html: shell({ preheader: `Updated: ${changes.map((ch) => ch.label).join(", ")} · ${r.order_code}`, body, c }),
+    html: shell({ preheader: `Updated: ${changes.map((ch) => ch.label).join(", ")} · ${r.order_code}`, body: applyIntro(body, customOf(r, "change"), r), c }),
   };
 }
 
@@ -916,7 +952,7 @@ ${p("<strong>Need to change your dates or guest list?</strong> Just reply to thi
 ${signature(c)}`;
   return {
     subject: guestSubject(r, c),
-    html: shell({ preheader: `${r.order_code} · ${q ? peso(q.total) + " due · " : ""}${stayRange(r)} · Bank details inside`, body, c }),
+    html: shell({ preheader: `${r.order_code} · ${q ? peso(q.total) + " due · " : ""}${stayRange(r)} · Bank details inside`, body: applyIntro(body, customOf(r, "quote"), r), c }),
   };
 }
 
@@ -1004,7 +1040,7 @@ ${cancellationTable()}
 ${signature(c)}`;
   return {
     subject: "Re: " + guestSubject(r, c),
-    html: shell({ preheader: `Confirmed: ${stayRange(r)} · ${r.order_code}`, body, c }),
+    html: shell({ preheader: `Confirmed: ${stayRange(r)} · ${r.order_code}`, body: applyIntro(body, customOf(r, "confirmed"), r), c }),
   };
 }
 
@@ -1320,12 +1356,94 @@ async function onChanged(r: Any, payload: Any) {
   if (!changes.length) return { skipped: "no changes" };
   const cabanas = await loadUnits(r);
   const threadRecord = { ...r, check_in: payload.old_check_in || r.check_in };
-  const g = guestChangedEmail(r, cabanas, changes, c, threadRecord);
+  const custom = payload.message ? { message: String(payload.message).slice(0, 5000) } : null;
+  const rc = custom ? { ...r, email_custom: { ...(r.email_custom || {}), change: custom } } : r;
+  const g = guestChangedEmail(rc, cabanas, changes, c, threadRecord);
   const kind = `guest_changed:${String(payload.change_id || Date.now())}`;
   return await send({ booking: r, kind, to: String(r.guest_email).trim(), subject: g.subject, html: g.html, thread: "guest" });
 }
 
+// ---------- dashboard preview (signed-in staff only) ---------------------------
+// The staff dashboard shows the exact guest email — before anything is saved —
+// so staff can review and edit the opening message. Called with the staff
+// member's own login token (supabase.functions.invoke); nothing is sent.
+const CORS = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+};
+const PREVIEW_FIELDS = ["source", "status", "stay_type", "stay_type_label", "guest_name", "guest_email", "guest_phone", "country",
+  "check_in", "check_out", "adults", "children_6_12", "children_0_5", "senior_count", "pet_count", "companions", "primary_is_senior",
+  "discount_type", "discount_value", "discount_amount", "discount_reason", "total_amount", "subtotal_people", "cabana_total",
+  "senior_discount", "notes", "add_ons", "online_discount", "booked_by", "email_custom"];
+
+async function staffUser(auth: string) {
+  const c = cfg();
+  const res = await fetch(`${c.supabaseUrl}/auth/v1/user`, { headers: { apikey: c.serviceKey, Authorization: auth } });
+  if (!res.ok) return null;
+  const u = await res.json();
+  return u && u.id ? u : null;
+}
+
+async function unitsByIds(overnight: boolean, ids: string[]): Promise<Any[]> {
+  const clean = ids.filter((x) => /^[0-9a-f-]{36}$/i.test(String(x)));
+  if (!clean.length) return [];
+  const list = `(${clean.join(",")})`;
+  if (overnight) {
+    const res = await db(`villas?id=in.${list}&select=unit_label,room_type,room_type_name,base_occupancy,max_extra,sort`);
+    return res.ok ? (await res.json()).sort((a: Any, b: Any) => (a.sort || 0) - (b.sort || 0)) : [];
+  }
+  const res = await db(`cabanas?id=in.${list}&select=label,cabana_type,price,capacity,section,number`);
+  return res.ok ? (await res.json()).sort((a: Any, b: Any) => String(a.label).localeCompare(String(b.label), undefined, { numeric: true })) : [];
+}
+
+export async function preview(req: Request): Promise<Response> {
+  const json = (o: unknown, status = 200) => new Response(JSON.stringify(o), { status, headers: { ...CORS, "Content-Type": "application/json" } });
+  const user = await staffUser(req.headers.get("authorization") || "");
+  if (!user) return json({ error: "Sign in to the staff dashboard first." }, 401);
+  let b: Any;
+  try { b = await req.json(); } catch { return json({ error: "Bad request" }, 400); }
+  const c = cfg();
+  const kind = ["quote", "change", "confirmed"].includes(b.kind) ? b.kind : "quote";
+  let r: Any = b.booking_id ? await loadBooking(String(b.booking_id)) : null;
+  if (b.booking_id && !r) return json({ error: "Booking not found" }, 404);
+  r = r ? { ...r } : { id: "00000000-0000-0000-0000-000000000000", order_code: "VBR-····", created_at: new Date().toISOString(), source: "phone" };
+  const d = b.draft && typeof b.draft === "object" ? b.draft : {};
+  for (const k of PREVIEW_FIELDS) if (k in d) r[k] = d[k];
+  if (!r.created_at) r.created_at = new Date().toISOString();
+  const overnight = isOvernight(r);
+  const units = Array.isArray(b.unit_ids) ? await unitsByIds(overnight, b.unit_ids) : (b.booking_id ? await loadUnits(r) : []);
+  let q: Quote | null = null;
+  if (overnight && b.quote_params && typeof b.quote_params === "object") {
+    const res = await db("rpc/quote_overnight", { method: "POST", body: JSON.stringify(b.quote_params) });
+    if (res.ok) q = quoteFromOvernight(r, await res.json());
+  } else {
+    q = overnight ? (b.booking_id ? await quoteFor(r, units) : null) : buildQuote(r, units);
+  }
+  const custom = b.custom && typeof b.custom === "object"
+    ? { subject: String(b.custom.subject || "").slice(0, 180), message: String(b.custom.message || "").slice(0, 5000) } : null;
+  if (custom) r.email_custom = { ...(r.email_custom || {}), [kind]: custom };
+  let out: { subject: string; html: string };
+  if (kind === "change") {
+    const raw = Array.isArray(b.changes) ? b.changes.slice(0, 30) : [];
+    const changes: Change[] = raw.map((x: Any) => ({ label: String(x?.label ?? "").slice(0, 80), before: String(x?.before ?? "").slice(0, 300), after: String(x?.after ?? "").slice(0, 300) })).filter((x: Change) => x.label);
+    out = guestChangedEmail(r, units, changes.length ? changes : [{ label: "(no changes yet)", before: "—", after: "—" }], c, r);
+  } else if (kind === "confirmed") {
+    out = guestConfirmedEmail(r, units, q, c);
+  } else {
+    out = guestQuoteEmail(r, units, q, c);
+  }
+  return json({ subject: out.subject, html: out.html, to: r.guest_email || null, total: q ? q.total : null });
+}
+
 export async function handle(req: Request): Promise<Response> {
+  if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
+  if (req.method === "POST" && !req.headers.get("x-webhook-secret") && /^Bearer /i.test(req.headers.get("authorization") || "")) {
+    try { return await preview(req); } catch (err) {
+      console.error(err);
+      return new Response(JSON.stringify({ error: String((err as Error)?.message || err) }), { status: 500, headers: { ...CORS, "Content-Type": "application/json" } });
+    }
+  }
   const c = cfg();
   if (req.method !== "POST") return new Response("Method not allowed", { status: 405 });
   if (!c.webhookSecret || req.headers.get("x-webhook-secret") !== c.webhookSecret) {

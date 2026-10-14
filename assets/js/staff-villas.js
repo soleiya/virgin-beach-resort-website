@@ -50,6 +50,16 @@
   var guests = [];             // companions [{name, age_group}]
   var holds = [];              // active booking_villas overlapping the chosen dates
   var lastQuote = null, quoteSeq = 0, quoteTimer = null;
+  // Editing an existing booking keeps its saved total (Cloudbeds / OTA /
+  // agreed prices) until something that affects the price is changed —
+  // same rule as the Day Trip form.
+  var keepSaved = false, openSig = null, notifyTouched = false;
+  function priceSig() {
+    var c = counts();
+    return [$("vIn").value, $("vOut").value, picked.slice().sort().join(","), c.adults, c.seniors, c.k612, c.k05, $("vPets").value,
+      JSON.stringify(addOnPayload()), $("vOnline").checked, $("vDiscType").value, $("vDiscValue").value].join("|");
+  }
+  function keeping() { return keepSaved && editing && openSig !== null && priceSig() === openSig; }
 
   function showErr(m) { errEl.textContent = m; errEl.style.display = "block"; saveBtn.disabled = false; }
 
@@ -99,17 +109,17 @@
         for (i = 0; i < extra05; i++) guests.push({ name: "", age_group: "child_0_5" });
       }
     }
-    // A price agreed elsewhere (Cloudbeds / OTA import) can be kept.
-    var imported = editing && ["cloudbeds", "booking_com", "agoda"].indexOf(r.source) !== -1;
-    $("vKeepWrap").hidden = !imported;
-    $("vKeepTotal").checked = imported && r.total_amount != null;
-    $("vKeepAmount").value = r.total_amount != null ? r.total_amount : "";
+    keepSaved = !!editing && r.total_amount != null;
+    openSig = null;
     $("vPayField").style.display = editing ? "block" : "none";
     $("vLogBtn").hidden = !editing;
     renderPayExisting(r);
     $("vNotify").checked = !editing ? false : true;
+    notifyTouched = false;
     renderGuests();
     onDates();
+    var mp = mailPanel();
+    if (mp) mp.reset();
     backdrop.classList.add("open");
   }
   function close() { backdrop.classList.remove("open"); editing = null; }
@@ -232,8 +242,8 @@
   $("vAddGuest").addEventListener("click", function () { guests.push({ name: "", age_group: "adult" }); renderGuests(); requestQuote(); var ins = $("vGuests").querySelectorAll("input:not([readonly])"); if (ins.length) ins[ins.length - 1].focus(); });
   $("vPrimarySenior").addEventListener("change", function () { renderGuests(); requestQuote(); });
   $("vName").addEventListener("input", function () { var f = $("vGuests").querySelector("input[readonly]"); if (f) f.value = $("vName").value || "Primary guest"; });
-  ["vPets", "vDiscValue", "vDiscReason", "vKeepAmount"].forEach(function (id) { $(id).addEventListener("input", requestQuote); });
-  ["vDiscType", "vKeepTotal", "vOverCap", "vOnline"].forEach(function (id) { $(id).addEventListener("change", requestQuote); });
+  ["vPets", "vDiscValue", "vDiscReason"].forEach(function (id) { $(id).addEventListener("input", requestQuote); });
+  ["vDiscType", "vOverCap", "vOnline"].forEach(function (id) { $(id).addEventListener("change", requestQuote); });
   $("vEmail").addEventListener("input", updateNotify);
   $("vStatus").addEventListener("change", updateNotify);
 
@@ -277,18 +287,18 @@
     return Math.min(v, total);
   }
   function renderBill(q) {
-    var L = (q.lines || []).map(function (l) {
-      return '<div class="bill-row' + (Number(l.amount) < 0 ? " discount" : "") + '"><span>' + esc(l.desc) + (l.kind !== "senior_room" ? ' <span class="muted">× ' + l.qty + "</span>" : "") +
-        "</span><span>" + (Number(l.amount) === 0 ? "Free" : peso(l.amount)) + "</span></div>";
-    });
+    if (editing && openSig === null) openSig = priceSig();
+    var L = D.villaRows(q.lines);
     var d = discount(Number(q.total));
-    if (d > 0) L.push('<div class="bill-row discount"><span>Discount' + ($("vDiscReason").value.trim() ? " — " + esc($("vDiscReason").value.trim()) : "") + "</span><span>−" + peso(d) + "</span></div>");
-    var total = Number(q.total) - d;
-    var keep = !$("vKeepWrap").hidden && $("vKeepTotal").checked;
+    if (d > 0) L.push(D.billRow("Discount" + ($("vDiscReason").value.trim() ? " — " + esc($("vDiscReason").value.trim()) : ""), "−" + peso(d), "discount"));
+    var total = Math.round((Number(q.total) - d) * 100) / 100;
+    var keep = keeping() && Math.abs(Number(editing.total_amount) - total) > 0.5;
     $("vBill").innerHTML = '<div class="bill-lines">' + L.join("") + "</div>" +
-      '<div class="bill-total"><span>Total</span><span>' + peso(keep ? Number($("vKeepAmount").value || 0) : total) + "</span></div>" +
-      (keep ? '<p class="bill-note">Keeping the agreed price (rate sheet gives ' + peso(total) + ").</p>" : "") +
+      '<div class="bill-total"><span>Total</span><span>' + peso(keep ? Number(editing.total_amount) : total) + "</span></div>" +
+      (keep ? '<p class="bill-note">Saved total kept: ' + peso(editing.total_amount) + " (rate sheet gives " + peso(total) + '). <button type="button" class="btn-sm ghost" id="vUseCalc">Use rate sheet total</button></p>' : "") +
       '<p class="bill-note">' + q.nights + " night(s) · " + q.weekday_nights + " weekday, " + q.weekend_nights + " weekend/peak · " + q.guests + " guest(s)</p>";
+    var useBtn = $("vUseCalc");
+    if (useBtn) useBtn.addEventListener("click", function () { keepSaved = false; renderBill(q); if (vMail) vMail.refresh(); });
     var cap = $("vCap");
     cap.hidden = false;
     cap.className = "cap-line" + (q.guests > q.max_capacity ? " over" : "");
@@ -305,14 +315,17 @@
       var why = !ok ? "Add the guest's email to send the quotation" : ["pending", "pending_payment"].indexOf($("vStatus").value) === -1 ? "Only Pending bookings can be sent as a quotation" : "";
       box.disabled = !!why;
       if (why) box.checked = false;
+      else if (!notifyTouched) box.checked = true;
       wrap.classList.toggle("is-disabled", !!why);
-      txt.textContent = why || "Send this booking to the guest (" + email + ") as a quotation — same email as a website booking";
+      txt.textContent = why || "Send the quotation to " + email + " when I save";
+      if (vMail) vMail.refresh();
       return;
     }
     box.disabled = !ok;
     if (!ok) box.checked = false;
     wrap.classList.toggle("is-disabled", !ok);
-    txt.textContent = ok ? "Email the guest (" + email + ") a summary of these changes" : "No guest email on this booking — the guest won't be emailed";
+    txt.textContent = ok ? "Email " + email + " a summary of the changes when I save" : "No guest email on this booking — the guest won't be emailed";
+    if (vMail) vMail.refresh();
   }
 
   // ---------------- save ----------------
@@ -328,6 +341,67 @@
     return bits.join(", ");
   }
   function longDate(s) { return s ? new Date(s + "T00:00:00").toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", year: "numeric" }) : "—"; }
+
+  function draftPayload() {
+    var c = counts();
+    return {
+      c: c,
+      payload: {
+        source: $("vChannel").value, status: $("vStatus").value,
+        guest_name: $("vName").value.trim(), guest_phone: $("vPhone").value.trim(), guest_email: $("vEmail").value.trim(), country: $("vCountry").value.trim(),
+        check_in: $("vIn").value, check_out: $("vOut").value, primary_is_senior: $("vPrimarySenior").checked,
+        companions: guests.map(function (g) { return { name: g.name.trim(), age_group: g.age_group }; }),
+        pet_count: parseInt($("vPets").value || "0", 10) || 0, notes: $("vNotes").value, add_ons: addOnPayload(),
+      },
+    };
+  }
+  function changeList(r, payload, c, villaIds, totalAfter) {
+    var changes = [];
+    var push = function (label, before, after) { if (before !== after) changes.push({ label: label, before: before || "—", after: after || "—" }); };
+    var beforeVillas = (r.booking_villas || []).map(function (x) { return x.villa_id; });
+    push("Check-in", longDate(r.check_in), longDate(payload.check_in));
+    push("Check-out", longDate(r.check_out), longDate(payload.check_out));
+    push("Casita(s)", villaText(beforeVillas), villaText(villaIds));
+    push("Guests", partyText({ adults: r.adults || 0, seniors: r.senior_count || 0, k612: r.children_6_12 || 0, k05: r.children_0_5 || 0 }), partyText(c));
+    var namesNow = [payload.guest_name].concat(payload.companions.map(function (g) { return g.name || "(name to follow)"; })).join(", ");
+    push("Guest names", r.guest_names || "", namesNow);
+    push("Pets", String(r.pet_count || 0), String(payload.pet_count));
+    var aoText = function (list) { return (list || []).map(function (x) { var a = addOns.filter(function (o) { return o.slug === x.slug; })[0]; return x.qty + " × " + (a ? a.name : x.slug); }).join(", ") || "None"; };
+    push("Add-ons", aoText(r.add_ons), aoText(payload.add_ons));
+    if (totalAfter != null) push("Total", r.total_amount != null ? peso(r.total_amount) : "", peso(totalAfter));
+    push("Phone", r.guest_phone || "", payload.guest_phone);
+    push("Email", r.guest_email || "", payload.guest_email);
+    push("Your requests", r.notes || "", String(payload.notes || "").trim());
+    return changes;
+  }
+
+  // ---------------- "Email to the guest" panel ----------------
+  var vMail = null;
+  function mailPanel() {
+    if (vMail || !window.VBREmail) return vMail;
+    vMail = window.VBREmail.create({
+      root: $("vMail"), notifyEl: $("vNotify"),
+      mode: function () { return editing ? "change" : "quote"; },
+      overnight: function () { return true; },
+      request: function () {
+        var dp = draftPayload(), c = dp.c, pl = dp.payload;
+        var base = lastQuote ? Number(lastQuote.total) : null;
+        var disc = base != null ? discount(base) : 0;
+        var draft = Object.assign({}, pl, {
+          stay_type: "overnight", stay_type_label: "Overnight Stay", adults: c.adults, senior_count: c.seniors, children_6_12: c.k612, children_0_5: c.k05,
+          discount_type: $("vDiscType").value || null, discount_value: $("vDiscValue").value || null, discount_amount: disc, discount_reason: $("vDiscReason").value || null,
+          total_amount: keeping() ? editing.total_amount : (base != null ? base - disc : null),
+        });
+        var qp = pl.check_in && pl.check_out && picked.length ? { p_check_in: pl.check_in, p_check_out: pl.check_out, p_villa_ids: picked, p_adults: c.adults, p_seniors: c.seniors, p_kids612: c.k612, p_kids05: c.k05, p_pets: pl.pet_count, p_add_ons: pl.add_ons, p_online_bank: $("vOnline").checked } : null;
+        if (!editing) return { draft: draft, unit_ids: picked.slice(), quote_params: qp };
+        return { booking_id: editing.id, draft: draft, unit_ids: picked.slice(), quote_params: qp, changes: changeList(editing, pl, c, picked, draft.total_amount) };
+      },
+    });
+    $("vNotify").addEventListener("click", function () { notifyTouched = true; });
+    form.addEventListener("input", function () { if (vMail) vMail.refresh(); });
+    form.addEventListener("change", function () { if (vMail) vMail.refresh(); });
+    return vMail;
+  }
 
   form.addEventListener("submit", function (e) {
     e.preventDefault();
@@ -349,7 +423,7 @@
       pet_count: parseInt($("vPets").value || "0", 10) || 0,
       discount_type: $("vDiscType").value, discount_value: $("vDiscValue").value, discount_reason: $("vDiscReason").value,
       notes: $("vNotes").value, staff_notes: $("vStaffNotes").value,
-      keep_total: !$("vKeepWrap").hidden && $("vKeepTotal").checked, total_amount: $("vKeepAmount").value,
+      keep_total: keeping(), total_amount: keeping() ? editing.total_amount : null,
       allow_over_capacity: $("vOverCap").checked,
       add_ons: addOnPayload(), online_bank: $("vOnline").checked,
     };
@@ -358,7 +432,7 @@
     var beforeVillas = r ? (r.booking_villas || []).map(function (x) { return x.villa_id; }) : [];
     var notify = $("vNotify").checked && !$("vNotify").disabled;
     saveBtn.disabled = true;
-    saveBtn.textContent = "Saving…";
+    saveBtn.textContent = notify ? (r ? "Saving & emailing…" : "Saving & sending…") : "Saving…";
     sb.rpc("staff_save_overnight", { p_id: r ? r.id : null, payload: payload, p_villa_ids: picked })
       .then(function (res) {
         if (res.error) throw res.error;
@@ -372,27 +446,17 @@
           });
         }
         if (!r && notify) {
-          jobs = jobs.then(function () { return sb.from("booking_requests").update({ email_guest: true }).eq("id", saved.id).then(function (u) { if (u.error) throw u.error; }); });
+          var mv = vMail ? vMail.value() : { subject: "", message: "" };
+          var upd = { email_guest: true };
+          if (mv.message || mv.subject) upd.email_custom = { quote: { subject: mv.subject || null, message: mv.message || null } };
+          jobs = jobs.then(function () { return sb.from("booking_requests").update(upd).eq("id", saved.id).then(function (u) { if (u.error) throw u.error; }); });
         }
         if (r && notify) {
-          var changes = [];
-          var push = function (label, before, after) { if (before !== after) changes.push({ label: label, before: before || "—", after: after || "—" }); };
-          push("Check-in", longDate(r.check_in), longDate(a));
-          push("Check-out", longDate(r.check_out), longDate(b));
-          push("Casita(s)", villaText(beforeVillas), villaText(picked));
-          push("Guests", partyText({ adults: r.adults || 0, seniors: r.senior_count || 0, k612: r.children_6_12 || 0, k05: r.children_0_5 || 0 }), partyText(c));
-          var namesNow = [payload.guest_name].concat(payload.companions.map(function (g) { return g.name || "(name to follow)"; })).join(", ");
-          push("Guest names", r.guest_names || "", namesNow);
-          push("Pets", String(r.pet_count || 0), String(payload.pet_count));
-          var aoText = function (list) { return (list || []).map(function (x) { var a = addOns.filter(function (o) { return o.slug === x.slug; })[0]; return x.qty + " × " + (a ? a.name : x.slug); }).join(", ") || "None"; };
-          push("Add-ons", aoText(r.add_ons), aoText(payload.add_ons));
-          push("Total", r.total_amount != null ? peso(r.total_amount) : "", saved.total != null ? peso(saved.total) : "");
-          push("Phone", r.guest_phone || "", payload.guest_phone);
-          push("Email", r.guest_email || "", payload.guest_email);
-          push("Your requests", r.notes || "", payload.notes.trim());
+          var changes = changeList(r, payload, c, picked, saved.total != null ? saved.total : null);
           if (changes.length) {
             jobs = jobs.then(function () {
-              return sb.rpc("notify_booking_change", { p_booking_id: r.id, p_changes: changes, p_old_check_in: r.check_in !== a ? r.check_in : null });
+              var mv = vMail ? vMail.value() : { message: "" };
+              return sb.rpc("notify_booking_change", { p_booking_id: r.id, p_changes: changes, p_old_check_in: r.check_in !== a ? r.check_in : null, p_message: mv.message || null });
             });
           }
         }
