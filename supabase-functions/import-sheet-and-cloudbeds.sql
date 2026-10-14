@@ -5,8 +5,8 @@
 -- script:
 --   1. pauses the email / activity-log triggers (no guest gets emailed,
 --      the log isn't flooded with 16,000 "created" lines),
---   2. removes ALL bookings, villa holds/blocks, cabana links and their email
---      and activity-log rows (all test data),
+--   2. removes ALL bookings, villa holds/blocks, cabana links, their email log
+--      and the activity log (all test data),
 --   3. loads the cleaned file — the 2026 Day Trip Calendar (live .xlsx) and
 --      every Cloudbeds reservation since Dec 2021 — from the staging table
 --      `vbr_import` (Table Editor → New table → Import data from CSV:
@@ -23,6 +23,12 @@ do $$ begin
   if to_regclass('public.vbr_import') is null then
     raise exception 'First import vbr_import.csv into a new table named vbr_import (Table Editor → New table → Import data from CSV).';
   end if;
+end $$;
+
+-- 0. a CSV imported twice leaves identical rows — keep one per key ------------
+delete from vbr_import a using vbr_import b where a.ikey = b.ikey and a.ctid > b.ctid;
+do $$ begin
+  if (select count(*) from vbr_import) = 0 then raise exception 'vbr_import is empty'; end if;
 end $$;
 
 -- 1. pause email + logging triggers ------------------------------------------
@@ -44,6 +50,7 @@ end $$;
 -- other table that references a booking)
 truncate table booking_requests cascade;
 delete from booking_villas;          -- staff blocks (no booking) too
+truncate table booking_audit_log;    -- the activity log only described test bookings
 
 -- 3. load ------------------------------------------------------------------------
 create temp table _src on commit drop as
