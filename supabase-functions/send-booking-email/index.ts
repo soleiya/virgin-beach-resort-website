@@ -718,13 +718,26 @@ ${kv([
 export function guestProofEmail(r: Any, c: ReturnType<typeof cfg>) {
   const first = esc(String(r.guest_name || "there").trim().split(/\s+/)[0]);
   const body = `${p(`Hi ${first},`)}
-${p(`We are pleased to acknowledge receipt of your payment transaction slip for <strong>${esc(r.order_code)}</strong>. Our Accounting Team will validate it, and your confirmation letter will be sent in this same email thread. If you don't see it, kindly check your Spam or Junk folder.`)}
-${p("To finalize your booking, please reply with the signed Reservations Agreement and a photo of one (1) valid ID, if you haven't yet.")}
+${p(`Thank you! We've received your proof of payment for <strong>${esc(r.order_code)}</strong>${r.payment_uploaded_at ? ` (uploaded ${esc(fmtDateTime(new Date(r.payment_uploaded_at)))})` : ""}.`)}
+${statusBox([
+    ["Order ID", esc(r.order_code || "—")],
+    [isOvernight(r) ? "Stay" : "Date", esc(isOvernight(r) ? stayRange(r) : fmtDate(r.check_in, "short"))],
+    ["Status", "Payment being verified"],
+  ])}
+${p("Our team is now verifying it against our bank records. As soon as it's confirmed, we'll send your <strong>booking confirmation</strong> in this same email thread &mdash; no need to do anything else in the meantime. If you don't see it, kindly check your Spam or Junk folder.")}
+${p("If you haven't yet, please reply with the signed Reservations Agreement and a photo of one (1) valid ID so we can finalize everything.", `font-size:13.5px;color:${C.soft};`)}
 ${signature(c)}`;
   return {
     subject: "Re: " + guestSubject(r, c),
-    html: shell({ preheader: `Proof of payment received for ${r.order_code}`, body, c }),
+    html: shell({ preheader: `We received your payment proof for ${r.order_code} — verifying it now`, body, c }),
   };
+}
+
+// "Thank you for your payment" line for the confirmation, when payment was received.
+function paidThanks(r: Any, q: Quote | null) {
+  const paid = !!(r.payment_uploaded_at || r.payment_screenshot_path);
+  if (!paid) return "";
+  return p(`Thank you for your payment${q ? ` of <strong>${esc(peso(q.total))}</strong>` : ""} &mdash; we've verified it, and your booking is now <strong>confirmed</strong>.`);
 }
 
 export function guestConfirmedEmail(r: Any, cabanas: Any[], q: Quote | null, c: ReturnType<typeof cfg>) {
@@ -733,7 +746,7 @@ export function guestConfirmedEmail(r: Any, cabanas: Any[], q: Quote | null, c: 
   const t = TIMES[r.stay_type] || TIMES.day_trip;
   const map = "https://www.google.com/maps/search/?api=1&query=" + encodeURIComponent("Virgin Beach Resort, Laiya, San Juan, Batangas");
   const body = `${p(`Hi ${first},`)}
-${p(`We are delighted to confirm your reservation for a <strong>${esc(r.stay_type === "half_day" ? "Half-Day Trip" : "Day Trip")}</strong> on <strong>${esc(fmtDate(r.check_in))}</strong>.`)}
+${paidThanks(r, q)}${p(`We are delighted to confirm your reservation for a <strong>${esc(r.stay_type === "half_day" ? "Half-Day Trip" : "Day Trip")}</strong> on <strong>${esc(fmtDate(r.check_in))}</strong>.`)}
 ${statusBox([
     ["Order ID", esc(r.order_code || "—")],
     ["Date", esc(fmtDate(r.check_in, "short"))],
@@ -751,7 +764,7 @@ ${rebookNote(true)}
 ${signature(c)}`;
   return {
     subject: "Re: " + guestSubject(r, c),
-    html: shell({ preheader: `Confirmed: ${fmtDate(r.check_in, "short")} · ${r.order_code}`, body: applyIntro(body, customOf(r, "confirmed"), r), c }),
+    html: shell({ preheader: `${r.payment_uploaded_at || r.payment_screenshot_path ? "Payment received — " : ""}Confirmed: ${fmtDate(r.check_in, "short")} · ${r.order_code}`, body: applyIntro(body, customOf(r, "confirmed"), r), c }),
   };
 }
 
@@ -1021,7 +1034,7 @@ export function guestConfirmedEmailOvernight(r: Any, villas: Any[], q: Quote | n
   const first = esc(String(r.guest_name || "there").trim().split(/\s+/)[0]);
   const map = "https://www.google.com/maps/search/?api=1&query=" + encodeURIComponent("Virgin Beach Resort, Laiya, San Juan, Batangas");
   const body = `${p(`Hi ${first},`)}
-${p(`We are delighted to confirm your <strong>overnight stay</strong> at Virgin Beach Resort from <strong>${esc(fmtDate(r.check_in))}</strong> to <strong>${esc(fmtDate(r.check_out))}</strong>. We can't wait to welcome you.`)}
+${paidThanks(r, q)}${p(`We are delighted to confirm your <strong>overnight stay</strong> at Virgin Beach Resort from <strong>${esc(fmtDate(r.check_in))}</strong> to <strong>${esc(fmtDate(r.check_out))}</strong>. We can't wait to welcome you.`)}
 ${statusBox([
     ["Order ID", esc(r.order_code || "—")],
     ["Arrival", esc(fmtDate(r.check_in, "short"))],
@@ -1040,7 +1053,7 @@ ${cancellationTable()}
 ${signature(c)}`;
   return {
     subject: "Re: " + guestSubject(r, c),
-    html: shell({ preheader: `Confirmed: ${stayRange(r)} · ${r.order_code}`, body: applyIntro(body, customOf(r, "confirmed"), r), c }),
+    html: shell({ preheader: `${r.payment_uploaded_at || r.payment_screenshot_path ? "Payment received — " : ""}Confirmed: ${stayRange(r)} · ${r.order_code}`, body: applyIntro(body, customOf(r, "confirmed"), r), c }),
   };
 }
 
@@ -1291,7 +1304,7 @@ async function onProof(r: Any) {
   let guest = null;
   if (r.guest_email) {
     const g = guestProofEmail(r, c);
-    guest = await send({ booking: r, kind: "proof_guest", to: r.guest_email, subject: g.subject, html: g.html, thread: "guest" });
+    guest = await send({ booking: r, kind: `proof_guest:${stamp}`, to: r.guest_email, subject: g.subject, html: g.html, thread: "guest" });
   }
   return { staff, guest };
 }
