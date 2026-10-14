@@ -519,7 +519,7 @@
       "<p>Your Order ID is <strong>" + esc(row && row.order_code || "—") + "</strong>" + (row && row.total != null ? " · Total <strong>" + peso(row.total) + "</strong>" : "") + ".</p>" +
       "<p>We're holding " + esc(picked.map(function (v) { return v.room_type_name + " (" + v.unit_label + ")"; }).join(", ")) +
       " for " + fmtDay(payload.check_in) + " → " + fmtDay(payload.check_out) + ". Your quotation, bank details and next steps are on their way to <strong>" + esc(payload.guest_email) +
-      "</strong> — full payment by bank transfer within 24 hours confirms the booking (your 3% Convenience Discount is already included).</p>" +
+      "</strong> — full payment by bank transfer within 24 hours confirms the booking (your 5% Convenience Discount is already included).</p>" +
       "<p>Can't find the email? Check Spam or Promotions, or call us at +63 917 792 0712.</p>" +
       '<p><a class="btn btn-ghost" href="../pay/index.html?order=' + encodeURIComponent(row && row.order_code || "") + "&email=" + encodeURIComponent(payload.guest_email) + '">Upload payment proof</a></p>';
     window.scrollTo({ top: st.getBoundingClientRect().top + window.scrollY - 120, behavior: "smooth" });

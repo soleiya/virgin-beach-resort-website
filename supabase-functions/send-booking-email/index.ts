@@ -234,9 +234,10 @@ export type Quote = {
   websiteTotal: number | null;
   mismatch: boolean;
   // Overnight website bookings: price when paying by card / e-wallet instead
-  // of bank transfer (i.e. without the 3% book-direct discount).
+  // of bank transfer (i.e. without the book-direct Convenience Discount).
   cardTotal?: number;
   onlineDiscount?: number;
+  onlineDiscountRate?: number; // percent, e.g. 5
 };
 
 function cabanaKind(c: Any): "lounge" | "dining" {
@@ -940,7 +941,7 @@ ${statusBox([
     ["Amount due", q ? esc(peso(q.total)) : "To follow"],
     ["Please pay by", esc(dl.label)],
   ])}
-${q && q.onlineDiscount ? p(`The amount due already includes your <strong>3% Convenience Discount (${esc(peso(q.onlineDiscount))})</strong> for paying by bank transfer.`, `background:${C.tint};border-radius:8px;padding:10px 14px;font-size:14px;`) : ""}
+${q && q.onlineDiscount ? p(`The amount due already includes your <strong>${q.onlineDiscountRate ? esc(String(q.onlineDiscountRate)) + "% " : ""}Convenience Discount (${esc(peso(q.onlineDiscount))})</strong> for paying by bank transfer.`, `background:${C.tint};border-radius:8px;padding:10px 14px;font-size:14px;`) : ""}
 ${h2("Your reservation")}${kv(overnightRows(r, villas))}${cabanaNote(villas)}
 ${h2("Guest list")}${rosterTable(r)}
 ${q ? h2("Quotation") + quoteTable(q) + p("The full-board meal package (lunch, dinner and breakfast) is mandatory for every guest and is charged per guest, per night. Children 0–5 eat free.", `font-size:12.5px;color:${C.soft};margin-top:8px;`) : ""}
@@ -1084,6 +1085,7 @@ export function quoteFromOvernight(record: Any, oq: Any): Quote | null {
   const onlineDiscount = r2(Number(oq.online_discount) || 0);
   return {
     cardTotal: onlineDiscount > 0 ? r2(total + onlineDiscount) : total, onlineDiscount,
+    onlineDiscountRate: oq.online_discount_rate != null ? Math.round(Number(oq.online_discount_rate) * 10000) / 100 : undefined,
     heading: `OVERNIGHT STAY — ${plural(Number(oq.nights) || 0, "night")}, casita${(oq.villas || []).length === 1 ? "" : "s"} with full-board meals`,
     lines, subtotal: total, total, vatExemptSales, vatableSales, vat, serviceCharge,
     websiteTotal, mismatch: websiteTotal !== null && Math.abs(websiteTotal - total) > 0.5,

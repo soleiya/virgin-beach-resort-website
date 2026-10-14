@@ -59,7 +59,7 @@ body = f"""
       <p class="qb-error" id="qbError" hidden></p>
       <ul class="qb-perks">
         <li>Best rate &mdash; book direct</li>
-        <li>3% off with bank transfer</li>
+        <li>5% off with bank transfer</li>
         <li>Instant quotation by email</li>
       </ul>
     </form>
