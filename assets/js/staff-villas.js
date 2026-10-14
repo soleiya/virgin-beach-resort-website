@@ -38,7 +38,10 @@
   function labelsFor(r) {
     return (r.booking_villas || []).map(function (bv) { return villasById[bv.villa_id]; }).filter(Boolean)
       .sort(function (a, b) { return a.sort - b.sort; })
-      .map(function (v) { return v.unit_label + " · " + v.room_type_name.replace(" Casita", ""); });
+      .map(function (v) {
+        var prov = (r.booking_villas || []).some(function (bv) { return bv.villa_id === v.id && bv.provisional; });
+        return v.unit_label + " · " + v.room_type_name.replace(" Casita", "") + (prov ? " (held — no casita assigned in Cloudbeds yet)" : "");
+      });
   }
 
   // ======================================================================
@@ -60,6 +63,33 @@
       JSON.stringify(addOnPayload()), $("vOnline").checked, $("vDiscType").value, $("vDiscValue").value].join("|");
   }
   function keeping() { return keepSaved && editing && openSig !== null && priceSig() === openSig; }
+
+  // Cloudbeds is the master for villas: "dates" = a website booking already in
+  // Cloudbeds (dates/casitas change there); "all" = a stay made in Cloudbeds.
+  var cbLock = "none";
+  function applyCbLock(r) {
+    Array.prototype.forEach.call(form.querySelectorAll("[data-cblocked]"), function (el) { el.disabled = false; el.removeAttribute("data-cblocked"); });
+    cbLock = !editing ? "none" : r.cb_owned ? "all" : r.cb_reservation_id ? "dates" : "none";
+    var lockEl = function (el) { if (el && !el.disabled) { el.disabled = true; el.setAttribute("data-cblocked", "1"); } };
+    if (cbLock === "dates") { lockEl($("vIn")); lockEl($("vOut")); }
+    if (cbLock === "all") {
+      Array.prototype.forEach.call(form.querySelectorAll("input, select, textarea, button"), function (el) {
+        if (el.id === "vStaffNotes" || el.id === "vCancel" || el.id === "vSave" || el.id === "vLogBtn" || el.closest(".mail-panel")) return;
+        lockEl(el);
+      });
+      lockEl($("vNotify"));
+    }
+    var url = D.cbUrl ? D.cbUrl(r) : null;
+    var link = url ? ' <a href="' + url + '" target="_blank" rel="noopener">Open in Cloudbeds ↗</a>' : "";
+    var banner = $("vCbBanner");
+    if (banner) {
+      banner.hidden = cbLock === "none";
+      banner.innerHTML = cbLock === "all"
+        ? "<b>Booked in Cloudbeds.</b> Change dates, casitas, guests, price or status in Cloudbeds — this page updates within a few minutes. Here you can add staff notes." + link
+        : "<b>Also in Cloudbeds (#" + esc(r.cb_reservation_id || "") + ").</b> Change dates and casitas in Cloudbeds — they update here within a few minutes. Status (confirm / cancel) is sent to Cloudbeds when you save. Guest numbers changed here are not." + link;
+    }
+    saveBtn.textContent = cbLock === "all" ? "Save Staff Notes" : saveBtn.textContent;
+  }
 
   function showErr(m) { errEl.textContent = m; errEl.style.display = "block"; saveBtn.disabled = false; }
 
@@ -120,6 +150,8 @@
     onDates();
     var mp = mailPanel();
     if (mp) mp.reset();
+    applyCbLock(r);
+    if (!editing) $("villaModalSub").textContent = "Overnight stay in one or more casitas. Priced from the same rate sheet as the website. Saved bookings are created in Cloudbeds automatically, on the same casita.";
     backdrop.classList.add("open");
   }
   function close() { backdrop.classList.remove("open"); editing = null; }
@@ -149,7 +181,7 @@
     $("vNights").value = n > 0 ? n + " night" + (n === 1 ? "" : "s") : "";
     if (!(n > 0)) { holds = []; renderPick(); requestQuote(); return; }
     $("vAvailNote").textContent = "Checking availability…";
-    sb.from("booking_villas").select("id,villa_id,booking_id,check_in,check_out,block_reason").eq("active", true)
+    sb.from("booking_villas").select("id,villa_id,booking_id,check_in,check_out,block_reason,provisional,cb_block_id").eq("active", true)
       .lt("check_in", b).gt("check_out", a)
       .then(function (res) {
         holds = res.error ? [] : (res.data || []).filter(function (h) { return !(editing && h.booking_id === editing.id); });
@@ -164,9 +196,10 @@
   function whoHolds(villaId) {
     var h = holds.filter(function (x) { return x.villa_id === villaId; })[0];
     if (!h) return null;
-    if (!h.booking_id) return "Blocked: " + (h.block_reason || "");
+    if (!h.booking_id) return (h.cb_block_id ? "" : "Blocked: ") + (h.block_reason || "");
     var row = D.rows().filter(function (r) { return r.id === h.booking_id; })[0];
-    return (row ? row.guest_name + " (" + row.order_code + ")" : "another booking") + " " + fmtDate(h.check_in) + "→" + fmtDate(h.check_out);
+    return (row ? row.guest_name + " (" + row.order_code + ")" : "another booking") + " " + fmtDate(h.check_in) + "→" + fmtDate(h.check_out) +
+      (h.provisional ? " · held: Cloudbeds hasn't assigned a casita of this type yet" : "");
   }
 
   function renderPick() {
@@ -186,7 +219,7 @@
       var lab = document.createElement("label");
       lab.className = "villa-opt" + (taken ? " is-taken" : "") + (on ? " is-on" : "");
       lab.title = taken || "";
-      lab.innerHTML = '<input type="checkbox"' + (on ? " checked" : "") + (taken && !on ? " disabled" : "") + "><span>" + esc(v.unit_label) +
+      lab.innerHTML = '<input type="checkbox"' + (on ? " checked" : "") + ((taken && !on) || cbLock !== "none" ? " disabled" : "") + "><span>" + esc(v.unit_label) +
         "<small>" + (taken ? esc(taken) : "Sleeps " + v.base_occupancy + (v.max_extra ? " +" + v.max_extra : "")) + "</small></span>";
       lab.querySelector("input").addEventListener("change", function (e) {
         if (e.target.checked) { if (picked.indexOf(v.id) === -1) picked.push(v.id); }
@@ -406,6 +439,16 @@
   form.addEventListener("submit", function (e) {
     e.preventDefault();
     errEl.style.display = "none";
+    if (cbLock === "all") {
+      saveBtn.disabled = true;
+      sb.from("booking_requests").update({ staff_notes: $("vStaffNotes").value }).eq("id", editing.id).then(function (u) {
+        saveBtn.disabled = false;
+        if (u.error) return showErr("Couldn't save: " + u.error.message);
+        close();
+        D.reload();
+      });
+      return;
+    }
     var a = $("vIn").value, b = $("vOut").value;
     if (!$("vName").value.trim()) return showErr("Primary guest name is required.");
     if (!a || !b || b <= a) return showErr("Set a check-out date after the check-in date.");
@@ -499,7 +542,7 @@
     var end = addDays(start, n);
     $("calStatus").textContent = "Loading…";
     Promise.all([
-      sb.from("booking_villas").select("id,villa_id,booking_id,check_in,check_out,block_reason").eq("active", true).lt("check_in", end).gt("check_out", start),
+      sb.from("booking_villas").select("id,villa_id,booking_id,check_in,check_out,block_reason,provisional,cb_block_id").eq("active", true).lt("check_in", end).gt("check_out", start),
       sb.from("peak_dates").select("*").order("night"),
     ]).then(function (res) {
       if (res[0].error) { $("calStatus").textContent = "Couldn't load: " + res[0].error.message; return; }
@@ -540,13 +583,13 @@
         var span = Math.min(diffDays(d, h.check_out), n - i);
         occupied += span;
         var r = h.booking_id ? rowsById[h.booking_id] : null;
-        var cls = h.booking_id ? "st-" + (r ? r.status : "pending") : "st-block";
+        var cls = (h.booking_id ? "st-" + (r ? r.status : "pending") : "st-block") + (h.provisional ? " provisional" : "");
         if (h.check_in < d) cls += " cont-l";
         if (h.check_out > addDays(start, n)) cls += " cont-r";
         var title = h.booking_id
           ? (r ? r.guest_name + " · " + r.order_code + " · " + (D.STATUS_LABELS[r.status] || r.status) + " · " + ((r.adults || 0) + (r.children_6_12 || 0) + (r.children_0_5 || 0)) + " pax · " + (D.SOURCE_LABELS[r.source] || r.source) : "Booking")
           : "Blocked: " + (h.block_reason || "");
-        var label = h.booking_id ? (r ? r.guest_name : "Booking") : "Blocked — " + (h.block_reason || "");
+        var label = h.booking_id ? (r ? r.guest_name : "Booking") + (h.provisional ? " (unassigned)" : "") : (h.cb_block_id ? "" : "Blocked — ") + (h.block_reason || "");
         var sub = h.booking_id && r ? r.order_code + " · " + ((r.adults || 0) + (r.children_6_12 || 0) + (r.children_0_5 || 0)) + " pax" : fmtDate(h.check_in) + "→" + fmtDate(h.check_out);
         html += '<td colspan="' + span + '"><div class="cal-bk ' + cls + '" data-hold="' + h.id + '" title="' + esc(title) + '">' + esc(label) + "<small>" + esc(sub) + "</small></div></td>";
         i += span;
@@ -568,6 +611,7 @@
         return;
       }
       var v = villasById[h.villa_id];
+      if (h.cb_block_id) { alert("This block was made in Cloudbeds (" + (h.block_reason || "") + "). Remove it in Cloudbeds — the website follows within a few minutes."); return; }
       if (confirm("Remove the block on " + (v ? v.unit_label : "this villa") + " (" + fmtDate(h.check_in) + " → " + fmtDate(h.check_out) + ")?\n\n" + (h.block_reason || ""))) {
         sb.from("booking_villas").delete().eq("id", h.id).then(function (res) {
           if (res.error) alert("Couldn't remove the block: " + res.error.message);

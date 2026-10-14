@@ -531,6 +531,11 @@
   if (qOut && checkInEl.value && qOut > checkInEl.value) checkOutEl.value = qOut;
   var pre = params.get("casita");
   if (pre && typeCards[pre]) typeCards[pre].classList.add("is-picked");
+  var qGuests = parseInt(params.get("guests") || "", 10);
+  if (qGuests >= 1 && qGuests <= MAX_PARTY) {
+    companions = [];
+    for (var gi = 1; gi < qGuests; gi++) companions.push({ name: "", age: "adult" });
+  }
   renderGuests();
   onPartyChanged();
   loadAddOns();

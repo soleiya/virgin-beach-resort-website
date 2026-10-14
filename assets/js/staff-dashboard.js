@@ -121,6 +121,22 @@
   var filterLoadFrom = document.getElementById("filterLoadFrom");
   var THIS_YEAR = Number(new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Manila" }).slice(0, 4));
   function isVillaRow(r) { return r.stay_type === "overnight"; }
+
+  // ---------- Cloudbeds (master for villas; see booking-v14-cloudbeds-sync.sql) ----------
+  var CB_RES_URL = "https://hotels.cloudbeds.com/connect/208402#/reservations/";
+  var CB_STATUS = { not_confirmed: "Not confirmed", confirmed: "Confirmed", checked_in: "Checked in", checked_out: "Checked out",
+    canceled: "Cancelled", no_show: "No-show", deleted: "Deleted", in_progress: "In progress" };
+  function cbUrl(r) { return r && r.cb_reservation_id ? CB_RES_URL + encodeURIComponent(r.cb_reservation_id) : null; }
+  function cbLinkHtml(r) {
+    return r.cb_reservation_id ? '<a class="cb-link" href="' + cbUrl(r) + '" target="_blank" rel="noopener" title="Open this reservation in Cloudbeds">Cloudbeds #' + esc(r.cb_reservation_id) + " ↗</a>" : "";
+  }
+  // a website villa booking that hasn't reached Cloudbeds yet
+  function cbWaiting(r) {
+    return isVillaRow(r) && !r.cb_owned && !r.cb_reservation_id && ["declined", "expired", "completed"].indexOf(r.status) === -1 &&
+      (r.booking_villas || []).length > 0 && (!r.check_out || r.check_out >= new Date().toISOString().slice(0, 10));
+  }
+  var cbPushOn = null; // false = test mode (website bookings aren't sent to Cloudbeds)
+  function cbClashes(r) { return r.cb_info && Array.isArray(r.cb_info.clashes) ? r.cb_info.clashes : []; }
   // Default view: today's bookings first, then upcoming dates (soonest first),
   // then past dates (most recent first). Click "Preferred Date" to cycle
   // through Today-first → oldest-first → newest-first.
@@ -261,7 +277,7 @@
   }
   function loadBookingsPage(offset, acc) {
     var qy = sb.from("booking_requests")
-      .select("*, booking_cabanas(cabana_id), booking_villas(villa_id)");
+      .select("*, booking_cabanas(cabana_id), booking_villas(villa_id,provisional)");
     var from = loadFrom();
     if (from) qy = qy.or("check_in.gte." + from + ",check_in.is.null,check_out.gte." + from);
     return qy
@@ -285,6 +301,7 @@
       allRows = rows;
       populateBookedByOptions();
       render();
+      if (cbLastRun === null) loadCbStatus();
     }, function (err) {
       countLine.textContent = "Couldn't load bookings: " + (err && err.message ? err.message : err);
     });
@@ -381,7 +398,7 @@
       if (fSource && (r.source || "website") !== fSource) return false;
 
       if (!q) return true;
-      var hay = [r.guest_name, r.guest_email, r.guest_phone, r.notes, r.staff_notes, r.booked_by, r.order_code, r.room_name, r.guest_names].join(" ").toLowerCase();
+      var hay = [r.guest_name, r.guest_email, r.guest_phone, r.notes, r.staff_notes, r.booked_by, r.order_code, r.room_name, r.guest_names, r.cb_reservation_id, r.cb_info && r.cb_info.ota_ref].join(" ").toLowerCase();
       return hay.indexOf(q) !== -1;
     });
   }
@@ -702,6 +719,13 @@
       } else if (r.total_amount != null) {
         tdTotal.title = "People: " + peso(r.subtotal_people) + (r.senior_discount ? " (incl. " + peso(r.senior_discount) + " senior discount)" : "") + " · Cabana(s): " + peso(r.cabana_total);
       }
+      if (isVillaRow(r) && r.cb_info) {
+        if (r.cb_owned && r.cb_info.balance != null && Number(r.cb_info.balance) > 0.5 && r.status !== "declined") {
+          tdTotal.innerHTML += '<span class="payby">balance ' + esc(peso(r.cb_info.balance)) + "</span>";
+        } else if (!r.cb_owned && r.cb_info.total != null && r.total_amount != null && Math.abs(Number(r.cb_info.total) - Number(r.total_amount)) > 1) {
+          tdTotal.innerHTML += '<span class="payby overdue" title="Cloudbeds priced it from its own rate plan. Adjust the folio in Cloudbeds so it matches the website total.">Cloudbeds: ' + esc(peso(r.cb_info.total)) + "</span>";
+        }
+      }
       tr.appendChild(tdTotal);
 
       var tdStatus = document.createElement("td");
@@ -710,6 +734,38 @@
       statusBadge.textContent = STATUS_LABELS[r.status] || r.status;
       statusBadge.title = "Change the status with ✎ Edit";
       tdStatus.appendChild(statusBadge);
+      if (isVillaRow(r) && r.cb_info && r.cb_info.status) {
+        var cbs = document.createElement("span");
+        cbs.className = "payby cb-status";
+        cbs.textContent = "Cloudbeds: " + (CB_STATUS[r.cb_info.status] || r.cb_info.status);
+        tdStatus.appendChild(cbs);
+      }
+      if (cbWaiting(r) && cbPushOn === false) {
+        var ct = document.createElement("span");
+        ct.className = "payby";
+        ct.textContent = "Test mode: not sent to Cloudbeds";
+        ct.title = "Until launch, website villa bookings stay on the website only.";
+        tdStatus.appendChild(ct);
+      } else if (cbWaiting(r)) {
+        var cw = document.createElement("span");
+        cw.className = "payby" + (r.cb_push_state === "error" ? " overdue" : "");
+        cw.textContent = r.cb_push_state === "error" ? "⚠ Not in Cloudbeds yet" : "Sending to Cloudbeds…";
+        cw.title = r.cb_push_error ? "Cloudbeds said: " + r.cb_push_error + " — it's retried every 5 minutes. If it keeps failing, add the booking in Cloudbeds by hand." : "Created in Cloudbeds within a minute.";
+        tdStatus.appendChild(cw);
+      } else if (r.cb_push_state === "done" && r.cb_push_error) {
+        var cn = document.createElement("span");
+        cn.className = "payby overdue";
+        cn.textContent = "⚠ Check casita in Cloudbeds";
+        cn.title = r.cb_push_error;
+        tdStatus.appendChild(cn);
+      }
+      if (cbClashes(r).length && r.status !== "declined" && r.status !== "expired") {
+        var cc = document.createElement("span");
+        cc.className = "payby overdue";
+        cc.textContent = "⚠ Casita clash";
+        cc.title = cbClashes(r).join("\n") + "\nFix the room assignment in Cloudbeds.";
+        tdStatus.appendChild(cc);
+      }
       if ((r.status === "pending" || r.status === "pending_payment") && !r.payment_uploaded_at) {
         var dl = paymentDeadlines(r);
         var pb = document.createElement("span");
@@ -736,7 +792,9 @@
       tr.appendChild(tdPay);
 
       var tdSource = document.createElement("td");
-      tdSource.innerHTML = '<span class="source-badge">' + (SOURCE_LABELS[r.source] || r.source || "Website") + "</span>";
+      tdSource.innerHTML = '<span class="source-badge">' + (SOURCE_LABELS[r.source] || r.source || "Website") + "</span>" +
+        (r.cb_reservation_id ? "<br>" + cbLinkHtml(r) : "") +
+        (r.cb_info && r.cb_info.ota_ref && r.cb_owned ? '<span class="payby">ref ' + esc(r.cb_info.ota_ref) + "</span>" : "");
       tr.appendChild(tdSource);
 
       var tdNotes = document.createElement("td");
@@ -1791,6 +1849,18 @@
     };
     if (/^\[Imported from Cloudbeds/.test(r.staff_notes || "")) note.textContent = (r.staff_notes || "").replace(/^\[Imported from Cloudbeds #\d+\]\s*·?\s*/, "Cloudbeds: ");
     else if (r.source === "sheet_import" && r.staff_notes) note.textContent = "Sheet remarks: " + r.staff_notes.replace(/^\[Imported from 2026 Day Trip Calendar\]\s*/, "");
+    if (isVillaRow(r) && r.cb_owned) {
+      var ci = r.cb_info || {};
+      var CL = ['<div class="bill-sec">Cloudbeds folio</div>',
+        billRow(esc(r.room_name || "Room(s)") + '<span class="bd-qty">' + nightsOf(r) + " night" + (nightsOf(r) === 1 ? "" : "s") + "</span>", ci.total != null ? peso(ci.total) : peso(r.total_amount))];
+      if (ci.paid != null) CL.push(billRow("Paid", "−" + peso(ci.paid), "discount"));
+      if (ci.balance != null) CL.push(billRow("<b>Balance</b>", "<b>" + peso(ci.balance) + "</b>"));
+      bdBody.innerHTML = '<div class="bill-lines">' + CL.join("") + "</div>" +
+        '<p class="bill-note">This stay was booked in Cloudbeds, so it\'s priced there (rate plans, promos, OTA prices). ' +
+        (cbUrl(r) ? '<a href="' + cbUrl(r) + '" target="_blank" rel="noopener">Open the folio in Cloudbeds ↗</a>' : "") + "</p>";
+      bdBackdrop.classList.add("open");
+      return;
+    }
     if (isVillaRow(r)) {
       bdBody.innerHTML = '<div class="bill-lines">' + billRow("Calculating…", "") + "</div>";
       sb.rpc("quote_booking_overnight", { p_booking_id: r.id }).then(function (res) {
@@ -1821,6 +1891,46 @@
     bdBackdrop.classList.add("open");
   }
 
+  // ---------- Cloudbeds sync status (Villas section) ----------
+  var cbBar = document.getElementById("cbSync"), cbLastRun = null;
+  function ago(ts) {
+    var m = Math.round((Date.now() - new Date(ts).getTime()) / 60000);
+    return m < 1 ? "just now" : m < 60 ? m + " min ago" : Math.round(m / 60) + " h ago";
+  }
+  function loadCbStatus() {
+    if (!cbBar) return;
+    sb.rpc("cb_sync_status").then(function (res) {
+      if (res.error) { cbBar.hidden = true; return; }
+      var s = res.data || {}, lp = s.last_pull || {}, html = [];
+      cbBar.hidden = false;
+      var wasOn = cbPushOn;
+      cbPushOn = s.push_enabled === true;
+      var ran = lp.ran_at || null;
+      var stale = !ran || Date.now() - new Date(ran).getTime() > 20 * 60000;
+      html.push('<span class="cb-dot' + (stale ? " bad" : "") + '"></span><b>Cloudbeds</b> ' +
+        (s.setup ? (ran ? "synced " + ago(ran) : "waiting for the first sync") : "sync not set up yet"));
+      if (!cbPushOn) html.push('<span class="cb-test" title="Cloudbeds reservations come in, but nothing made on the website is sent to Cloudbeds until launch.">TEST MODE · website bookings stay here</span>');
+      else if (s.push_waiting) html.push('<span class="' + (s.push_errors ? "cb-warn" : "") + '" title="Website villa bookings not in Cloudbeds yet (retried every 5 min)">' +
+        s.push_waiting + " website booking" + (s.push_waiting === 1 ? "" : "s") + " not in Cloudbeds yet</span>");
+      if (s.clashes_upcoming) html.push('<span class="cb-warn" title="Stays where Cloudbeds\' casita couldn\'t be shown here — fix the room assignment in Cloudbeds">' + s.clashes_upcoming + " casita clash" + (s.clashes_upcoming === 1 ? "" : "es") + "</span>");
+      var le = s.last_error;
+      if (le && le.at && (!ran || new Date(le.at) >= new Date(ran) - 60000) && Date.now() - new Date(le.at).getTime() < 3600e3) {
+        html.push('<span class="cb-warn" title="' + esc((le.errors || []).join("\n")) + '">last sync had errors</span>');
+      }
+      html.push('<button type="button" class="btn-sm ghost" id="cbSyncNow">Sync now</button>');
+      cbBar.innerHTML = html.join(" · ");
+      document.getElementById("cbSyncNow").addEventListener("click", function (e) {
+        e.target.disabled = true; e.target.textContent = "Syncing…";
+        sb.rpc("cb_request_sync").then(function () { setTimeout(function () { loadCbStatus(); loadBookings(); }, 12000); });
+      });
+      // new data from Cloudbeds → refresh the list (unless a form is open)
+      if (ran && cbLastRun && ran !== cbLastRun && (lp.applied || lp.pushed) && !document.querySelector(".modal-backdrop.open")) loadBookings();
+      cbLastRun = ran;
+      if (wasOn !== cbPushOn && allRows.length) render();
+    });
+  }
+  setInterval(function () { if (document.visibilityState === "visible" && allRows.length) loadCbStatus(); }, 60000);
+
   // Shared with staff-villas.js (overnight bookings, villa calendar).
   window.VBRDash = {
     sb: sb,
@@ -1833,6 +1943,7 @@
     villaRows: villaRows, billRow: billRow,
     esc: esc, peso: peso, fmtDate: fmtDate, fmtDateTime: fmtDateTime,
     proofLinks: proofLinks, openSignedUrl: openSignedUrl, uploadProof: uploadProof,
+    cbUrl: cbUrl, loadCbStatus: loadCbStatus,
     STATUS_LABELS: STATUS_LABELS, SOURCE_LABELS: SOURCE_LABELS,
   };
 })();

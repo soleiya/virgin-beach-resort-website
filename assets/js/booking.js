@@ -322,6 +322,13 @@
   // honoured for today's date — see refreshHalfDay).
   var qType = params.get("type");
   if (qType === "half_day") checkInEl.value = todayManila();
+  // From the home page booking box: ?date=YYYY-MM-DD&adults=2&kids=1
+  var qDate = params.get("date");
+  if (qDate && /^\d{4}-\d{2}-\d{2}$/.test(qDate) && qDate >= todayManila() && qType !== "half_day") checkInEl.value = qDate;
+  var qAdults = parseInt(params.get("adults") || "", 10), qKids = parseInt(params.get("kids") || "", 10);
+  if (qAdults >= 1 && qAdults <= 200) adultsEl.value = qAdults;
+  if (qKids >= 0 && qKids <= 200) kids612El.value = qKids;
+  if (qAdults || qKids) { try { renderBill(); } catch (e) {} }
   checkInLabel.textContent = "Preferred Date";
   refreshHalfDay();
   if (qType === "half_day" && halfDayOpt && halfDayOpt.parentNode) stayTypeEl.value = "half_day";

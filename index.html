@@ -9,7 +9,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400..600;1,9..144,400..600&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/css/style.css?v=2197d56c1d">
+<link rel="stylesheet" href="assets/css/style.css?v=b6c3c14652">
 </head>
 <body>
 <header class="site-header">
@@ -28,29 +28,146 @@
   </div>
 </header>
 
-<section class="hero">
+<section class="hero hero-book">
   <img class="hero-slide is-active" src="assets/images/hero.jpg" alt="Aerial view of Virgin Beach Resort's cove, casitas lined along a curving white sand beach">
   <img class="hero-slide" src="assets/images/fire-tree-and-coastline.jpg" alt="Aerial view of the shoreline with flowering fire trees along the coast">
   <img class="hero-slide" src="assets/images/reef-of-virgin-beach.jpg" alt="Aerial view of the turquoise reef off Virgin Beach Resort">
   <div class="wrap hero-content">
-    <span class="eyebrow">Laiya &middot; San Juan &middot; Batangas</span>
-    <h1>Manila&rsquo;s Quick Escape to Pure Unspoiled Paradise</h1>
-    <p class="lede">Leave the city hustle behind for a secluded stretch of pristine white sand, bespoke beachside service, and quiet luxury&mdash;just a few hours&rsquo; drive away.</p>
-    <div class="hero-actions">
-      <a class="btn btn-primary" href="book-stay/index.html">Book Now</a>
-      <a class="btn btn-on-dark" href="overnight/index.html">View Casitas</a>
+    <span class="eyebrow">Laiya &middot; San Juan &middot; Batangas &middot; 3 hours from Manila</span>
+    <h1>Book your beach escape</h1>
+    <p class="lede">Oceanfront casitas with full-board meals, or a day on the sand. Pick your dates &mdash; see what&rsquo;s free and your price right away.</p>
+
+    <form class="quickbook" id="quickBook" novalidate>
+      <div class="qb-tabs" role="tablist">
+        <button type="button" class="qb-tab is-on" role="tab" aria-selected="true" data-mode="stay">Overnight stay</button>
+        <button type="button" class="qb-tab" role="tab" aria-selected="false" data-mode="day">Day trip</button>
+      </div>
+      <div class="qb-fields" data-mode="stay">
+        <label class="qb-field"><span>Check-in</span><input type="date" id="qbIn" required></label>
+        <label class="qb-field"><span>Check-out</span><input type="date" id="qbOut" required></label>
+        <label class="qb-field qb-small"><span>Guests</span><select id="qbGuests"></select></label>
+        <button type="submit" class="btn btn-primary qb-go">See available casitas</button>
+      </div>
+      <div class="qb-fields" data-mode="day" hidden>
+        <label class="qb-field"><span>Date</span><input type="date" id="qbDate" required></label>
+        <label class="qb-field qb-small"><span>Adults</span><select id="qbAdults"></select></label>
+        <label class="qb-field qb-small"><span>Kids 6&ndash;12</span><select id="qbKids"></select></label>
+        <button type="submit" class="btn btn-primary qb-go">Book a day trip</button>
+      </div>
+      <p class="qb-error" id="qbError" hidden></p>
+      <ul class="qb-perks">
+        <li>Best rate &mdash; book direct</li>
+        <li>3% off with bank transfer</li>
+        <li>Instant quotation by email</li>
+      </ul>
+    </form>
+  </div>
+</section>
+
+<section class="section-tight band-tint">
+  <div class="wrap">
+    <div class="two-col-head">
+      <div>
+        <span class="eyebrow">Stay the night</span>
+        <h2>Choose your casita</h2>
+      </div>
+      <p class="prose" style="max-width:46ch;">Every stay includes full-board meals at The Pavilion &mdash; lunch, dinner and breakfast
+      (&#8369;2,695 per adult per night, kids 6&ndash;12 half price, 0&ndash;5 free).</p>
+    </div>
+    <div class="grid-3">
+      <div class="card card-book">
+        <a class="card-media" href="book-stay/index.html?casita=deluxe-king-casita"><img src="assets/images/casitas/deluxe-king-casita-01.jpg" alt="Deluxe King Casita at Virgin Beach Resort" loading="lazy"></a>
+        <div class="card-body">
+          <span class="meta">2 Persons · King Bed</span>
+          <h3><a href="book-stay/index.html?casita=deluxe-king-casita">Deluxe King Casita</a></h3>
+          <div class="price"><span>Weekend rate: <b>&#8369;21,825</b></span><span>Weekday rate: <b>&#8369;18,525</b></span><small>per night</small></div>
+          <div class="card-actions">
+            <a class="btn btn-primary btn-sm" href="book-stay/index.html?casita=deluxe-king-casita">Book this casita</a>
+            <a class="text-link" href="overnight/deluxe-king-casita/index.html">Photos &amp; details</a>
+          </div>
+        </div>
+      </div>
+      <div class="card card-book">
+        <a class="card-media" href="book-stay/index.html?casita=double-queen-casita"><img src="assets/images/casitas/double-queen-casita-01.jpg" alt="Deluxe Double Queen Casita at Virgin Beach Resort" loading="lazy"></a>
+        <div class="card-body">
+          <span class="meta">4 Persons · 2 Queen Beds</span>
+          <h3><a href="book-stay/index.html?casita=double-queen-casita">Deluxe Double Queen Casita</a></h3>
+          <div class="price"><span>Weekend rate: <b>&#8369;21,825</b></span><span>Weekday rate: <b>&#8369;18,525</b></span><small>per night</small></div>
+          <div class="card-actions">
+            <a class="btn btn-primary btn-sm" href="book-stay/index.html?casita=double-queen-casita">Book this casita</a>
+            <a class="text-link" href="overnight/double-queen-casita/index.html">Photos &amp; details</a>
+          </div>
+        </div>
+      </div>
+      <div class="card card-book">
+        <a class="card-media" href="book-stay/index.html?casita=sunrise-casita"><img src="assets/images/casitas/sunrise-casita-01.jpg" alt="Sunrise Casita at Virgin Beach Resort" loading="lazy"></a>
+        <div class="card-body">
+          <span class="meta">4 Persons · 2 Queen Beds</span>
+          <h3><a href="book-stay/index.html?casita=sunrise-casita">Sunrise Casita</a></h3>
+          <div class="price"><span>Weekend rate: <b>&#8369;17,525</b></span><span>Weekday rate: <b>&#8369;15,525</b></span><small>per night</small></div>
+          <div class="card-actions">
+            <a class="btn btn-primary btn-sm" href="book-stay/index.html?casita=sunrise-casita">Book this casita</a>
+            <a class="text-link" href="overnight/sunrise-casita/index.html">Photos &amp; details</a>
+          </div>
+        </div>
+      </div>
+      <div class="card card-book">
+        <a class="card-media" href="book-stay/index.html?casita=louver-window-casita"><img src="assets/images/casitas/louver-window-casita-01.jpg" alt="Louver-Window Casita at Virgin Beach Resort" loading="lazy"></a>
+        <div class="card-body">
+          <span class="meta">4 Persons · 2 Queen Beds</span>
+          <h3><a href="book-stay/index.html?casita=louver-window-casita">Louver-Window Casita</a></h3>
+          <div class="price"><span>Weekend rate: <b>&#8369;16,525</b></span><span>Weekday rate: <b>&#8369;14,525</b></span><small>per night</small></div>
+          <div class="card-actions">
+            <a class="btn btn-primary btn-sm" href="book-stay/index.html?casita=louver-window-casita">Book this casita</a>
+            <a class="text-link" href="overnight/louver-window-casita/index.html">Photos &amp; details</a>
+          </div>
+        </div>
+      </div>
+      <div class="card card-book">
+        <a class="card-media" href="book-stay/index.html?casita=bamboo-king-casita"><img src="assets/images/casitas/bamboo-king-casita-01.jpg" alt="Bamboo King Casita at Virgin Beach Resort" loading="lazy"></a>
+        <div class="card-body">
+          <span class="meta">2 Persons · King Bed</span>
+          <h3><a href="book-stay/index.html?casita=bamboo-king-casita">Bamboo King Casita</a></h3>
+          <div class="price"><span>Weekend rate: <b>&#8369;12,925</b></span><span>Weekday rate: <b>&#8369;9,225</b></span><small>per night</small></div>
+          <div class="card-actions">
+            <a class="btn btn-primary btn-sm" href="book-stay/index.html?casita=bamboo-king-casita">Book this casita</a>
+            <a class="text-link" href="overnight/bamboo-king-casita/index.html">Photos &amp; details</a>
+          </div>
+        </div>
+      </div>
+      <div class="card card-book">
+        <a class="card-media" href="book-stay/index.html?casita=bamboo-casita"><img src="assets/images/casitas/bamboo-casita-01.jpg" alt="Bamboo Casita at Virgin Beach Resort" loading="lazy"></a>
+        <div class="card-body">
+          <span class="meta">4 Persons · 2 Queen Beds</span>
+          <h3><a href="book-stay/index.html?casita=bamboo-casita">Bamboo Casita</a></h3>
+          <div class="price"><span>Weekend rate: <b>&#8369;12,925</b></span><span>Weekday rate: <b>&#8369;9,225</b></span><small>per night</small></div>
+          <div class="card-actions">
+            <a class="btn btn-primary btn-sm" href="book-stay/index.html?casita=bamboo-casita">Book this casita</a>
+            <a class="text-link" href="overnight/bamboo-casita/index.html">Photos &amp; details</a>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 </section>
 
 <section class="section-tight">
-  <div class="wrap center">
-    <p class="prose mx-auto" style="font-size:1.2rem; font-family:var(--font-display); color:var(--ink);">
-      The beautiful landscape, clear blue waters, and rustic casitas sprawled over a stretch of creamy white sand
-      beach combine into a picturesque setting one would usually find in far-away exotic destinations. You would
-      think you are on a beautiful island, not somewhere just a few hours away from Metro Manila.
-    </p>
-    <p class="prose mx-auto" style="margin-top:18px;">If you are appreciative of such a place, then come and experience Virgin Beach Resort.</p>
+  <div class="wrap">
+    <div class="feature-row">
+      <div class="feature-media wide"><img src="assets/images/day-trip.jpg" alt="Aerial view of dining cabanas lining the beach"></div>
+      <div>
+        <span class="eyebrow">Day trip</span>
+        <h2>Spend the day with us</h2>
+        <p class="prose" style="margin-top:18px;">A full day on the beach from &#8369;1,250 per adult (kids 6&ndash;12 &#8369;825, 0&ndash;5 free),
+        with your own dining cabana (&#8369;1,500, up to 10 people) or lounge cabana (&#8369;2,000, up to 4).
+        Pick your cabana on the beach map when you book.</p>
+        <div class="hero-actions" style="margin-top:22px;">
+          <a class="btn btn-primary" href="book/index.html">Book a day trip</a>
+          <a class="btn btn-ghost" href="day-packages/index.html">Packages &amp; rates</a>
+          <a class="btn btn-ghost" href="corporate/index.html">Corporate outings</a>
+        </div>
+      </div>
+    </div>
   </div>
 </section>
 
@@ -80,69 +197,6 @@
   </div>
 </section>
 
-<section class="band-tint">
-  <div class="wrap">
-    <div class="two-col-head">
-      <div>
-        <span class="eyebrow">Overnight</span>
-        <h2>Rest, easy.</h2>
-      </div>
-      <p class="prose" style="max-width:44ch;">Bring yourself to the perfect tropical getaway and stay in any of our oceanfront accommodations. Our
-      rooms come with an understated elegance that feels like home.</p>
-    </div>
-    <div class="grid-3">
-      <a class="card" href="overnight/deluxe-king-casita/index.html">
-        <div class="card-media"><img src="assets/images/casitas/deluxe-king-casita-01.jpg" alt="Deluxe King Casita at Virgin Beach Resort" loading="lazy"></div>
-        <div class="card-body">
-          <span class="meta">2 Persons · King Bed</span>
-          <h3>Deluxe King Casita</h3>
-          <div class="price"><span>Weekend rate: <b>&#8369;21,825</b></span><span>Weekday rate: <b>&#8369;18,525</b></span><small>per night</small></div>
-        </div>
-      </a>
-      <a class="card" href="overnight/double-queen-casita/index.html">
-        <div class="card-media"><img src="assets/images/casitas/double-queen-casita-01.jpg" alt="Deluxe Double Queen Casita at Virgin Beach Resort" loading="lazy"></div>
-        <div class="card-body">
-          <span class="meta">4 Persons · 2 Queen Beds</span>
-          <h3>Deluxe Double Queen Casita</h3>
-          <div class="price"><span>Weekend rate: <b>&#8369;21,825</b></span><span>Weekday rate: <b>&#8369;18,525</b></span><small>per night</small></div>
-        </div>
-      </a>
-      <a class="card" href="overnight/sunrise-casita/index.html">
-        <div class="card-media"><img src="assets/images/casitas/sunrise-casita-01.jpg" alt="Sunrise Casita at Virgin Beach Resort" loading="lazy"></div>
-        <div class="card-body">
-          <span class="meta">4 Persons · 2 Queen Beds</span>
-          <h3>Sunrise Casita</h3>
-          <div class="price"><span>Weekend rate: <b>&#8369;17,525</b></span><span>Weekday rate: <b>&#8369;15,525</b></span><small>per night</small></div>
-        </div>
-      </a>
-      <a class="card" href="overnight/louver-window-casita/index.html">
-        <div class="card-media"><img src="assets/images/casitas/louver-window-casita-01.jpg" alt="Louver-Window Casita at Virgin Beach Resort" loading="lazy"></div>
-        <div class="card-body">
-          <span class="meta">4 Persons · 2 Queen Beds</span>
-          <h3>Louver-Window Casita</h3>
-          <div class="price"><span>Weekend rate: <b>&#8369;16,525</b></span><span>Weekday rate: <b>&#8369;14,525</b></span><small>per night</small></div>
-        </div>
-      </a>
-      <a class="card" href="overnight/bamboo-king-casita/index.html">
-        <div class="card-media"><img src="assets/images/casitas/bamboo-king-casita-01.jpg" alt="Bamboo King Casita at Virgin Beach Resort" loading="lazy"></div>
-        <div class="card-body">
-          <span class="meta">2 Persons · King Bed</span>
-          <h3>Bamboo King Casita</h3>
-          <div class="price"><span>Weekend rate: <b>&#8369;12,925</b></span><span>Weekday rate: <b>&#8369;9,225</b></span><small>per night</small></div>
-        </div>
-      </a>
-      <a class="card" href="overnight/bamboo-casita/index.html">
-        <div class="card-media"><img src="assets/images/casitas/bamboo-casita-01.jpg" alt="Bamboo Casita at Virgin Beach Resort" loading="lazy"></div>
-        <div class="card-body">
-          <span class="meta">4 Persons · 2 Queen Beds</span>
-          <h3>Bamboo Casita</h3>
-          <div class="price"><span>Weekend rate: <b>&#8369;12,925</b></span><span>Weekday rate: <b>&#8369;9,225</b></span><small>per night</small></div>
-        </div>
-      </a>
-    </div>
-  </div>
-</section>
-
 <section>
   <div class="wrap">
     <div class="feature-row">
@@ -156,19 +210,6 @@
       </div>
     </div>
 
-    <div class="feature-row reverse mt-lg">
-      <div class="feature-media wide"><img src="assets/images/day-trip.jpg" alt="Aerial view of dining cabanas lining the beach"></div>
-      <div>
-        <span class="eyebrow">Day Activities</span>
-        <h2>Spend the day with us</h2>
-        <p class="prose" style="margin-top:18px;">For guests who would like to spend the day here, we offer Day Trip and Corporate packages. Stay in
-        one of our cabanas, soak up the sun, and take a dip along the shore.</p>
-        <div class="hero-actions" style="margin-top:22px;">
-          <a class="btn btn-ghost" href="day-packages/index.html">Day Trip Packages</a>
-          <a class="btn btn-ghost" href="corporate/index.html">Corporate Outings</a>
-        </div>
-      </div>
-    </div>
   </div>
 </section>
 
@@ -198,16 +239,20 @@
   </div>
 </section>
 
-<section>
+<section class="band-tint">
   <div class="wrap center" style="max-width:720px;">
-    <span class="eyebrow">Soft Opening</span>
-    <h2>We are happy to announce we are now accepting bookings during our soft opening.</h2>
-    <p class="prose mx-auto" style="margin-top:18px;">While we work on getting our website up and running, please direct all inquiries to our email address:
-    <a class="text-link" href="mailto:reservations@virginbeachresort.com">reservations@virginbeachresort.com</a></p>
-    <p class="prose mx-auto" style="margin-top:10px;">Thank you and we look forward to your visit! &mdash; <strong>Virgin Beach Resort Management</strong></p>
-    <a class="btn btn-primary mt-lg" href="book-stay/index.html">Book Now</a>
+    <span class="eyebrow">Ready when you are</span>
+    <h2>Book direct &mdash; it takes two minutes</h2>
+    <p class="prose mx-auto" style="margin-top:18px;">Pick your dates, choose your casita or cabana, and get your quotation by email right away.
+    Questions? Call <a class="text-link" href="tel:+639177920712">+63 917 792 0712</a> or email
+    <a class="text-link" href="mailto:reservations@virginbeachresort.com">reservations@virginbeachresort.com</a>.</p>
+    <div class="hero-actions" style="justify-content:center;">
+      <a class="btn btn-primary" href="book-stay/index.html">Book an overnight stay</a>
+      <a class="btn btn-ghost" href="book/index.html">Book a day trip</a>
+    </div>
   </div>
 </section>
+<script src="assets/js/quickbook.js"></script>
 <footer class="site-footer">
   <div class="wrap">
     <div class="footer-grid">

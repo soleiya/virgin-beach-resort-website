@@ -285,6 +285,18 @@ html = """<!doctype html>
   .cal-bk.st-confirmed { background: #1f7a72; }
   .cal-bk.st-completed { background: #7d7466; }
   .cal-bk.st-block { background: repeating-linear-gradient(45deg, #6b6559, #6b6559 6px, #7d776c 6px, #7d776c 12px); }
+  .cal-bk.provisional { outline: 2px dashed rgba(255,255,255,0.85); outline-offset: -3px; opacity: 0.85; }
+  .cb-sync { margin-left: auto; align-self: center; font-size: 0.8rem; color: var(--ink-soft); display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; }
+  .cb-sync .btn-sm { padding: 3px 10px; font-size: 0.75rem; }
+  .cb-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #2e9d6a; margin-right: 2px; }
+  .cb-dot.bad { background: #c0573e; }
+  .cb-warn { color: #a5462f; font-weight: 600; }
+  .cb-test { background: #fff3cd; color: #7a5a00; border: 1px solid #f0d58a; border-radius: 999px; padding: 2px 10px; font-weight: 700; font-size: 0.72rem; letter-spacing: 0.03em; }
+  .cb-link { font-size: 0.75rem; color: var(--teal, #1f7a72); text-decoration: none; white-space: nowrap; }
+  .cb-link:hover { text-decoration: underline; }
+  .cb-status { color: var(--ink-soft); }
+  .cb-banner { background: #eef6f4; border: 1px solid #b9dcd5; color: #1d4b45; border-radius: 10px; padding: 10px 14px; font-size: 0.86rem; margin: -6px 0 16px; }
+  .cb-banner a { color: #1f7a72; font-weight: 600; }
   .cal-bk.cont-l { border-top-left-radius: 0; border-bottom-left-radius: 0; margin-left: 0; }
   .cal-bk.cont-r { border-top-right-radius: 0; border-bottom-right-radius: 0; margin-right: 0; }
   .cal-legend { display: flex; flex-wrap: wrap; gap: 14px; font-size: .76rem; color: var(--ink-soft); margin-top: 10px; }
@@ -328,6 +340,7 @@ html = """<!doctype html>
     <div class="section-tabs" role="tablist" id="sectionTabs">
       <button type="button" class="sec-tab active" role="tab" data-section="daytrip"><span class="sec-ico">☀</span> Day Trips <span class="sec-count" id="secCountDaytrip"></span></button>
       <button type="button" class="sec-tab" role="tab" data-section="villas"><span class="sec-ico">⌂</span> Villas <span class="sec-count" id="secCountVillas"></span></button>
+      <div class="cb-sync" id="cbSync" data-section="villas" hidden></div>
     </div>
     <div class="toolbar">
       <div class="toolbar-left" id="filterPills">
@@ -582,6 +595,7 @@ html = """<!doctype html>
   <div class="modal modal-villa">
     <h2 id="villaModalTitle">New Villa Booking</h2>
     <p id="villaModalSub" style="color:var(--ink-soft); font-size:0.85rem; margin:-10px 0 20px;">Overnight stay in one or more casitas. Priced from the same rate sheet as the website.</p>
+    <div class="cb-banner" id="vCbBanner" hidden></div>
     <form id="villaForm">
       <div class="bk-grid"><div class="bk-main">
       <div class="modal-row three">
@@ -713,7 +727,7 @@ html = """<!doctype html>
     <div class="cal-side">
       <div class="cal-panel">
         <h3>Block a villa</h3>
-        <p class="modal-hint" style="margin:0 0 8px;">For repairs, owner use, etc. Blocked nights can't be booked online or here.</p>
+        <p class="modal-hint" style="margin:0 0 8px;">For repairs, owner use, etc. Blocked nights can't be booked online or here. <b>Cloudbeds is the master:</b> block the room in Cloudbeds too, or OTAs can still sell it. Blocks made in Cloudbeds appear here automatically.</p>
         <div class="modal-row" style="margin-bottom:8px;">
           <select id="blkVilla"></select>
           <input id="blkReason" type="text" placeholder="Reason, e.g. Roof repair">

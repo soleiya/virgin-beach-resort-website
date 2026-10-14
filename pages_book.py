@@ -6,8 +6,8 @@ body = f"""
   <img src="../assets/images/drone-shot-hero.jpg" alt="Aerial view of Virgin Beach Resort">
   <div class="wrap page-hero-content">
     <span class="eyebrow">Book Direct</span>
-    <h1>Request Your Day Trip</h1>
-    <p class="lede">Send us your preferred date and party size — our reservations team will confirm availability directly with you, no third-party booking site involved.</p>
+    <h1>Book Your Day Trip</h1>
+    <p class="lede">Pick your date, party size and cabana on the beach map &mdash; your quotation arrives by email right away.</p>
   </div>
 </section>
 
@@ -43,4 +43,4 @@ body = f"""
 {booking_scripts()}
 """
 
-page("book/index.html", "Request Your Day Trip", "Request a Day Trip or Corporate outing directly with Virgin Beach Resort. Booking an overnight casita? Use our Book Your Stay page.", body)
+page("book/index.html", "Book Your Day Trip", "Request a Day Trip or Corporate outing directly with Virgin Beach Resort. Booking an overnight casita? Use our Book Your Stay page.", body)
