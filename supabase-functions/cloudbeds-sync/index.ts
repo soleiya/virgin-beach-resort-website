@@ -83,7 +83,7 @@ export function form(params: Record<string, unknown>): URLSearchParams {
   return out;
 }
 
-export async function cb(method: "GET" | "POST" | "PUT", path: string, params: Record<string, unknown> = {}): Promise<Any> {
+export async function cb(method: "GET" | "POST" | "PUT" | "DELETE", path: string, params: Record<string, unknown> = {}): Promise<Any> {
   const key = env("CLOUDBEDS_API_KEY");
   if (!key) throw new Error("CLOUDBEDS_API_KEY is not set (Edge Functions → Secrets)");
   const p = { propertyID: PROPERTY(), ...params };
@@ -91,15 +91,16 @@ export async function cb(method: "GET" | "POST" | "PUT", path: string, params: R
     const wait = lastCall + 220 - Date.now(); // stay well under Cloudbeds' rate limit
     if (wait > 0) await sleep(wait);
     lastCall = Date.now();
-    const url = method === "GET" ? `${CB}/${path}?${form(p)}` : `${CB}/${path}`;
+    const inQuery = method === "GET" || method === "DELETE";
+    const url = inQuery ? `${CB}/${path}?${form(p)}` : `${CB}/${path}`;
     const res = await fetch(url, {
       method,
       headers: {
         "x-api-key": key,
         Accept: "application/json",
-        ...(method === "GET" ? {} : { "Content-Type": "application/x-www-form-urlencoded" }),
+        ...(inQuery ? {} : { "Content-Type": "application/x-www-form-urlencoded" }),
       },
-      body: method === "GET" ? undefined : form(p),
+      body: inQuery ? undefined : form(p),
     });
     if ((res.status === 429 || res.status >= 500) && attempt < 3) {
       await sleep(1500 * (attempt + 1));
@@ -401,6 +402,32 @@ async function pushStatus(bookingId: string) {
   return { reservation_id: b.cb_reservation_id, status: want };
 }
 
+// Our Cloudbeds webhook subscriptions, keyed "entity/action".
+const hookKey = (w: Any) => `${w.event?.entity ?? w.object ?? ""}/${w.event?.action ?? w.action ?? ""}`.toLowerCase();
+const hookUrl = (w: Any) => String(w.subscriptionData?.endpoint ?? w.endpointUrl ?? w.endpoint ?? "");
+const isOurs = (w: Any) => hookUrl(w).includes("/functions/v1/cloudbeds-sync");
+
+// List our webhooks; with dedupe, keep one per event and delete the rest.
+async function webhooks(dedupe: boolean) {
+  const all: Any[] = (await cb("GET", "getWebhooks")).data || [];
+  const ours = all.filter(isOurs);
+  const seen = new Set<string>();
+  const removed: string[] = [];
+  if (dedupe) {
+    for (const w of ours) {
+      const k = hookKey(w);
+      if (!seen.has(k)) { seen.add(k); continue; }
+      await cb("DELETE", "deleteWebhook", { subscriptionID: w.id, propertyIDs: PROPERTY() });
+      removed.push(k);
+    }
+  }
+  return {
+    total: all.length, ours: ours.length, removed,
+    events: ours.map((w) => hookKey(w)).sort(),
+    sample: all[0] ? { keys: Object.keys(all[0]), event: all[0].event, url: hookUrl(all[0]).replace(/\?.*$/, "") } : null,
+  };
+}
+
 async function setup() {
   const rooms: Any[] = [];
   for (let page = 1; page <= 10; page++) {
@@ -414,8 +441,7 @@ async function setup() {
   });
   const s = await secret();
   const existing: Any[] = (await cb("GET", "getWebhooks").catch(() => ({ data: [] }))).data || [];
-  const have = new Set(existing.filter((w: Any) => String(w.subscriptionData?.endpoint || w.endpointUrl || "").startsWith(SELF()))
-    .map((w: Any) => `${w.event?.entity || w.object}/${w.event?.action || w.action}`));
+  const have = new Set(existing.filter(isOurs).map(hookKey));
   const webhooks: Record<string, string> = {};
   for (const action of RESERVATION_EVENTS) {
     if (have.has(`reservation/${action}`)) { webhooks[action] = "already registered"; continue; }
@@ -487,6 +513,7 @@ export async function handle(req: Request): Promise<Response> {
       case "status": return json(await pushStatus(String(body.booking_id)));
       case "sync_one": return json(await syncOne(String(body.reservation_id)));
       case "setup": return json(await setup());
+      case "webhooks": return json(await webhooks(body.dedupe === true));
       case "test": {
         const r = await cb("GET", "getRooms", { propertyIDs: PROPERTY(), pageSize: 1 });
         return json({ ok: true, rooms_total: r.total ?? null });

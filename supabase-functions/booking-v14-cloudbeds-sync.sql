@@ -394,7 +394,7 @@ $$;
 -- Cloudbeds room blocks (out of service, blocked dates, courtesy holds) for
 -- [p_from, p_to) → website blocks, so the website never sells those nights.
 -- p = [{block_id, type, reason, start, end, rooms: [room_id, …]}]; Cloudbeds'
--- endDate is the last blocked night.
+-- endDate works like a check-out date (the room is free again that night).
 create or replace function cb_apply_blocks(p_from date, p_to date, p jsonb) returns jsonb
 language plpgsql security definer set search_path = public as $$
 declare
@@ -405,7 +405,7 @@ begin
   perform set_config('vbr.actor', 'Cloudbeds', true);
   for x in select * from jsonb_array_elements(coalesce(p, '[]'::jsonb)) loop
     v_in := (x->>'start')::date;
-    v_out := (x->>'end')::date + 1;
+    v_out := greatest((x->>'end')::date, (x->>'start')::date + 1);
     v_reason := 'Cloudbeds: ' || coalesce(nullif(trim(x->>'reason'), ''), replace(coalesce(x->>'type', 'block'), '_', ' '));
     for r in select jsonb_array_elements_text(coalesce(x->'rooms', '[]'::jsonb)) loop
       select id into v from villas where cb_room_id = r;
