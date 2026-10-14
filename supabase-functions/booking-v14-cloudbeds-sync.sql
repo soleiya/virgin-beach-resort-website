@@ -39,10 +39,6 @@ create unique index if not exists booking_requests_cb_reservation_key on booking
 alter table booking_villas add column if not exists provisional boolean not null default false;
 alter table booking_villas add column if not exists cb_block_id text;   -- a room block made in Cloudbeds
 
--- Everything imported from Cloudbeds belongs to Cloudbeds.
-update booking_requests
-   set cb_reservation_id = substr(legacy_source_row, 4), cb_owned = true
- where legacy_source_row like 'CB:%' and cb_reservation_id is null;
 
 -- 2. sync state ----------------------------------------------------------------
 create table if not exists cb_sync_state (
@@ -608,6 +604,15 @@ begin
   return null;
 end;
 $function$;
+
+-- Everything imported from Cloudbeds belongs to Cloudbeds. (Done after the
+-- functions above exist, with the sync flag on, so it neither wakes the
+-- email function nor fills the activity log.)
+select set_config('vbr.cb_sync', 'on', false), set_config('vbr.actor', 'Cloudbeds', false);
+update booking_requests
+   set cb_reservation_id = substr(legacy_source_row, 4), cb_owned = true
+ where legacy_source_row like 'CB:%' and cb_reservation_id is null;
+select set_config('vbr.cb_sync', '', false), set_config('vbr.actor', '', false);
 
 -- 8. schedules ----------------------------------------------------------------------
 do $$ begin
