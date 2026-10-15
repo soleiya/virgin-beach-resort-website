@@ -414,7 +414,7 @@
       ? " — our reservations team will follow up with your quotation and payment details at " +
         payload.guest_email + " or " + payload.guest_phone + ".</p>"
       : " — we've just emailed your quotation, bank details and next steps to <strong>" + payload.guest_email +
-        "</strong>. Your cabana is on hold; the booking is confirmed once payment is verified. " +
+        "</strong>. Your cabana is on hold — pay 50% or 100% within 24 hours and upload your proof to secure it; we confirm once payment is verified. " +
         "Can't find the email? Check your Spam or Promotions folder, or call us at +63 917 792 0712.</p>";
     statusEl.innerHTML = "<h3>Request received.</h3><p>Thank you, " + firstName + body + orderLine + extra;
   }

@@ -23,6 +23,9 @@
   var petHint = document.getElementById("docPetHint");
   var petPolicy = document.getElementById("docPetPolicy");
   var petAgree = document.getElementById("docPetAgree");
+  var kindWrap = document.getElementById("payKindWrap");
+  var kindOpts = document.getElementById("payKindOpts");
+  var kindHint = document.getElementById("payKindHint");
 
   // What this booking still needs (from get_booking_uploads), or null.
   var needs = null;
@@ -46,6 +49,43 @@
     reader.readAsDataURL(file);
   });
 
+  function peso(n) { return "₱" + Number(n || 0).toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+  function fmtDay(s) { return s ? new Date(s + "T00:00:00").toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", year: "numeric" }) : ""; }
+
+  // 50% / 100% / remaining balance — from the booking's payment summary.
+  function renderKinds() {
+    var pay = needs && needs.pay;
+    var total = pay && Number(pay.total);
+    if (!pay || !total) { kindWrap.hidden = true; kindOpts.innerHTML = ""; return; }
+    var claimed = Number(pay.claimed) || 0;
+    var opts = [];
+    if (claimed <= 0.5) {
+      if (pay.half_allowed) opts.push(["deposit", "50% down payment", Number(pay.deposit)]);
+      opts.push(["full", "Full payment (100%)", total]);
+    } else if (total - Math.max(claimed, Number(pay.paid) || 0) > 0.5) {
+      opts.push(["balance", "Remaining balance", total - Math.max(claimed, Number(pay.paid) || 0)]);
+    }
+    if (!opts.length) {
+      kindWrap.hidden = false;
+      kindOpts.innerHTML = "";
+      kindHint.textContent = "We already have proof of the full amount for this booking — you can still upload documents below.";
+      return;
+    }
+    kindWrap.hidden = false;
+    kindOpts.innerHTML = opts.map(function (o, i) {
+      return '<label class="pay-kind-opt"><input type="radio" name="payKind" value="' + o[0] + '"' + (i === 0 ? " checked" : "") + '><span><strong>' + o[1] + "</strong> " + peso(o[2]) + "</span></label>";
+    }).join("");
+    var hint = [];
+    if (claimed <= 0.5 && pay.half_allowed && pay.balance_due) hint.push("Paying 50% now? The balance is due by " + fmtDay(pay.balance_due) + " (15 days before arrival).");
+    if (claimed <= 0.5 && !pay.half_allowed) hint.push("Your " + (needs.stay_type === "overnight" ? "stay" : "visit") + " is less than 15 days away, so the full amount is needed to secure it.");
+    if (Number(needs.online_discount) > 0) hint.push("Your 5% Convenience Discount applies when you pay by bank or e-wallet transfer.");
+    kindHint.textContent = hint.join(" ");
+  }
+  function chosenKind() {
+    var r = kindOpts.querySelector("input[name=payKind]:checked");
+    return r ? r.value : "full";
+  }
+
   function plural(n, one, many) { return n + " " + (n === 1 ? one : many || one + "s"); }
   function andList(a) { return a.length < 2 ? a.join("") : a.slice(0, -1).join(", ") + " and " + a[a.length - 1]; }
 
@@ -67,9 +107,12 @@
         : "A clear photo of each pet's vaccination card, showing the pet's details and a current anti-rabies vaccination. Please bring the card(s) on the day too.";
       petPolicy.hidden = !!n.pet_policy_agreed;
     }
+    renderKinds();
     if (!n) { lookupEl.hidden = true; return; }
     var todo = [];
+    var pay = n.pay || {};
     if (!n.payment_uploaded) todo.push("payment screenshot");
+    else if (pay.total && !pay.fully_paid && Number(pay.claimed) < Number(pay.total) - 0.5) todo.push("remaining balance (" + peso(Number(pay.total) - Number(pay.claimed)) + (pay.balance_due ? ", due " + fmtDay(pay.balance_due) : "") + ")");
     if (seniors && !n.senior_ids) todo.push("Senior Citizen / PWD ID(s)");
     if (pets && !n.pet_cards) todo.push("pet vaccination card(s)");
     lookupEl.hidden = false;
@@ -190,19 +233,21 @@
         return sb.storage.from("payment-proofs").upload(path, payFile, { contentType: payFile.type || "image/jpeg" })
           .then(function (res) {
             if (res.error) throw res.error;
-            return sb.rpc("submit_payment_proof", { p_order_code: orderCode, p_guest_email: email, p_storage_path: path });
+            return sb.rpc("submit_payment_proof", { p_order_code: orderCode, p_guest_email: email, p_storage_path: path, p_kind: chosenKind() });
           })
           .then(function (res) {
             if (res.error) throw res.error;
             if (res.data !== true) throw new Error("nomatch");
-            did.unshift("payment screenshot");
+            var k = chosenKind();
+            did.unshift(k === "deposit" ? "50% payment screenshot" : k === "balance" ? "balance payment screenshot" : "payment screenshot");
           });
       })
       .then(function () {
         showResult(
           "<h3>Thank you!</h3><p>We've received your " + andList(did) + " for order <strong>" + orderCode + "</strong>." +
             (payFile
-              ? " We've emailed you an acknowledgement, and our reservations team will send your confirmation once the payment is verified (office hours 9:00 AM–4:00 PM, Monday–Friday)."
+              ? " We've emailed you an acknowledgement, and our reservations team will " + (chosenKind() === "balance" ? "email you once it's verified" : "send your confirmation once the payment is verified") + " (office hours 9:00 AM–4:00 PM, Monday–Friday)." +
+                (chosenKind() === "deposit" && needs && needs.pay && needs.pay.balance_due ? " Remember: the remaining balance is due by " + fmtDay(needs.pay.balance_due) + " — upload it here the same way." : "")
               : " Our reservations team will check " + (did.length > 1 || /s$/.test(did[0] || "") ? "them" : "it") + " — please remember to upload your payment screenshot too, if you haven't yet.") +
             "</p>",
           true

@@ -219,6 +219,45 @@ export function finalDeadline(record: Any): { date: Date | null; label: string; 
   return { date: d, label: fmtDateTime(d), isTripMorning };
 }
 
+// ---------- payment terms (booking-v16) -------------------------------------
+// Pay at least 50% (or 100%) by the payment deadline to secure the booking;
+// the balance is due 15 days before arrival (the day before the 50%
+// cancellation charge starts). Within 14 days of arrival: 100% up front.
+export const BALANCE_DAYS = 15;
+function addDaysStr(d: string, n: number) {
+  const x = new Date(d + "T00:00:00Z");
+  x.setUTCDate(x.getUTCDate() + n);
+  return x.toISOString().slice(0, 10);
+}
+function manilaToday(now = new Date()) { return new Date(now.getTime() + 8 * 3600_000).toISOString().slice(0, 10); }
+export function payTerms(r: Any, total: number | null | undefined, now = new Date()) {
+  const ci = r?.check_in ? String(r.check_in).slice(0, 10) : null;
+  const due = ci ? addDaysStr(ci, -BALANCE_DAYS) : null;
+  const t = Number(total) || 0;
+  return { half: !!(due && due > manilaToday(now)), total: t, deposit: r2(t / 2), balanceDue: due, balanceDueLabel: due ? fmtDate(due) : "" };
+}
+export type PaySummary = {
+  total: number | null; paid: number; claimed: number; pending: number; balance: number; deposit: number;
+  half_allowed: boolean; balance_due: string | null; plan: string | null; fully_paid: boolean;
+  last: { kind: string; amount: number; method: string; status: string; at: string } | null;
+};
+export const KIND_WORDS: Record<string, string> = { deposit: "50% down payment", full: "full payment", balance: "remaining balance", other: "payment" };
+// "To secure your reservation, pay at least 50% …" (quotation + 24-hour reminder)
+function securePara(r: Any, total: number, dl: { label: string }, units: string) {
+  const t = payTerms(r, total);
+  return t.half
+    ? `<strong>To secure your reservation, pay at least 50% (${esc(peso(t.deposit))}) &mdash; or the full ${esc(peso(t.total))} &mdash; by ${esc(dl.label)}</strong>, and send us your proof of payment. The remaining balance is due by <strong>${esc(t.balanceDueLabel)}</strong> (${BALANCE_DAYS} days before arrival). Unpaid bookings are automatically canceled and the ${units} released.`
+    : `<strong>Full payment of ${esc(peso(t.total))} is required by ${esc(dl.label)}</strong> to secure the reservation, as ${isOvernight(r) ? "your stay" : "your visit"} is less than ${BALANCE_DAYS} days away. Unpaid bookings are automatically canceled and the ${units} released.`;
+}
+function secureRows(r: Any, total: number, dl: { label: string }): [string, string][] {
+  const t = payTerms(r, total);
+  return t.half
+    ? [["To secure (50%)", esc(peso(t.deposit))], ["Please pay by", esc(dl.label)], ["Balance due by", esc(fmtDate(t.balanceDue, "short"))]]
+    : [["Amount due", esc(peso(t.total))], ["Please pay by", esc(dl.label)]];
+}
+// The 5% Convenience Discount (villas): one wording everywhere.
+export const CONVENIENCE_RULE = "booked here on our official website and paid by bank or e-wallet transfer";
+
 // ---------- quotation --------------------------------------------------------
 
 export type QuoteLine = { desc: string; rate: number; qty: number; amount: number; vatExempt?: boolean };
@@ -588,20 +627,19 @@ ${p(staffMade
     ? `Thank you for choosing Virgin Beach Resort! As discussed with our reservations team, here is the quotation for your <strong>${esc(r.stay_type_label || TYPE_NAMES[r.stay_type])}</strong> on <strong>${esc(fmtDate(r.check_in))}</strong>${cabanas.length ? ` — we're holding ${cabanas.length === 1 ? "your cabana" : "your cabanas"} for you` : ""}.`
     : `Thank you for choosing Virgin Beach Resort! We've received your <strong>${esc(r.stay_type_label || TYPE_NAMES[r.stay_type])}</strong> request for <strong>${esc(fmtDate(r.check_in))}</strong>${cabanas.length ? ` and are holding ${cabanas.length === 1 ? "your cabana" : "your cabanas"} for you` : ""}.`)}
 ${p(dl.date
-    ? `<strong>Full payment is required by ${esc(dl.label)}</strong> to secure the reservation. Unpaid bookings are automatically canceled and the cabana(s) released.`
+    ? securePara(r, q.total, dl, "cabana(s)")
     : `<strong>Payment is settled upon arrival at the resort.</strong>`)}
 ${poolNotice(c, r.check_in)}
 ${statusBox([
     ["Order ID", esc(r.order_code || "—")],
-    ["Amount due", esc(peso(q.total))],
-    ["Please pay by", esc(dl.label)],
+    ...(dl.date ? secureRows(r, q.total, dl) : [["Amount due", esc(peso(q.total))] as [string, string]]),
   ])}
 ${h2("Your reservation")}${kv(reservationRows(r, cabanas))}${cabanaNote(cabanas)}
 ${h2("Quotation")}${quoteTable(q)}
 ${h2("How to pay")}
-${p(`<strong>Option 1 — Bank deposit or online transfer</strong> (InstaPay / PESONet) to any of these accounts. Please put <strong>${esc(r.order_code)}</strong> and your name in the reference / remarks.`)}
+${p(`<strong>Option 1 — Bank or e-wallet transfer</strong> (InstaPay / PESONet &mdash; GCash and Maya can send to these accounts via InstaPay). Please put <strong>${esc(r.order_code)}</strong> and your name in the reference / remarks.`)}
 ${bankTable()}
-${p(`<strong>Option 2 — Credit/debit card or e-wallet.</strong> Reply to this email and we'll send you a secure Xendit payment link for ${esc(peso(q.total))}.`, "margin-top:14px;")}
+${p(`<strong>Option 2 — Card or e-wallet payment link.</strong> Reply to this email with the amount you'd like to pay (50% or 100%) and we'll send you a secure Xendit payment link.`, "margin-top:14px;")}
 ${h2("After you pay")}
 <ol style="margin:0 0 12px;padding-left:20px;font-size:14px;">
 <li style="margin:0 0 8px;"><strong>Send us your proof of payment</strong> — upload the screenshot or transaction slip using the button below, or simply reply to this email with it attached.</li>
@@ -619,7 +657,7 @@ ${signature(c)}`;
 
   return {
     subject: guestSubject(r, c),
-    html: shell({ preheader: `${r.order_code} · ${peso(q.total)} due · Bank details inside`, body: applyIntro(body, customOf(r, "quote"), r), c }),
+    html: shell({ preheader: `${r.order_code} · ${payTerms(r, q.total).half ? `50% (${peso(r2(q.total / 2))}) secures it` : `${peso(q.total)} due`} · Bank details inside`, body: applyIntro(body, customOf(r, "quote"), r), c }),
   };
 }
 
@@ -691,7 +729,7 @@ ${button(dash, "Open in staff dashboard")}${button(gmail, "Find guest thread in 
   };
 }
 
-export function staffProofEmail(r: Any, q: Quote | null, c: ReturnType<typeof cfg>, hasAttachment: boolean, now = new Date()) {
+export function staffProofEmail(r: Any, q: Quote | null, c: ReturnType<typeof cfg>, hasAttachment: boolean, now = new Date(), ps: PaySummary | null = null) {
   const d = daysUntil(r.check_in, now);
   const urgent = d !== null && d <= 2
     ? `<p style="margin:0 0 12px;padding:10px 14px;background:${C.redBg};color:${C.red};border-radius:8px;font-weight:bold;">${isOvernight(r) ? "Arrival" : "Trip"} is ${d <= 0 ? "TODAY" : d === 1 ? "TOMORROW" : "in 2 days"} — please validate and confirm right away.</p>`
@@ -699,11 +737,11 @@ export function staffProofEmail(r: Any, q: Quote | null, c: ReturnType<typeof cf
   const dash = `${c.site}/staff/index.html?q=${encodeURIComponent(r.order_code || "")}`;
   const body = `${statusBox([
     ["Order", esc(r.order_code || "—")],
-    ["Expected", q ? esc(peso(q.total)) : "—"],
-    ["Status", "Proof received"],
+    ["Guest says", ps?.last ? `${esc(KIND_WORDS[ps.last.kind] || "payment")}: ${esc(peso(ps.last.amount))}` : (q ? esc(peso(q.total)) : "—")],
+    ["Booking total", ps?.total != null ? esc(peso(ps.total)) : (q ? esc(peso(q.total)) : "—")],
   ])}
 ${urgent}${p(`<strong>${esc(r.guest_name)}</strong> uploaded a payment screenshot on the website${r.payment_uploaded_at ? ` (${esc(fmtDateTime(new Date(r.payment_uploaded_at)))})` : ""}.${hasAttachment ? " It's attached to this email." : " Open it from the dashboard."}`)}
-${p(`Please check it against the bank statement for <strong>${q ? esc(peso(q.total)) : "the quoted amount"}</strong>, confirm the signed Reservations Agreement is in the guest thread, then set the booking to <strong>Confirmed</strong>. The guest has been told we're verifying it.`)}
+${p(`Please check it against the bank statement for <strong>${ps?.last ? esc(peso(ps.last.amount)) : q ? esc(peso(q.total)) : "the quoted amount"}</strong>, confirm the signed Reservations Agreement is in the guest thread, then click <strong>Verify</strong> on the payment in the dashboard (Payments). ${ps?.last?.kind === "balance" ? "That completes the payment and sends the guest a thank-you." : "That confirms the booking and sends the guest their confirmation."} The guest has been told we're verifying it.`)}
 ${kv([
     [isOvernight(r) ? "Stay" : "Trip date", esc(isOvernight(r) ? stayRange(r) : fmtDate(r.check_in))], ["Mobile", esc(r.guest_phone)], ["Email", esc(r.guest_email)],
     ...(int(r.senior_count) ? [["Senior/PWD IDs", Array.isArray(r.senior_id_paths) && r.senior_id_paths.length ? plural(r.senior_id_paths.length, "photo") + " on file" : "<strong>None uploaded yet</strong>"] as [string, string]] : []),
@@ -716,16 +754,23 @@ ${kv([
   };
 }
 
-export function guestProofEmail(r: Any, c: ReturnType<typeof cfg>) {
+export function guestProofEmail(r: Any, c: ReturnType<typeof cfg>, ps: PaySummary | null = null) {
   const first = esc(String(r.guest_name || "there").trim().split(/\s+/)[0]);
+  const last = ps?.last || null;
+  const what = last ? `your <strong>${esc(KIND_WORDS[last.kind] || "payment")} of ${esc(peso(last.amount))}</strong>` : "your proof of payment";
+  const isBalance = last?.kind === "balance";
+  const balanceAfter = ps && last && last.kind === "deposit" && ps.total ? r2(Number(ps.total) - Number(last.amount)) : 0;
   const body = `${p(`Hi ${first},`)}
-${p(`Thank you! We've received your proof of payment for <strong>${esc(r.order_code)}</strong>${r.payment_uploaded_at ? ` (uploaded ${esc(fmtDateTime(new Date(r.payment_uploaded_at)))})` : ""}.`)}
+${p(`Thank you! We've received ${last ? `the proof of ${what}` : what} for <strong>${esc(r.order_code)}</strong>${r.payment_uploaded_at ? ` (uploaded ${esc(fmtDateTime(new Date(r.payment_uploaded_at)))})` : ""}.`)}
 ${statusBox([
     ["Order ID", esc(r.order_code || "—")],
     [isOvernight(r) ? "Stay" : "Date", esc(isOvernight(r) ? stayRange(r) : fmtDate(r.check_in, "short"))],
     ["Status", "Payment being verified"],
   ])}
-${p("Our team is now verifying it against our bank records. As soon as it's confirmed, we'll send your <strong>booking confirmation</strong> in this same email thread &mdash; no need to do anything else in the meantime. If you don't see it, kindly check your Spam or Junk folder.")}
+${p(isBalance
+    ? "Our team is now verifying it against our bank records. Once it's confirmed, we'll email you in this same thread &mdash; and you're all set for your arrival."
+    : "Our team is now verifying it against our bank records. As soon as it's confirmed, we'll send your <strong>booking confirmation</strong> in this same email thread &mdash; no need to do anything else in the meantime. If you don't see it, kindly check your Spam or Junk folder.")}
+${balanceAfter > 0.5 && ps?.balance_due ? p(`The remaining balance of <strong>${esc(peso(balanceAfter))}</strong> is due by <strong>${esc(fmtDate(ps.balance_due))}</strong>${isOvernight(r) && Number(r.online_discount) > 0 ? ` &mdash; please pay it by bank or e-wallet transfer too, to keep your 5% Convenience Discount` : ""}. You'll upload that proof the same way.`) : ""}
 ${p("If you haven't yet, please reply with the signed Reservations Agreement and a photo of one (1) valid ID so we can finalize everything.", `font-size:13.5px;color:${C.soft};`)}
 ${signature(c)}`;
   return {
@@ -735,19 +780,32 @@ ${signature(c)}`;
 }
 
 // "Thank you for your payment" line for the confirmation, when payment was received.
-function paidThanks(r: Any, q: Quote | null) {
-  const paid = !!(r.payment_uploaded_at || r.payment_screenshot_path);
+function paidThanks(r: Any, q: Quote | null, ps: PaySummary | null = null, c?: ReturnType<typeof cfg>) {
+  if (ps && ps.paid > 0 && !ps.fully_paid) {
+    const keep = isOvernight(r) && Number(r.online_discount) > 0 ? " Please pay it by bank or e-wallet transfer too, to keep your 5% Convenience Discount." : "";
+    return p(`Thank you for your payment of <strong>${esc(peso(ps.paid))}</strong> &mdash; we've verified it, and your booking is now <strong>confirmed</strong>.`) +
+      p(`The remaining balance of <strong>${esc(peso(ps.balance))}</strong> is due by <strong>${esc(fmtDate(ps.balance_due))}</strong>.${keep} When you've paid it, upload the proof using the same link:`, `background:${C.tint};border-radius:8px;padding:10px 14px;font-size:14px;`) +
+      (c ? `<p style="margin:0 0 16px;">${button(uploadUrl(r, c), "Upload balance payment")}</p>` : "");
+  }
+  const paid = !!(r.payment_uploaded_at || r.payment_screenshot_path || (ps && ps.paid > 0));
   if (!paid) return "";
-  return p(`Thank you for your payment${q ? ` of <strong>${esc(peso(q.total))}</strong>` : ""} &mdash; we've verified it, and your booking is now <strong>confirmed</strong>.`);
+  const amt = ps && ps.paid > 0 ? ps.paid : q ? q.total : null;
+  return p(`Thank you for your payment${amt ? ` of <strong>${esc(peso(amt))}</strong>` : ""} &mdash; we've verified it, and your booking is now <strong>confirmed</strong>.`);
+}
+function paidRows(q: Quote | null, ps: PaySummary | null): [string, string][] {
+  if (ps && ps.paid > 0 && !ps.fully_paid) {
+    return [["Amount paid", `<strong>${esc(peso(ps.paid))}</strong>`], ["Balance due", `<strong>${esc(peso(ps.balance))}</strong> by ${esc(fmtDate(ps.balance_due, "short"))}`]];
+  }
+  return q ? [["Amount paid", `<strong>${esc(peso(ps && ps.paid > 0 ? ps.paid : q.total))}</strong>`]] : [];
 }
 
-export function guestConfirmedEmail(r: Any, cabanas: Any[], q: Quote | null, c: ReturnType<typeof cfg>) {
-  if (isOvernight(r)) return guestConfirmedEmailOvernight(r, cabanas, q, c);
+export function guestConfirmedEmail(r: Any, cabanas: Any[], q: Quote | null, c: ReturnType<typeof cfg>, ps: PaySummary | null = null) {
+  if (isOvernight(r)) return guestConfirmedEmailOvernight(r, cabanas, q, c, ps);
   const first = esc(String(r.guest_name || "there").trim().split(/\s+/)[0]);
   const t = TIMES[r.stay_type] || TIMES.day_trip;
   const map = "https://www.google.com/maps/search/?api=1&query=" + encodeURIComponent("Virgin Beach Resort, Laiya, San Juan, Batangas");
   const body = `${p(`Hi ${first},`)}
-${paidThanks(r, q)}${p(`We are delighted to confirm your reservation for a <strong>${esc(r.stay_type === "half_day" ? "Half-Day Trip" : "Day Trip")}</strong> on <strong>${esc(fmtDate(r.check_in))}</strong>.`)}
+${paidThanks(r, q, ps, c)}${p(`We are delighted to confirm your reservation for a <strong>${esc(r.stay_type === "half_day" ? "Half-Day Trip" : "Day Trip")}</strong> on <strong>${esc(fmtDate(r.check_in))}</strong>.`)}
 ${statusBox([
     ["Order ID", esc(r.order_code || "—")],
     ["Date", esc(fmtDate(r.check_in, "short"))],
@@ -755,7 +813,7 @@ ${statusBox([
   ], "ok")}
 ${h2("Your reservation")}${kv([
     ...reservationRows(r, cabanas).slice(1),
-    ...(q ? [["Amount paid", `<strong>${esc(peso(q.total))}</strong>`] as [string, string]] : []),
+    ...paidRows(q, ps),
   ])}${cabanaNote(cabanas)}
 ${p(`Kindly present this confirmation, your proof of payment, and one (1) valid ID upon check-in at the Resort. Check-in is from <strong>${t.in}</strong>; check-out is at <strong>${t.out}</strong>. ${r.stay_type === "half_day" ? "Afternoon snacks are included for every guest." : "Lunch is served from 12:00 NN to 2:00 PM only."}`, "margin-top:14px;")}
 ${p("If you haven't sent it yet, please reply with a signed copy of the Reservations Agreement. Once you receive this email, we'd appreciate a quick reply to acknowledge it.", `font-size:13.5px;color:${C.soft};`)}
@@ -781,7 +839,7 @@ ${p(fin.isTripMorning
     : `As a courtesy, we've <strong>extended your hold by 12 hours, until ${esc(fin.label)}</strong>. If payment isn't settled by then, the booking will be canceled and the cabana(s) released to other guests.`)}
 ${statusBox([
     ["Order ID", esc(r.order_code || "—")],
-    ["Amount due", q ? esc(peso(q.total)) : "See quotation"],
+    ["Amount due", q ? (payTerms(r, q.total).half ? `50%: ${esc(peso(r2(q.total / 2)))}<br>or 100%: ${esc(peso(q.total))}` : esc(peso(q.total))) : "See quotation"],
     ["Final deadline", esc(fin.label)],
   ])}
 ${p("Already paid? Just upload your proof of payment (or reply to this email with it) and we'll take it from here.")}
@@ -934,21 +992,20 @@ ${p(staffMade
     ? `Thank you for choosing Virgin Beach Resort! As discussed with our reservations team, here is the quotation for your <strong>overnight stay</strong> from <strong>${esc(fmtDate(r.check_in))}</strong> to <strong>${esc(fmtDate(r.check_out))}</strong> — we're holding ${casitaWord} for you.`
     : `Thank you for choosing Virgin Beach Resort! We've received your request for an <strong>overnight stay</strong> from <strong>${esc(fmtDate(r.check_in))}</strong> to <strong>${esc(fmtDate(r.check_out))}</strong> and are holding ${casitaWord} for you.`)}
 ${p(dl.date
-    ? `<strong>Full payment is required by ${esc(dl.label)}</strong> to secure the reservation. Unpaid bookings are automatically canceled and the casita${villas.length === 1 ? "" : "s"} released.`
+    ? (q ? securePara(r, q.total, dl, `casita${villas.length === 1 ? "" : "s"}`) : `<strong>Payment is required by ${esc(dl.label)}</strong> to secure the reservation.`)
     : `<strong>Payment is settled upon arrival at the resort.</strong>`)}
 ${statusBox([
     ["Order ID", esc(r.order_code || "—")],
-    ["Amount due", q ? esc(peso(q.total)) : "To follow"],
-    ["Please pay by", esc(dl.label)],
+    ...(q && dl.date ? secureRows(r, q.total, dl) : [["Amount due", q ? esc(peso(q.total)) : "To follow"] as [string, string], ["Please pay by", esc(dl.label)] as [string, string]]),
   ])}
-${q && q.onlineDiscount ? p(`The amount due already includes your <strong>${q.onlineDiscountRate ? esc(String(q.onlineDiscountRate)) + "% " : ""}Convenience Discount (${esc(peso(q.onlineDiscount))})</strong> for paying by bank transfer.`, `background:${C.tint};border-radius:8px;padding:10px 14px;font-size:14px;`) : ""}
+${q && q.onlineDiscount ? p(`Your total already includes the <strong>${q.onlineDiscountRate ? esc(String(q.onlineDiscountRate)) + "% " : ""}Convenience Discount (${esc(peso(q.onlineDiscount))})</strong> for stays ${CONVENIENCE_RULE}.${payTerms(r, q.total).half ? " Please settle the balance the same way to keep it." : ""}`, `background:${C.tint};border-radius:8px;padding:10px 14px;font-size:14px;`) : ""}
 ${h2("Your reservation")}${kv(overnightRows(r, villas))}${cabanaNote(villas)}
 ${h2("Guest list")}${rosterTable(r)}
 ${q ? h2("Quotation") + quoteTable(q) + p("The full-board meal package (lunch, dinner and breakfast) is mandatory for every guest and is charged per guest, per night. Children 0–5 eat free.", `font-size:12.5px;color:${C.soft};margin-top:8px;`) : ""}
 ${h2("How to pay")}
-${p(`<strong>Option 1 — Bank deposit or online transfer</strong> (InstaPay / PESONet) to any of these accounts. Please put <strong>${esc(r.order_code)}</strong> and your name in the reference / remarks.`)}
+${p(`<strong>Option 1 — Bank or e-wallet transfer</strong> (InstaPay / PESONet &mdash; GCash and Maya can send to these accounts via InstaPay). Please put <strong>${esc(r.order_code)}</strong> and your name in the reference / remarks.`)}
 ${bankTable()}
-${p(`<strong>Option 2 — Credit/debit card or e-wallet.</strong> Reply to this email and we'll send you a secure Xendit payment link${q ? ` for ${esc(peso(q.cardTotal ?? q.total))}` : ""}${q && q.onlineDiscount ? " (the Convenience Discount applies to bank transfers)" : ""}.`, "margin-top:14px;")}
+${p(`<strong>Option 2 — Card or e-wallet payment link.</strong> Reply to this email with the amount you'd like to pay (50% or 100%) and we'll send you a secure Xendit payment link${q && q.onlineDiscount ? ` &mdash; the Convenience Discount doesn't apply to payment-link payments, so the full price is ${esc(peso(q.cardTotal ?? q.total))}` : ""}.`, "margin-top:14px;")}
 ${h2("After you pay")}
 <ol style="margin:0 0 12px;padding-left:20px;font-size:14px;">
 <li style="margin:0 0 8px;"><strong>Send us your proof of payment</strong> — upload the screenshot or transaction slip using the button below, or simply reply to this email with it attached.</li>
@@ -959,14 +1016,14 @@ ${int(r.pet_count) && !need.pets ? `<li style="margin:0 0 8px;"><strong>Bringing
 <li style="margin:0 0 8px;"><strong>We'll email your confirmation</strong> as soon as the payment is verified (office hours, 9:00 AM–4:00 PM, Monday–Friday).</li>
 </ol>
 ${button(payUrl, need.any ? "Upload payment & documents" : "Upload proof of payment")}
-<p style="margin:14px 0 0;padding:12px 14px;background:${C.sand};border-radius:8px;font-size:13px;color:${C.soft};">This is a quotation, not yet a confirmed booking. Your casita${villas.length === 1 ? " is" : "s are"} held until the payment deadline above and confirmed only once full payment is received. In the absence of a signed agreement, guests are not relieved of the resort rules, regulations and conditions.</p>
+<p style="margin:14px 0 0;padding:12px 14px;background:${C.sand};border-radius:8px;font-size:13px;color:${C.soft};">This is a quotation, not yet a confirmed booking. Your casita${villas.length === 1 ? " is" : "s are"} held until the payment deadline above and confirmed once your payment is verified. In the absence of a signed agreement, guests are not relieved of the resort rules, regulations and conditions.</p>
 ${overnightGoodToKnow()}
 ${cancellationTable()}
 ${p("<strong>Need to change your dates or guest list?</strong> Just reply to this email and we'll help.", `font-size:13.5px;color:${C.soft};margin-top:14px;`)}
 ${signature(c)}`;
   return {
     subject: guestSubject(r, c),
-    html: shell({ preheader: `${r.order_code} · ${q ? peso(q.total) + " due · " : ""}${stayRange(r)} · Bank details inside`, body: applyIntro(body, customOf(r, "quote"), r), c }),
+    html: shell({ preheader: `${r.order_code} · ${q ? (payTerms(r, q.total).half ? `50% (${peso(r2(q.total / 2))}) secures it · ` : peso(q.total) + " due · ") : ""}${stayRange(r)} · Bank details inside`, body: applyIntro(body, customOf(r, "quote"), r), c }),
   };
 }
 
@@ -1031,11 +1088,11 @@ ${button(dash, "Open in staff dashboard")}${button(gmail, "Find guest thread in 
   };
 }
 
-export function guestConfirmedEmailOvernight(r: Any, villas: Any[], q: Quote | null, c: ReturnType<typeof cfg>) {
+export function guestConfirmedEmailOvernight(r: Any, villas: Any[], q: Quote | null, c: ReturnType<typeof cfg>, ps: PaySummary | null = null) {
   const first = esc(String(r.guest_name || "there").trim().split(/\s+/)[0]);
   const map = "https://www.google.com/maps/search/?api=1&query=" + encodeURIComponent("Virgin Beach Resort, Laiya, San Juan, Batangas");
   const body = `${p(`Hi ${first},`)}
-${paidThanks(r, q)}${p(`We are delighted to confirm your <strong>overnight stay</strong> at Virgin Beach Resort from <strong>${esc(fmtDate(r.check_in))}</strong> to <strong>${esc(fmtDate(r.check_out))}</strong>. We can't wait to welcome you.`)}
+${paidThanks(r, q, ps, c)}${p(`We are delighted to confirm your <strong>overnight stay</strong> at Virgin Beach Resort from <strong>${esc(fmtDate(r.check_in))}</strong> to <strong>${esc(fmtDate(r.check_out))}</strong>. We can't wait to welcome you.`)}
 ${statusBox([
     ["Order ID", esc(r.order_code || "—")],
     ["Arrival", esc(fmtDate(r.check_in, "short"))],
@@ -1043,7 +1100,7 @@ ${statusBox([
   ], "ok")}
 ${h2("Your reservation")}${kv([
     ...overnightRows(r, villas).slice(1),
-    ...(q ? [["Amount paid", `<strong>${esc(peso(q.total))}</strong>`] as [string, string]] : []),
+    ...paidRows(q, ps),
   ])}${cabanaNote(villas)}
 ${h2("Registered guests")}${rosterTable(r)}
 ${p(`Kindly present this confirmation and your proof of payment at the Front Office. <strong>Every guest</strong> listed above needs a valid government-issued ID at check-in. Check-in is from <strong>2:00 PM</strong>; check-out is at <strong>11:30 AM</strong>.`, "margin-top:14px;")}
@@ -1055,6 +1112,69 @@ ${signature(c)}`;
   return {
     subject: "Re: " + guestSubject(r, c),
     html: shell({ preheader: `${r.payment_uploaded_at || r.payment_screenshot_path ? "Payment received — " : ""}Confirmed: ${stayRange(r)} · ${r.order_code}`, body: applyIntro(body, customOf(r, "confirmed"), r), c }),
+  };
+}
+
+// ---------- balance reminders & paid in full (booking-v16) ----------------------
+export function guestBalanceEmail(r: Any, ps: PaySummary, c: ReturnType<typeof cfg>, overdue: boolean) {
+  const first = esc(String(r.guest_name || "there").trim().split(/\s+/)[0]);
+  const keep = isOvernight(r) && Number(r.online_discount) > 0
+    ? p(`Please pay by bank or e-wallet transfer to keep your 5% Convenience Discount (for stays ${CONVENIENCE_RULE}).`, `font-size:13.5px;color:${C.soft};`)
+    : "";
+  const body = `${p(`Hi ${first},`)}
+${p(overdue
+    ? `Our records show the remaining balance for your reservation <strong>${esc(r.order_code)}</strong> was due on <strong>${esc(fmtDate(ps.balance_due))}</strong> and hasn't reached us yet. Please settle it as soon as possible, or reply to this email if you've already paid or need help &mdash; our team will get in touch.`
+    : `A friendly reminder that the remaining balance for your ${isOvernight(r) ? "stay" : "visit"} on <strong>${esc(fmtDate(r.check_in))}</strong> is due by <strong>${esc(fmtDate(ps.balance_due))}</strong>.`)}
+${statusBox([
+    ["Order ID", esc(r.order_code || "—")],
+    ["Paid so far", esc(peso(ps.paid))],
+    ["Balance", `<strong>${esc(peso(ps.balance))}</strong>`],
+    ["Due by", esc(fmtDate(ps.balance_due, "short"))],
+  ])}
+${h2("How to pay")}
+${p(`Bank or e-wallet transfer (InstaPay / PESONet &mdash; GCash and Maya can send to these accounts via InstaPay). Please put <strong>${esc(r.order_code)}</strong> and your name in the reference / remarks.`)}
+${bankTable()}
+${keep}
+${p("Then upload your proof of payment &mdash; or simply reply to this email with it attached.")}
+${button(uploadUrl(r, c), "Upload balance payment")}
+${cancellationTable()}
+${signature(c)}`;
+  return {
+    subject: "Re: " + guestSubject(r, c),
+    html: shell({ preheader: `${overdue ? "Balance overdue" : "Balance due " + fmtDate(ps.balance_due, "short")} · ${peso(ps.balance)} · ${r.order_code}`, body, c }),
+  };
+}
+
+export function staffBalanceOverdueEmail(r: Any, ps: PaySummary, c: ReturnType<typeof cfg>) {
+  const dash = `${c.site}/staff/index.html?q=${encodeURIComponent(r.order_code || "")}`;
+  const body = `${statusBox([
+    ["Order", esc(r.order_code || "—")],
+    ["Balance", esc(peso(ps.balance))],
+    ["Was due", esc(fmtDate(ps.balance_due, "short"))],
+  ])}
+${p(`<strong>${esc(r.guest_name)}</strong> has paid ${esc(peso(ps.paid))} of ${esc(peso(ps.total))} for ${isOvernight(r) ? "the stay" : "the visit"} on <strong>${esc(fmtDate(r.check_in))}</strong>; the balance was due ${esc(fmtDate(ps.balance_due))}. The guest has been sent a reminder.`)}
+${p("Nothing has been cancelled. Please follow up with the guest, then decide: extend the deadline, record a payment received another way, or cancel under the cancellation policy (50% of the booking value is forfeited from 14 days before arrival).")}
+<p style="margin-top:16px;">${button(dash, "Open in staff dashboard")}</p>`;
+  return {
+    subject: "Re: " + staffSubject(r, c),
+    html: shell({ preheader: `Balance overdue for ${r.order_code} — please follow up`, body, c, internal: true }),
+  };
+}
+
+export function guestPaidInFullEmail(r: Any, ps: PaySummary, c: ReturnType<typeof cfg>) {
+  const first = esc(String(r.guest_name || "there").trim().split(/\s+/)[0]);
+  const body = `${p(`Hi ${first},`)}
+${p(`Thank you &mdash; we've received your ${ps.last?.kind === "balance" ? "remaining balance" : "payment"}, and your reservation <strong>${esc(r.order_code)}</strong> is now <strong>fully paid</strong>.`)}
+${statusBox([
+    ["Order ID", esc(r.order_code || "—")],
+    [isOvernight(r) ? "Stay" : "Date", esc(isOvernight(r) ? stayRange(r) : fmtDate(r.check_in, "short"))],
+    ["Paid", `<strong>${esc(peso(ps.paid))}</strong>`],
+  ], "ok")}
+${p(`We look forward to welcoming you! Please bring your booking confirmation and one (1) valid ID${isOvernight(r) ? " for every guest" : ""} on the day.`)}
+${signature(c)}`;
+  return {
+    subject: "Re: " + guestSubject(r, c),
+    html: shell({ preheader: `Fully paid · ${r.order_code} · see you soon`, body, c }),
   };
 }
 
@@ -1147,6 +1267,12 @@ async function quoteFor(r: Any, units: Any[]): Promise<Quote | null> {
   const res = await db("rpc/quote_booking_overnight", { method: "POST", body: JSON.stringify({ p_booking_id: r.id }) });
   if (!res.ok) { console.error("quote_booking_overnight", res.status, await res.text()); return null; }
   return quoteFromOvernight(r, await res.json());
+}
+
+async function paySummary(id: string): Promise<PaySummary | null> {
+  const res = await db("rpc/booking_payment_summary", { method: "POST", body: JSON.stringify({ p_booking_id: id }) });
+  if (!res.ok) { console.error("booking_payment_summary", res.status, await res.text()); return null; }
+  return await res.json();
 }
 
 // Claims a (booking, kind) slot. Returns false if that email already went out
@@ -1294,18 +1420,19 @@ function autoEmail(r: Any, c: ReturnType<typeof cfg>) {
 async function onProof(r: Any) {
   const c = cfg();
   if (!autoEmail(r, c)) return { skipped: "source " + r.source };
-  if (r.status === "confirmed" || String(r.payment_screenshot_path || "").startsWith("staff/")) {
-    return { skipped: "uploaded by staff" };
-  }
+  if (String(r.payment_screenshot_path || "").startsWith("staff/")) return { skipped: "uploaded by staff" };
+  const ps = await paySummary(r.id);
+  // A confirmed booking only gets these for a new (balance) upload waiting to be verified.
+  if (r.status === "confirmed" && !(ps?.last && ps.last.status === "pending")) return { skipped: "already confirmed" };
   const cabanas = await loadUnits(r);
   const q = await quoteFor(r, cabanas);
   const att = await proofAttachment(r.payment_screenshot_path);
-  const s = staffProofEmail(r, q, c, att.length > 0);
+  const s = staffProofEmail(r, q, c, att.length > 0, new Date(), ps);
   const stamp = String(r.payment_uploaded_at || Date.now());
   const staff = await send({ booking: r, kind: `proof_staff:${stamp}`, to: [...c.staffEmails, ...c.proofCc], subject: s.subject, html: s.html, thread: "staff", attachments: att });
   let guest = null;
   if (r.guest_email) {
-    const g = guestProofEmail(r, c);
+    const g = guestProofEmail(r, c, ps);
     guest = await send({ booking: r, kind: `proof_guest:${stamp}`, to: r.guest_email, subject: g.subject, html: g.html, thread: "guest" });
   }
   return { staff, guest };
@@ -1344,11 +1471,39 @@ async function onConfirmed(r: Any) {
   if (!r.guest_email) return { skipped: "no guest email" };
   const cabanas = await loadUnits(r);
   const q = await quoteFor(r, cabanas);
-  const g = guestConfirmedEmail(r, cabanas, q, c);
+  const ps = await paySummary(r.id);
+  const g = guestConfirmedEmail(r, cabanas, q, c, ps);
   return await send({ booking: r, kind: "guest_confirmed", to: r.guest_email, subject: g.subject, html: g.html, thread: "guest" });
 }
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+
+async function onBalance(r: Any, overdue: boolean) {
+  const c = cfg();
+  if (!autoEmail(r, c)) return { skipped: "source " + r.source };
+  const ps = await paySummary(r.id);
+  if (!ps || ps.fully_paid || !(ps.balance > 0.5)) return { skipped: "nothing outstanding" };
+  const out: Record<string, unknown> = {};
+  if (r.guest_email && EMAIL_RE.test(String(r.guest_email).trim())) {
+    const g = guestBalanceEmail(r, ps, c, overdue);
+    out.guest = await send({ booking: r, kind: overdue ? "balance_overdue_guest" : "balance_due", to: String(r.guest_email).trim(), subject: g.subject, html: g.html, thread: "guest" });
+  }
+  if (overdue) {
+    const s = staffBalanceOverdueEmail(r, ps, c);
+    out.staff = await send({ booking: r, kind: "balance_overdue_staff", to: c.staffEmails, subject: s.subject, html: s.html, thread: "staff" });
+  }
+  return out;
+}
+
+async function onPaidInFull(r: Any) {
+  const c = cfg();
+  if (!autoEmail(r, c)) return { skipped: "source " + r.source };
+  if (!r.guest_email || !EMAIL_RE.test(String(r.guest_email).trim())) return { skipped: "no valid guest email" };
+  const ps = await paySummary(r.id);
+  if (!ps || !ps.fully_paid) return { skipped: "not fully paid" };
+  const g = guestPaidInFullEmail(r, ps, c);
+  return await send({ booking: r, kind: "paid_in_full", to: String(r.guest_email).trim(), subject: g.subject, html: g.html, thread: "guest" });
+}
 
 async function onReminder(r: Any) {
   const c = cfg();
@@ -1486,6 +1641,9 @@ export async function handle(req: Request): Promise<Response> {
     if (payload.type === "CHANGE") out.changed = await onChanged(r, payload);
     if (payload.type === "REMINDER") out.reminder = await onReminder(r);
     if (payload.type === "DOCS") out.docs = await onDocs(r, payload);
+    if (payload.type === "BALANCE_DUE") out.balance = await onBalance(r, false);
+    if (payload.type === "BALANCE_OVERDUE") out.balance = await onBalance(r, true);
+    if (payload.type === "PAID_IN_FULL") out.paid = await onPaidInFull(r);
     if (payload.type === "UPDATE") {
       // Staff ticked "Send this booking to the guest" — the dashboard flips
       // email_guest after the cabanas are attached, so the quote lists them.

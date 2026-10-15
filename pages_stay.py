@@ -56,7 +56,8 @@ body = f"""
   <div class="wrap" style="max-width:820px;">
     <div class="book-direct-note">
       <span class="bdn-badge">5% off</span>
-      <div><strong>Enjoy a 5% Convenience Discount.</strong> Book here on our official website and pay by bank transfer, and 5% comes off your whole stay &mdash; casita, meals and any add-ons.</div>
+      <div><strong>5% Convenience Discount</strong> on your whole stay &mdash; casita, meals and any add-ons &mdash; when you:
+        <ul class="bdn-list"><li>book here, on our official website</li><li>pay by bank or e-wallet transfer</li></ul></div>
     </div>
     <div id="stayFormWrap">
       <form class="inquiry" id="stayForm" novalidate>
@@ -170,7 +171,7 @@ body = f"""
           <label class="inline-check" style="font-size:0.85rem !important; color:var(--ink-soft) !important;"><input type="checkbox" id="marketingOptIn" checked> Send me occasional promos and updates from Virgin Beach Resort.</label>
           <div class="form-error-box" id="formError" hidden></div>
           <button class="btn btn-primary" type="submit" id="submitBtn">Request Booking</button>
-          <p class="field-hint">Your casita is held while you pay: you'll get the quotation and bank details by email right away, and full payment within 24 hours confirms the booking. Prefer card or e-wallet? We can send a secure payment link instead (the Convenience Discount applies to bank transfers).</p>
+          <p class="field-hint">Your casita is held while you pay: you'll get the quotation and bank details by email right away. Transfer <strong>50% or 100% within 24 hours</strong> and upload your proof to secure it; the balance is due 15 days before arrival (bookings within 14 days of arrival are paid in full). Prefer a card or e-wallet payment link? We can send one &mdash; the Convenience Discount applies to bank or e-wallet transfers.</p>
         </div>
       </form>
     </div>

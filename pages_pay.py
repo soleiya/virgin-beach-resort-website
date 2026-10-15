@@ -7,7 +7,7 @@ body = f"""
   <div class="wrap page-hero-content">
     <span class="eyebrow">Payment</span>
     <h1>Upload Payment &amp; Documents</h1>
-    <p class="lede">Send us your payment screenshot &mdash; plus any Senior Citizen / PWD IDs and pet vaccination cards your booking needs.</p>
+    <p class="lede">Send us your payment screenshot &mdash; 50% or the full amount to secure your booking, or your remaining balance &mdash; plus any Senior Citizen / PWD IDs and pet vaccination cards your booking needs.</p>
   </div>
 </section>
 
@@ -25,6 +25,11 @@ body = f"""
           <input id="payEmail" type="email" required>
         </div>
         <p class="field-hint" id="payLookup" hidden></p>
+        <fieldset class="pay-kind" id="payKindWrap" hidden>
+          <legend>What are you paying?</legend>
+          <div class="pay-kind-opts" id="payKindOpts"></div>
+          <p class="field-hint" id="payKindHint"></p>
+        </fieldset>
         <div>
           <label>Payment screenshot</label>
           <label class="upload-drop" for="payFile">

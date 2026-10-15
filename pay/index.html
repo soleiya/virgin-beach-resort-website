@@ -9,7 +9,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400..600;1,9..144,400..600&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="../assets/css/style.css?v=b6c3c14652">
+<link rel="stylesheet" href="../assets/css/style.css?v=8eb74ed3c0">
 </head>
 <body>
 <header class="site-header no-hero">
@@ -33,7 +33,7 @@
   <div class="wrap page-hero-content">
     <span class="eyebrow">Payment</span>
     <h1>Upload Payment &amp; Documents</h1>
-    <p class="lede">Send us your payment screenshot &mdash; plus any Senior Citizen / PWD IDs and pet vaccination cards your booking needs.</p>
+    <p class="lede">Send us your payment screenshot &mdash; 50% or the full amount to secure your booking, or your remaining balance &mdash; plus any Senior Citizen / PWD IDs and pet vaccination cards your booking needs.</p>
   </div>
 </section>
 
@@ -51,6 +51,11 @@
           <input id="payEmail" type="email" required>
         </div>
         <p class="field-hint" id="payLookup" hidden></p>
+        <fieldset class="pay-kind" id="payKindWrap" hidden>
+          <legend>What are you paying?</legend>
+          <div class="pay-kind-opts" id="payKindOpts"></div>
+          <p class="field-hint" id="payKindHint"></p>
+        </fieldset>
         <div>
           <label>Payment screenshot</label>
           <label class="upload-drop" for="payFile">
@@ -122,7 +127,7 @@
 
 <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
 <script src="../assets/js/booking-config.js?v=c116a3a0ae"></script>
-<script src="../assets/js/payment-upload.js?v=90dad6f6e4"></script>
+<script src="../assets/js/payment-upload.js?v=37d42957a3"></script>
 <footer class="site-footer">
   <div class="wrap">
     <div class="footer-grid">

@@ -17,8 +17,12 @@ before_stay = [
     ("How long is the drive from Metro Manila?",
      "<p>The travel time by car is normally 3 hours from Metro Manila, depending on traffic and road conditions.</p>"),
     ("What payment methods do you accept?",
-     "<p>We require full payment to secure your booking. We accept cash (Philippine Peso or USD) or credit card (Visa or Mastercard) or bank "
-     "deposit (Unionbank). Check payments are not allowed.</p>"),
+     "<p>To secure your booking, pay at least 50% &mdash; or the full amount &mdash; within 24 hours of booking, and upload your proof of payment. "
+     "The balance is due 15 days before arrival; bookings made 14 days or less before arrival are paid in full. Full payment guarantees your reservation.</p>"
+     "<p>Pay by bank or e-wallet transfer (InstaPay / PESONet to our UnionBank, BDO or Metrobank account &mdash; GCash and Maya can send via InstaPay), "
+     "or ask us for a secure card / e-wallet payment link. Villa stays booked on our official website and paid by bank or e-wallet transfer "
+     "get a 5% Convenience Discount.</p>"
+     "<p>At the resort, incidental charges are settled in cash (Philippine Peso or USD) or by credit/debit card (Visa or Mastercard). Check payments are not allowed.</p>"),
     ("What are your check-in and check-out times?",
      "<p>For overnight guests: Check-in &mdash; 2:00 PM, Check-out &mdash; 11:30 AM. For Day Trip guests: Check-in &mdash; 8:00 AM, "
      "Check-out &mdash; 5:00 PM.</p><p>Day Tour guests may avail of dinner at our overnight section. Should you wish to stay for dinner, kindly "

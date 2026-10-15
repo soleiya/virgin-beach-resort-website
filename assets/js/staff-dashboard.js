@@ -58,6 +58,20 @@
     pending: "Pending", pending_payment: "Pending Payment", confirmed: "Confirmed",
     declined: "Declined", completed: "Completed", expired: "Expired",
   };
+  // Villas use Cloudbeds' status names so both systems read the same.
+  var VILLA_STATUS = {
+    pending: "Confirmation Pending", pending_payment: "Confirmation Pending", confirmed: "Confirmed",
+    completed: "Checked Out", declined: "Cancelled", expired: "Cancelled",
+  };
+  function statusLabel(r) {
+    if (r && r.stay_type === "overnight") {
+      var cbs = r.cb_info && r.cb_info.status;
+      if (cbs === "checked_in" && r.status === "confirmed") return "Checked In";
+      if (cbs === "no_show" && r.status === "declined") return "No-Show";
+      return VILLA_STATUS[r.status] || r.status;
+    }
+    return STATUS_LABELS[r.status] || r.status;
+  }
   // Bookings that no longer hold their cabana(s).
   function releasesCabanas(status) { return status === "declined" || status === "expired"; }
 
@@ -127,7 +141,7 @@
   // links open the Reservations list and copy the reservation number to paste
   // into Cloudbeds' search box.
   var CB_RES_URL = "https://hotels.cloudbeds.com/connect/208402#/reservations";
-  var CB_STATUS = { not_confirmed: "Not confirmed", confirmed: "Confirmed", checked_in: "Checked in", checked_out: "Checked out",
+  var CB_STATUS = { not_confirmed: "Confirmation Pending", confirmed: "Confirmed", checked_in: "Checked in", checked_out: "Checked out",
     canceled: "Cancelled", no_show: "No-show", deleted: "Deleted", in_progress: "In progress" };
   function cbUrl(r) { return r && r.cb_reservation_id ? CB_RES_URL : null; }
   function cbLinkHtml(r) {
@@ -616,6 +630,37 @@
   // Display only — payment proofs are uploaded from the ✎ edit form.
   function renderPayCell(td, r) {
     td.innerHTML = "";
+    // Payments (50% / 100% / balance) — website & dashboard bookings
+    if (!r.cb_owned && r.total_amount != null && window.VBRPayments) {
+      var total = Number(r.total_amount) || 0, paid = Number(r.amount_paid) || 0;
+      var box = document.createElement("div");
+      var fig = document.createElement("span");
+      fig.className = "pay-cell-fig";
+      fig.textContent = paid >= total - 0.5 && paid > 0 ? "Paid in full" : paid > 0 ? "Paid " + peso(paid) + " of " + peso(total) : "Unpaid";
+      box.appendChild(fig);
+      if (paid > 0 && paid < total - 0.5 && r.check_in) {
+        var dueD = new Date(r.check_in + "T00:00:00Z"); dueD.setUTCDate(dueD.getUTCDate() - 15);
+        var dueS = dueD.toISOString().slice(0, 10), late = dueS < new Date().toISOString().slice(0, 10);
+        var dl2 = document.createElement("span");
+        dl2.className = "payby" + (late ? " overdue" : "");
+        dl2.textContent = "balance " + peso(total - paid) + (late ? " overdue since " : " due ") + fmtDate(dueS);
+        box.appendChild(dl2);
+      }
+      if (Number(r.amount_pending) > 0 || r.status === "pending_payment") {
+        var tv = document.createElement("span");
+        tv.className = "payby overdue";
+        tv.textContent = Number(r.amount_pending) > 0 ? peso(r.amount_pending) + " to verify" : "proof to verify";
+        box.appendChild(tv);
+      }
+      var open = document.createElement("a");
+      open.href = "#";
+      open.className = "pay-open";
+      open.textContent = "Payments ›";
+      open.addEventListener("click", function (e) { e.preventDefault(); window.VBRPayments.open(r); });
+      box.appendChild(open);
+      td.appendChild(box);
+      return;
+    }
     var links = proofLinks(r);
     if (!links.length) { td.innerHTML = '<span class="muted">—</span>'; return; }
     links.forEach(function (l) {
@@ -647,6 +692,12 @@
     if (cv) cv.textContent = nV.toLocaleString();
     if (cd) cd.textContent = nD.toLocaleString();
     searchBox.placeholder = activeSection === "villas" ? "Search guest, Cloudbeds #, villa, notes…" : "Search guest, contact, notes…";
+    Array.prototype.forEach.call(filterStatus.options, function (o) {
+      if (!o.value) return;
+      o.textContent = activeSection === "villas"
+        ? (VILLA_STATUS[o.value] || o.value) + (o.value === "pending_payment" ? " · proof received" : o.value === "expired" ? " · unpaid" : "")
+        : (STATUS_LABELS[o.value] || o.value);
+    });
   }
   document.getElementById("sectionTabs").addEventListener("click", function (e) {
     var t = e.target.closest(".sec-tab");
@@ -746,13 +797,16 @@
       var tdStatus = document.createElement("td");
       var statusBadge = document.createElement("span");
       statusBadge.className = "status-badge readonly status-" + r.status;
-      statusBadge.textContent = STATUS_LABELS[r.status] || r.status;
+      statusBadge.textContent = statusLabel(r);
+      if (isVillaRow(r) && r.status === "pending_payment") statusBadge.title = "Proof of payment received — verify it under Payments";
       statusBadge.title = "Change the status with ✎ Edit";
       tdStatus.appendChild(statusBadge);
-      if (isVillaRow(r) && r.cb_info && r.cb_info.status) {
+      if (isVillaRow(r) && r.cb_info && r.cb_info.status && (CB_STATUS[r.cb_info.status] || r.cb_info.status) !== statusLabel(r) &&
+          !(r.cb_info.status === "not_confirmed" && statusLabel(r) === "Confirmation Pending")) {
         var cbs = document.createElement("span");
         cbs.className = "payby cb-status";
         cbs.textContent = "Cloudbeds: " + (CB_STATUS[r.cb_info.status] || r.cb_info.status);
+        cbs.title = "Cloudbeds shows a different status — it updates here within a few minutes.";
         tdStatus.appendChild(cbs);
       }
       if (cbWaiting(r) && cbPushOn === false) {

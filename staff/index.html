@@ -8,7 +8,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400..600;1,9..144,400..600&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="../assets/css/style.css?v=b6c3c14652">
+<link rel="stylesheet" href="../assets/css/style.css?v=8eb74ed3c0">
 <style>
   body { background: var(--sand); min-height: 100vh; }
   .dash-wrap { max-width: 1280px; margin: 0 auto; padding: 28px 20px 80px; }
@@ -273,6 +273,24 @@
   .cb-link { font-size: 0.75rem; color: var(--teal, #1f7a72); text-decoration: none; white-space: nowrap; }
   .cb-link:hover { text-decoration: underline; }
   .cb-status { color: var(--ink-soft); }
+  .pay-summary { margin-bottom: 4px; }
+  .pay-bar { height: 8px; background: var(--line, #e6dccb); border-radius: 99px; overflow: hidden; margin-bottom: 10px; }
+  .pay-bar span { display: block; height: 100%; background: #1f7a72; }
+  .pay-figs { display: flex; flex-wrap: wrap; gap: 10px 28px; }
+  .pay-figs small { display: block; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--ink-soft); }
+  .pay-figs b { font-size: 1.1rem; }
+  .pay-figs em { display: block; font-style: normal; font-size: 0.78rem; color: var(--ink-soft); }
+  .pay-figs em.pay-ok { color: #1f7a72; font-weight: 700; }
+  .pay-table .pay-amt { width: 120px; padding: 4px 6px; }
+  .pay-table tr.pay-rejected td { opacity: 0.55; }
+  .pay-st { font-size: 0.75rem; font-weight: 700; border-radius: 99px; padding: 2px 9px; }
+  .pay-st-pending { background: #fff3cd; color: #7a5a00; }
+  .pay-st-verified { background: #e2f3ee; color: #1f6b5c; }
+  .pay-st-rejected { background: #f6e1dc; color: #9c4a3f; }
+  .pay-record { margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--line); }
+  .pay-record h3 { font-size: 0.95rem; margin: 0 0 4px; }
+  .pay-cell-fig { display: block; font-weight: 600; }
+  .pay-open { display: inline-block; margin-top: 3px; font-size: 0.75rem; }
   .cb-copied { display: inline-block; margin-left: 6px; font-size: 0.72rem; background: #1f7a72; color: #fff; border-radius: 6px; padding: 2px 8px; }
   .cb-banner { background: #eef6f4; border: 1px solid #b9dcd5; color: #1d4b45; border-radius: 10px; padding: 10px 14px; font-size: 0.86rem; margin: -6px 0 16px; }
   .cb-banner a { color: #1f7a72; font-weight: 600; }
@@ -596,12 +614,12 @@
         <div class="modal-field" style="margin-bottom:0;">
           <label for="vStatus">Status</label>
           <select id="vStatus">
-            <option value="pending">Pending</option>
-            <option value="pending_payment">Pending Payment</option>
+            <option value="pending">Confirmation Pending</option>
+            <option value="pending_payment">Confirmation Pending &middot; proof received</option>
             <option value="confirmed">Confirmed</option>
-            <option value="completed">Completed</option>
-            <option value="declined">Declined / Cancelled</option>
-            <option value="expired">Expired (unpaid)</option>
+            <option value="completed">Checked Out</option>
+            <option value="declined">Cancelled</option>
+            <option value="expired">Cancelled &middot; unpaid</option>
           </select>
         </div>
         <div class="modal-field" style="margin-bottom:0;">
@@ -651,7 +669,7 @@
       <div class="villa-pick" id="vAddons"><span class="muted">Loading…</span></div>
 
       <h3 class="modal-subhead">Amount</h3>
-      <label class="modal-check"><input type="checkbox" id="vOnline"> 5% Convenience Discount (website booking, paid by bank transfer)</label>
+      <label class="modal-check"><input type="checkbox" id="vOnline"> 5% Convenience Discount (booked on the official website + paid by bank or e-wallet transfer)</label>
       <div id="vBill" class="bill-summary modal-bill"></div>
       <div class="modal-row three" style="margin:12px 0 0;">
         <div class="modal-field" style="margin-bottom:0;">
@@ -762,6 +780,36 @@
   </div>
 </div>
 
+<div class="modal-backdrop" id="payModalBackdrop">
+  <div class="modal modal-wide">
+    <h2 id="payTitle">Payments</h2>
+    <p id="paySub" style="color:var(--ink-soft); font-size:0.85rem; margin:-10px 0 16px;"></p>
+    <div id="paySummary" class="pay-summary"></div>
+    <p class="field-hint" style="margin:6px 0 14px;">Guests pay <b>50% or 100% within 24 hours</b> to secure the booking; the <b>balance is due 15 days before arrival</b> (bookings made within 14 days pay 100%). Check each upload against the bank, then <b>Verify</b> it &mdash; the first verified payment confirms the booking and emails the confirmation; the one that completes the total emails &ldquo;fully paid&rdquo;.</p>
+    <div class="log-scroll">
+      <table class="log-table pay-table">
+        <thead><tr><th>When</th><th>What</th><th class="num">Amount</th><th>Proof</th><th>Status</th><th></th></tr></thead>
+        <tbody id="payRows"></tbody>
+      </table>
+    </div>
+    <div class="pay-record">
+      <h3>Record a payment</h3>
+      <p class="field-hint" style="margin:0 0 8px;">Received another way (cash, card link, a transfer seen in the bank without an upload)? It counts as verified straight away.</p>
+      <div class="modal-row">
+        <input id="payRecAmount" type="number" step="0.01" min="0" placeholder="Amount (₱)">
+        <select id="payRecKind"><option value="deposit">50% down payment</option><option value="full">Full payment</option><option value="balance">Balance</option><option value="other">Other</option></select>
+        <select id="payRecMethod"><option value="transfer">Bank / e-wallet transfer</option><option value="link">Payment link (card / e-wallet)</option><option value="cash">Cash</option><option value="card">Card at the resort</option><option value="other">Other</option></select>
+      </div>
+      <div class="modal-row" style="margin-top:8px;">
+        <input id="payRecNote" type="text" placeholder="Note (e.g. reference number)">
+        <button type="button" class="btn-sm primary" id="payRecSave">Record payment</button>
+      </div>
+    </div>
+    <p class="modal-error" id="payError"></p>
+    <div class="modal-actions"><button type="button" class="btn-sm ghost" id="payClose">Close</button></div>
+  </div>
+</div>
+
 <div class="modal-backdrop" id="logModalBackdrop">
   <div class="modal modal-wide">
     <h2>Activity Log</h2>
@@ -858,9 +906,10 @@
 <script src="../assets/js/booking-config.js?v=c116a3a0ae"></script>
 <script src="../assets/js/cabana-map.js?v=8f4f80dcb3"></script>
 <script src="../assets/js/pricing.js?v=89ca03abac"></script>
-<script src="../assets/js/staff-dashboard.js?v=0487f7cfe3"></script>
+<script src="../assets/js/staff-dashboard.js?v=04bbe45ecb"></script>
 <script src="../assets/js/staff-email.js?v=ac542441c2"></script>
 <script src="../assets/js/staff-villas.js?v=42135ae7ca"></script>
+<script src="../assets/js/staff-payments.js?v=f943aa5e21"></script>
 <script src="../assets/js/staff-activity.js?v=2ed22c66bb"></script>
 </body>
 </html>

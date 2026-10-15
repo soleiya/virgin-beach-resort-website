@@ -276,7 +276,7 @@ def booking_form_section(default_type="day_trip"):
     </label>
 
     <button class="btn btn-primary" type="submit" id="submitBtn">Send Request</button>
-    <p class="field-hint">You'll get your quotation and bank details by email right away &mdash; your booking is confirmed once payment is verified.</p>
+    <p class="field-hint">You'll get your quotation and bank details by email right away. Pay 50% or 100% within 24 hours to secure your booking (the balance is due 15 days before your visit) &mdash; it's confirmed once payment is verified.</p>
   </form>
 </div>
 <div id="bookingStatus" class="form-status" hidden></div>
