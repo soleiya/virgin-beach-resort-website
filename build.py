@@ -347,11 +347,16 @@ def nav_html(base, current_path, solid=False, cta_label=None, cta_href=None):
       <ul class="nav-links">{nav_links}</ul>
     </nav>
     <div class="nav-cta">
+      <a class="nav-pay" href="{base}pay/index.html" title="Already booked? Upload your proof of payment"><span class="nav-pay-ico" aria-hidden="true">&#8593;</span>Upload Payment</a>
       <a class="btn {"btn-primary" if solid else "btn-on-dark"}" id="bookBtn" href="{cta_href}">{cta_label}</a>
       <button class="nav-toggle" aria-label="Menu">&#9776;</button>
     </div>
   </div>
   <div class="mobile-panel">
+    <div class="mp-actions">
+      <a class="btn btn-primary" href="{stay_link(base)}">Book Now</a>
+      <a class="btn btn-ghost" href="{base}pay/index.html">&#8593; Upload Payment</a>
+    </div>
     <ul>{mobile_links_html}</ul>
   </div>
 </header>
@@ -376,6 +381,7 @@ def footer_html(base):
           <li><a href="{base}dining/index.html">Dining</a></li>
           <li><a href="{base}experiences/index.html">Experiences</a></li>
           <li><a href="{base}gallery/index.html">Gallery</a></li>
+          <li><a href="{base}pay/index.html"><strong>Upload Payment</strong></a></li>
         </ul>
       </div>
       <div>

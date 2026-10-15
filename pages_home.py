@@ -65,6 +65,7 @@ body = f"""
           <li>pay by bank or e-wallet transfer</li>
         </ul>
       </div>
+      <a class="qb-paylink" href="pay/index.html"><span>Already booked?</span> <b>Upload your payment &rarr;</b></a>
     </form>
   </div>
 </section>
@@ -76,7 +77,7 @@ body = f"""
     <ol class="steps-4">
       <li><b>Pick your dates</b><span>Choose your casita or your cabana on the beach map &mdash; you see the price right away.</span></li>
       <li><b>Get your quotation</b><span>It arrives by email instantly, with the amount and our bank details.</span></li>
-      <li><b>Settle it online</b><span>Transfer 50% or 100% within 24 hours and upload your proof of payment. Paid 50%? The balance is due 15 days before arrival.</span></li>
+      <li><b>Settle it online</b><span>Transfer 50% or 100% within 24 hours and upload your proof of payment. Paid 50%? The balance is due 15 days before arrival.</span><a class="step-link" href="pay/index.html">Upload Payment &rsaquo;</a></li>
       <li><b>You&rsquo;re booked</b><span>We verify your payment and email your confirmation. See you at the beach!</span></li>
     </ol>
   </div>
@@ -195,6 +196,7 @@ body = f"""
     <div class="hero-actions" style="justify-content:center;">
       <a class="btn btn-primary" href="{stay_link("")}">Book an overnight stay</a>
       <a class="btn btn-ghost" href="book/index.html">Book a day trip</a>
+      <a class="btn btn-ghost" href="pay/index.html">Upload Payment</a>
     </div>
   </div>
 </section>
