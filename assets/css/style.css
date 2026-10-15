@@ -766,3 +766,26 @@ form.inquiry .field-hint { font-size: 0.8rem; color: var(--ink-soft); margin-top
 .steps-4 span { display: block; font-size: 0.92rem; color: var(--ink-soft); line-height: 1.5; }
 @media (max-width: 900px) { .steps-4 { grid-template-columns: 1fr 1fr; } }
 @media (max-width: 520px) { .steps-4 { grid-template-columns: 1fr; } }
+
+/* ---------- pay page: find your booking ---------- */
+.pay-step-head { display: flex; align-items: center; gap: 10px; margin: 8px 0 -4px; }
+.pay-step-head h2 { font-size: 1.35rem; margin: 0; }
+.pay-step-num { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; border-radius: 50%; background: var(--lagoon); color: #fff; font-weight: 700; font-size: 0.9rem; flex: none; }
+#payUploadPart { display: grid; gap: inherit; }
+#payUploadPart[hidden] { display: none; }
+.pay-lookup { border: 1px solid var(--line); border-radius: 12px; padding: 16px 18px; background: var(--surface); }
+.pay-lookup .pl-head b { display: block; font-size: 1.05rem; color: var(--ink); }
+.pay-lookup .pl-head span { display: block; font-size: 0.9rem; color: var(--ink-soft); margin-top: 2px; }
+.pl-figs { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px; margin: 14px 0 12px; }
+.pl-figs div { background: var(--sand); border-radius: 8px; padding: 10px 12px; }
+.pl-figs small { display: block; font-size: 0.7rem; font-weight: 700; letter-spacing: 0.07em; text-transform: uppercase; color: var(--ink-soft); }
+.pl-figs b { display: block; font-size: 1.1rem; color: var(--ink); margin-top: 2px; }
+.pl-figs .pl-bal { background: var(--lagoon-tint); }
+.pl-figs .pl-bal b { color: var(--lagoon-deep); }
+.pl-msg { margin: 0; font-size: 0.95rem; line-height: 1.55; padding: 10px 12px; border-radius: 8px; }
+.pl-due { background: var(--lagoon-tint); color: var(--ink); }
+.pl-ok { background: #e2f3ee; color: #1f6b5c; }
+.pl-warn { background: #f6e1dc; color: #8a3f33; }
+.pl-note { margin: 8px 0 0; font-size: 0.85rem; color: var(--ink-soft); }
+.pay-kind-opt b { margin-left: auto; font-size: 1rem; }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }

@@ -408,7 +408,7 @@
       ? "<p>Your email app should have opened with the request pre-filled — just hit send.</p>"
       : "";
     var orderLine = orderCode
-      ? "<p>Your Order ID is <strong>" + orderCode + "</strong>.</p>"
+      ? "<p>Your Booking ID is <strong>" + orderCode + "</strong>.</p>"
       : "";
     var body = viaEmail
       ? " — our reservations team will follow up with your quotation and payment details at " +

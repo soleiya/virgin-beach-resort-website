@@ -183,7 +183,7 @@ body = f"""
   <div class="wrap" style="max-width:560px; margin:0 auto;">
     <span class="eyebrow">Already booked?</span>
     <h2>Upload your payment</h2>
-    <p class="prose mx-auto mt-lg">Paid already? Send us proof of payment using the Order ID from your quotation email.</p>
+    <p class="prose mx-auto mt-lg">Paid already? Send us proof of payment using the Booking ID from your quotation email.</p>
     <a class="btn btn-ghost mt-lg" href="../pay/index.html">Upload Payment Proof</a>
   </div>
 </section>

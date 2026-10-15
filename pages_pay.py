@@ -7,7 +7,7 @@ body = f"""
   <div class="wrap page-hero-content">
     <span class="eyebrow">Payment</span>
     <h1>Upload Payment &amp; Documents</h1>
-    <p class="lede">Send us your payment screenshot &mdash; 50% or the full amount to secure your booking, or your remaining balance &mdash; plus any Senior Citizen / PWD IDs and pet vaccination cards your booking needs.</p>
+    <p class="lede">Find your booking to see your balance and due date, then upload your payment screenshot &mdash; partial (50%) or full &mdash; plus any documents your booking needs.</p>
   </div>
 </section>
 
@@ -15,21 +15,29 @@ body = f"""
   <div class="wrap" style="max-width:640px;">
     <div id="payFormWrap">
       <form class="inquiry" id="payForm">
-        <div>
-          <label for="orderCode">Order ID</label>
-          <input id="orderCode" type="text" required placeholder="e.g. VBR-1042" autocapitalize="characters">
-          <p class="field-hint">Find this in the confirmation email we sent when you submitted your request.</p>
+        <div class="pay-step-head"><span class="pay-step-num">1</span><h2>Find your booking</h2></div>
+        <div class="row-2">
+          <div>
+            <label for="orderCode">Booking ID</label>
+            <input id="orderCode" type="text" required placeholder="e.g. VBR-1042" autocapitalize="characters" autocomplete="off">
+          </div>
+          <div>
+            <label for="payEmail">Email used on your booking</label>
+            <input id="payEmail" type="email" required autocomplete="email">
+          </div>
         </div>
-        <div>
-          <label for="payEmail">Email used on your booking</label>
-          <input id="payEmail" type="email" required>
-        </div>
-        <p class="field-hint" id="payLookup" hidden></p>
+        <p class="field-hint" style="margin-top:-6px;">Both are in your quotation email.</p>
+        <button class="btn btn-ghost" type="button" id="payFindBtn">Find my booking</button>
+        <div class="pay-lookup" id="payLookup" hidden></div>
+
+        <div id="payUploadPart" hidden>
+        <div class="pay-step-head"><span class="pay-step-num">2</span><h2>What are you paying?</h2></div>
         <fieldset class="pay-kind" id="payKindWrap" hidden>
-          <legend>What are you paying?</legend>
+          <legend class="sr-only">Payment</legend>
           <div class="pay-kind-opts" id="payKindOpts"></div>
           <p class="field-hint" id="payKindHint"></p>
         </fieldset>
+        <div class="pay-step-head"><span class="pay-step-num">3</span><h2>Upload your proof</h2></div>
         <div>
           <label>Payment screenshot</label>
           <label class="upload-drop" for="payFile">
@@ -62,6 +70,7 @@ body = f"""
           </div>
         </div>
         <button class="btn btn-primary" type="submit" id="paySubmitBtn">Upload</button>
+        </div>
         <p class="field-hint">Our reservations team reviews uploads and updates your status &mdash; you'll hear back within one business day (office hours: 9:00 AM &ndash; 4:00 PM, Monday &ndash; Friday).</p>
       </form>
     </div>
@@ -73,7 +82,7 @@ body = f"""
   <div class="wrap" style="max-width:560px; margin:0 auto;">
     <span class="eyebrow">Trouble uploading?</span>
     <h2>Send it to us directly</h2>
-    <p class="prose mx-auto mt-lg">Message us on Facebook, or email your screenshot and Order ID to
+    <p class="prose mx-auto mt-lg">Message us on Facebook, or email your screenshot and Booking ID to
     <a class="text-link" href="mailto:reservations@virginbeachresort.com">reservations@virginbeachresort.com</a>.</p>
   </div>
 </section>
@@ -83,4 +92,4 @@ body = f"""
 <script src="../assets/js/payment-upload.js?v={asset_v('assets/js/payment-upload.js')}"></script>
 """
 
-page("pay/index.html", "Upload Payment & Documents", "Upload your payment screenshot, Senior Citizen / PWD IDs and pet vaccination cards for a Virgin Beach Resort booking using your Order ID.", body)
+page("pay/index.html", "Upload Payment & Documents", "Upload your payment screenshot, Senior Citizen / PWD IDs and pet vaccination cards for a Virgin Beach Resort booking using your Booking ID.", body)

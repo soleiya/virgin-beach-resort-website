@@ -33,7 +33,7 @@
 //
 // Guest emails all share one subject line so Gmail keeps them in ONE thread
 // (the guest's replies land in that same thread in reservations@). Staff
-// alerts likewise share their own internal thread per Order ID.
+// alerts likewise share their own internal thread per Booking ID.
 //
 // Every send is recorded in booking_email_log, which also stops the same
 // email from ever going out twice.
@@ -471,7 +471,7 @@ function reservationRows(r: Any, cabanas: Any[]): [string, string][] {
   if (isOvernight(r)) return overnightRows(r, cabanas);
   const t = TIMES[r.stay_type] || TIMES.day_trip;
   const rows: [string, string][] = [
-    ["Order ID", `<strong>${esc(r.order_code || "—")}</strong>`],
+    ["Booking ID", `<strong>${esc(r.order_code || "—")}</strong>`],
     ["Booking", esc(r.stay_type_label || TYPE_NAMES[r.stay_type] || r.stay_type)],
     ["Date", `<strong>${esc(fmtDate(r.check_in))}</strong>`],
     ["Check-in / out", `${t.in} – ${t.out}`],
@@ -631,7 +631,7 @@ ${p(dl.date
     : `<strong>Payment is settled upon arrival at the resort.</strong>`)}
 ${poolNotice(c, r.check_in)}
 ${statusBox([
-    ["Order ID", esc(r.order_code || "—")],
+    ["Booking ID", esc(r.order_code || "—")],
     ...(dl.date ? secureRows(r, q.total, dl) : [["Amount due", esc(peso(q.total))] as [string, string]]),
   ])}
 ${h2("Your reservation")}${kv(reservationRows(r, cabanas))}${cabanaNote(cabanas)}
@@ -692,7 +692,7 @@ export function staffNewEmail(r: Any, cabanas: Any[], q: Quote | null, c: Return
   const gmail = `https://mail.google.com/mail/u/?authuser=${encodeURIComponent(MAILBOX)}#search/${encodeURIComponent('"' + (r.order_code || "") + '"')}`;
 
   const body = `${statusBox([
-    ["Order", esc(r.order_code || "—")],
+    ["Booking ID", esc(r.order_code || "—")],
     ["Amount due", q ? esc(peso(q.total)) : "Quote needed"],
     ["Status", "Unpaid"],
   ])}
@@ -716,7 +716,7 @@ ${h2("Booking")}${kv(reservationRows(r, cabanas).slice(1))}
 ${q ? h2("Quotation sent") + quoteTable(q) : ""}
 ${h2("Follow-up checklist")}
 <ol style="margin:0 0 14px;padding-left:20px;font-size:14px;">
-<li>Watch the guest thread (search the Order ID) for proof of payment, the signed agreement and one valid ID. Website uploads also alert this inbox.</li>
+<li>Watch the guest thread (search the Booking ID) for proof of payment, the signed agreement and one valid ID. Website uploads also alert this inbox.</li>
 <li>Guest asks for card / e-wallet? Create a Xendit invoice for <strong>${q ? esc(peso(q.total)) : "the quoted amount"}</strong> with description <strong>Booking# ${esc(r.order_code)}</strong>, and reply in the guest's thread with the link and the same pay-by time.</li>
 <li>Verify the deposit against the bank statement, then set the booking to <strong>Confirmed</strong> in the dashboard — the guest gets the confirmation email automatically.</li>
 <li>No payment by ${esc(dl.label)}? The booking automatically turns <strong>Expired</strong> and the cabana(s) are released. Nothing to do unless the guest calls.</li>
@@ -736,7 +736,7 @@ export function staffProofEmail(r: Any, q: Quote | null, c: ReturnType<typeof cf
     : "";
   const dash = `${c.site}/staff/index.html?q=${encodeURIComponent(r.order_code || "")}`;
   const body = `${statusBox([
-    ["Order", esc(r.order_code || "—")],
+    ["Booking ID", esc(r.order_code || "—")],
     ["Guest says", ps?.last ? `${esc(KIND_WORDS[ps.last.kind] || "payment")}: ${esc(peso(ps.last.amount))}` : (q ? esc(peso(q.total)) : "—")],
     ["Booking total", ps?.total != null ? esc(peso(ps.total)) : (q ? esc(peso(q.total)) : "—")],
   ])}
@@ -763,7 +763,7 @@ export function guestProofEmail(r: Any, c: ReturnType<typeof cfg>, ps: PaySummar
   const body = `${p(`Hi ${first},`)}
 ${p(`Thank you! We've received ${last ? `the proof of ${what}` : what} for <strong>${esc(r.order_code)}</strong>${r.payment_uploaded_at ? ` (uploaded ${esc(fmtDateTime(new Date(r.payment_uploaded_at)))})` : ""}.`)}
 ${statusBox([
-    ["Order ID", esc(r.order_code || "—")],
+    ["Booking ID", esc(r.order_code || "—")],
     [isOvernight(r) ? "Stay" : "Date", esc(isOvernight(r) ? stayRange(r) : fmtDate(r.check_in, "short"))],
     ["Status", "Payment being verified"],
   ])}
@@ -807,7 +807,7 @@ export function guestConfirmedEmail(r: Any, cabanas: Any[], q: Quote | null, c: 
   const body = `${p(`Hi ${first},`)}
 ${paidThanks(r, q, ps, c)}${p(`We are delighted to confirm your reservation for a <strong>${esc(r.stay_type === "half_day" ? "Half-Day Trip" : "Day Trip")}</strong> on <strong>${esc(fmtDate(r.check_in))}</strong>.`)}
 ${statusBox([
-    ["Order ID", esc(r.order_code || "—")],
+    ["Booking ID", esc(r.order_code || "—")],
     ["Date", esc(fmtDate(r.check_in, "short"))],
     ["Status", "Confirmed"],
   ], "ok")}
@@ -838,7 +838,7 @@ ${p(fin.isTripMorning
     ? `We're holding your booking${cabanas.length ? " and cabana(s)" : ""} until <strong>${esc(fin.label)}</strong> — the morning of your visit. If payment isn't settled by then, the booking will be canceled and the cabana(s) released to other guests.`
     : `As a courtesy, we've <strong>extended your hold by 12 hours, until ${esc(fin.label)}</strong>. If payment isn't settled by then, the booking will be canceled and the cabana(s) released to other guests.`)}
 ${statusBox([
-    ["Order ID", esc(r.order_code || "—")],
+    ["Booking ID", esc(r.order_code || "—")],
     ["Amount due", q ? (payTerms(r, q.total).half ? `50%: ${esc(peso(r2(q.total / 2)))}<br>or 100%: ${esc(peso(q.total))}` : esc(peso(q.total))) : "See quotation"],
     ["Final deadline", esc(fin.label)],
   ])}
@@ -940,7 +940,7 @@ function rosterTable(r: Any) {
 function overnightRows(r: Any, villas: Any[]): [string, string][] {
   const t = TIMES.overnight;
   const rows: [string, string][] = [
-    ["Order ID", `<strong>${esc(r.order_code || "—")}</strong>`],
+    ["Booking ID", `<strong>${esc(r.order_code || "—")}</strong>`],
     ["Booking", "Overnight Stay"],
     ["Check-in", `<strong>${esc(fmtDate(r.check_in))}</strong> · from ${t.in}`],
     ["Check-out", `<strong>${esc(fmtDate(r.check_out))}</strong> · by ${t.out}`],
@@ -995,7 +995,7 @@ ${p(dl.date
     ? (q ? securePara(r, q.total, dl, `casita${villas.length === 1 ? "" : "s"}`) : `<strong>Payment is required by ${esc(dl.label)}</strong> to secure the reservation.`)
     : `<strong>Payment is settled upon arrival at the resort.</strong>`)}
 ${statusBox([
-    ["Order ID", esc(r.order_code || "—")],
+    ["Booking ID", esc(r.order_code || "—")],
     ...(q && dl.date ? secureRows(r, q.total, dl) : [["Amount due", q ? esc(peso(q.total)) : "To follow"] as [string, string], ["Please pay by", esc(dl.label)] as [string, string]]),
   ])}
 ${q && q.onlineDiscount ? p(`Your total already includes the <strong>${q.onlineDiscountRate ? esc(String(q.onlineDiscountRate)) + "% " : ""}Convenience Discount (${esc(peso(q.onlineDiscount))})</strong> for stays ${CONVENIENCE_RULE}.${payTerms(r, q.total).half ? " Please settle the balance the same way to keep it." : ""}`, `background:${C.tint};border-radius:8px;padding:10px 14px;font-size:14px;`) : ""}
@@ -1051,7 +1051,7 @@ export function staffNewEmailOvernight(r: Any, villas: Any[], q: Quote | null, c
   const dash = `${c.site}/staff/index.html?q=${encodeURIComponent(r.order_code || "")}`;
   const gmail = `https://mail.google.com/mail/u/?authuser=${encodeURIComponent(MAILBOX)}#search/${encodeURIComponent('"' + (r.order_code || "") + '"')}`;
   const body = `${statusBox([
-    ["Order", esc(r.order_code || "—")],
+    ["Booking ID", esc(r.order_code || "—")],
     ["Amount due", q ? esc(peso(q.total)) : "Quote needed"],
     ["Stay", esc(`${fmtDate(r.check_in, "short").replace(/^\w+, /, "")} · ${plural(nightsOf(r), "night")}`)],
   ])}
@@ -1075,7 +1075,7 @@ ${h2("Guest list")}${rosterTable(r)}
 ${q ? h2("Quotation sent") + quoteTable(q) : ""}
 ${h2("Follow-up checklist")}
 <ol style="margin:0 0 14px;padding-left:20px;font-size:14px;">
-<li>Watch the guest thread (search the Order ID) for proof of payment, the signed agreement and a valid ID. Website uploads also alert this inbox.</li>
+<li>Watch the guest thread (search the Booking ID) for proof of payment, the signed agreement and a valid ID. Website uploads also alert this inbox.</li>
 <li>Guest asks for card / e-wallet? Create a Xendit invoice for <strong>${q ? esc(peso(q.cardTotal ?? q.total)) : "the quoted amount"}</strong>${q && q.onlineDiscount ? " (no Convenience Discount on card payments)" : ""} with description <strong>Booking# ${esc(r.order_code)}</strong>, and reply in the guest's thread with the link and the same pay-by time.</li>
 <li>Verify the deposit against the bank statement, then set the booking to <strong>Confirmed</strong> in the dashboard — the guest gets the confirmation email automatically.</li>
 <li>No payment by ${esc(dl.label)}? The booking automatically turns <strong>Expired</strong> and the casita(s) are released.</li>
@@ -1094,7 +1094,7 @@ export function guestConfirmedEmailOvernight(r: Any, villas: Any[], q: Quote | n
   const body = `${p(`Hi ${first},`)}
 ${paidThanks(r, q, ps, c)}${p(`We are delighted to confirm your <strong>overnight stay</strong> at Virgin Beach Resort from <strong>${esc(fmtDate(r.check_in))}</strong> to <strong>${esc(fmtDate(r.check_out))}</strong>. We can't wait to welcome you.`)}
 ${statusBox([
-    ["Order ID", esc(r.order_code || "—")],
+    ["Booking ID", esc(r.order_code || "—")],
     ["Arrival", esc(fmtDate(r.check_in, "short"))],
     ["Status", "Confirmed"],
   ], "ok")}
@@ -1126,7 +1126,7 @@ ${p(overdue
     ? `Our records show the remaining balance for your reservation <strong>${esc(r.order_code)}</strong> was due on <strong>${esc(fmtDate(ps.balance_due))}</strong> and hasn't reached us yet. Please settle it as soon as possible, or reply to this email if you've already paid or need help &mdash; our team will get in touch.`
     : `A friendly reminder that the remaining balance for your ${isOvernight(r) ? "stay" : "visit"} on <strong>${esc(fmtDate(r.check_in))}</strong> is due by <strong>${esc(fmtDate(ps.balance_due))}</strong>.`)}
 ${statusBox([
-    ["Order ID", esc(r.order_code || "—")],
+    ["Booking ID", esc(r.order_code || "—")],
     ["Paid so far", esc(peso(ps.paid))],
     ["Balance", `<strong>${esc(peso(ps.balance))}</strong>`],
     ["Due by", esc(fmtDate(ps.balance_due, "short"))],
@@ -1148,7 +1148,7 @@ ${signature(c)}`;
 export function staffBalanceOverdueEmail(r: Any, ps: PaySummary, c: ReturnType<typeof cfg>) {
   const dash = `${c.site}/staff/index.html?q=${encodeURIComponent(r.order_code || "")}`;
   const body = `${statusBox([
-    ["Order", esc(r.order_code || "—")],
+    ["Booking ID", esc(r.order_code || "—")],
     ["Balance", esc(peso(ps.balance))],
     ["Was due", esc(fmtDate(ps.balance_due, "short"))],
   ])}
@@ -1166,7 +1166,7 @@ export function guestPaidInFullEmail(r: Any, ps: PaySummary, c: ReturnType<typeo
   const body = `${p(`Hi ${first},`)}
 ${p(`Thank you &mdash; we've received your ${ps.last?.kind === "balance" ? "remaining balance" : "payment"}, and your reservation <strong>${esc(r.order_code)}</strong> is now <strong>fully paid</strong>.`)}
 ${statusBox([
-    ["Order ID", esc(r.order_code || "—")],
+    ["Booking ID", esc(r.order_code || "—")],
     [isOvernight(r) ? "Stay" : "Date", esc(isOvernight(r) ? stayRange(r) : fmtDate(r.check_in, "short"))],
     ["Paid", `<strong>${esc(peso(ps.paid))}</strong>`],
   ], "ok")}

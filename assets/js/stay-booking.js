@@ -516,7 +516,7 @@
     st.className = "form-status form-status-success";
     var first = esc(payload.guest_name.split(" ")[0]);
     st.innerHTML = "<h3>Request received — thank you, " + first + "!</h3>" +
-      "<p>Your Order ID is <strong>" + esc(row && row.order_code || "—") + "</strong>" + (row && row.total != null ? " · Total <strong>" + peso(row.total) + "</strong>" : "") + ".</p>" +
+      "<p>Your Booking ID is <strong>" + esc(row && row.order_code || "—") + "</strong>" + (row && row.total != null ? " · Total <strong>" + peso(row.total) + "</strong>" : "") + ".</p>" +
       "<p>We're holding " + esc(picked.map(function (v) { return v.room_type_name + " (" + v.unit_label + ")"; }).join(", ")) +
       " for " + fmtDay(payload.check_in) + " → " + fmtDay(payload.check_out) + ". Your quotation, bank details and next steps are on their way to <strong>" + esc(payload.guest_email) +
       "</strong>. Transfer 50% or 100% by bank or e-wallet within 24 hours and upload your proof to secure it — your 5% Convenience Discount is already included.</p>" +

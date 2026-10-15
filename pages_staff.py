@@ -432,7 +432,7 @@ html = """<!doctype html>
       <table>
         <thead>
           <tr>
-            <th class="sortable" data-sort="order_code">Order ID<span class="sort-arrow">&#9662;</span></th>
+            <th class="sortable" data-sort="order_code">Booking ID<span class="sort-arrow">&#9662;</span></th>
             <th class="sortable" data-sort="guest_name">Guest<span class="sort-arrow">&#9662;</span></th>
             <th>Contact</th>
             <th class="sortable col-type" data-sort="stay_type">Type<span class="sort-arrow">&#9662;</span></th>
@@ -792,7 +792,7 @@ html = """<!doctype html>
     <div id="plannerMap"></div>
     <div class="planner-list">
       <table>
-        <thead><tr><th>Guest</th><th>Order</th><th>Party</th><th>Cabana(s)</th><th>Status</th></tr></thead>
+        <thead><tr><th>Guest</th><th>Booking ID</th><th>Party</th><th>Cabana(s)</th><th>Status</th></tr></thead>
         <tbody id="plannerList"></tbody>
       </table>
     </div>
