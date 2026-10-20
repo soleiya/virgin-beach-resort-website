@@ -584,6 +584,8 @@
         occupied += span;
         var r = h.booking_id ? rowsById[h.booking_id] : null;
         var cls = (h.booking_id ? "st-" + (r ? r.status : "pending") : "st-block") + (h.provisional ? " provisional" : "");
+        if (r && r.cb_info && r.cb_info.status) cls += " cbs-" + r.cb_info.status;
+        if (!h.booking_id && h.cb_block_id) cls += " cb-hold";
         if (h.check_in < d) cls += " cont-l";
         if (h.check_out > addDays(start, n)) cls += " cont-r";
         var title = h.booking_id
@@ -669,5 +671,5 @@
     });
   });
 
-  window.VBRVillas = { init: init, labelsFor: labelsFor, openBooking: openBooking };
+  window.VBRVillas = { init: init, labelsFor: labelsFor, openBooking: openBooking, villas: function () { return villas; } };
 })();

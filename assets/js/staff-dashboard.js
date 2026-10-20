@@ -710,6 +710,7 @@
 
   function render() {
     applySectionChrome();
+    try { document.dispatchEvent(new CustomEvent("vbr:render")); } catch (e) {}
     var filtered = applyFilter(allRows);
     renderSummary(filtered);
     var rows = sortRows(filtered);
@@ -2014,5 +2015,6 @@
     proofLinks: proofLinks, openSignedUrl: openSignedUrl, uploadProof: uploadProof,
     cbUrl: cbUrl, loadCbStatus: loadCbStatus,
     STATUS_LABELS: STATUS_LABELS, SOURCE_LABELS: SOURCE_LABELS,
+    TYPE_LABELS: TYPE_LABELS, statusLabel: statusLabel, openModal: openModal,
   };
 })();

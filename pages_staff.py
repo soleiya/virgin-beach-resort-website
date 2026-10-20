@@ -29,8 +29,9 @@ html = """<!doctype html>
 <meta name="robots" content="noindex, nofollow">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400..600;1,9..144,400..600&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400..600;1,9..144,400..600&family=Manrope:wght@400;500;600;700;800&family=Poppins:wght@400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="../assets/css/style.css?v=__V_CSS__">
+<link rel="stylesheet" href="../assets/css/staff-cloudbeds.css?v=__V_CBCSS__">
 <style>
   body { background: var(--sand); min-height: 100vh; }
   .dash-wrap { max-width: 1280px; margin: 0 auto; padding: 28px 20px 80px; }
@@ -933,6 +934,7 @@ html = """<!doctype html>
 <script src="../assets/js/staff-villas.js?v=__V_VILLAS__"></script>
 <script src="../assets/js/staff-payments.js?v=__V_PAYMENTS__"></script>
 <script src="../assets/js/staff-activity.js?v=__V_ACT__"></script>
+<script src="../assets/js/staff-cloudbeds.js?v=__V_CBJS__"></script>
 </body>
 </html>
 """
@@ -945,7 +947,9 @@ html = (html.replace("__V_CSS__", v("assets/css/style.css"))
             .replace("__V_VILLAS__", v("assets/js/staff-villas.js"))
             .replace("__V_PAYMENTS__", v("assets/js/staff-payments.js"))
             .replace("__V_ACT__", v("assets/js/staff-activity.js"))
-            .replace("__V_MAIL__", v("assets/js/staff-email.js")))
+            .replace("__V_MAIL__", v("assets/js/staff-email.js"))
+            .replace("__V_CBCSS__", v("assets/css/staff-cloudbeds.css"))
+            .replace("__V_CBJS__", v("assets/js/staff-cloudbeds.js")))
 
 os.makedirs(os.path.join(ROOT, "staff"), exist_ok=True)
 with open(os.path.join(ROOT, "staff", "index.html"), "w", encoding="utf-8") as f:

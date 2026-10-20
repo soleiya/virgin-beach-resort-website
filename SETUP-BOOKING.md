@@ -568,3 +568,12 @@ Copying payment screenshots into your Google Drive is ready to turn on whenever 
 **The staff experience**: an **Overnight** filter, villa names and stay dates in the table, **+ Villa Booking** (create/edit with villa availability, guest list, discount, payment proof, emailing the guest), and a **Villa Calendar** (all 18 units over 2–8 weeks; click a booking to open it, click an empty night to start one; add blocks and peak dates).
 
 **Payment deadline** is the same as Day Trips (24 hours after booking, or 8:00 AM on arrival day if sooner) — unpaid bookings expire and their casitas are released automatically.
+
+## 11. Two staff views: "Cloudbeds view" and "New version"
+
+The staff dashboard has a switch at the top — **Cloudbeds view** / **New version**. It only changes the interface; both views read and save the same bookings with the same forms.
+
+- **New version** — the dashboard as it was.
+- **Cloudbeds view** — laid out like the Cloudbeds front office: top bar with search and a **+** for new reservations, the ☰ side menu (Dashboard, Calendar, Reservations, Day Trips, Cabana Map, Activity Log, Team Activity, Export), a front-desk **Dashboard** (today's arrivals, departures, in-house, stayovers, day trips, bookings, cancellations, occupancy and a 7-day forecast), the **Calendar** as a full-page gantt with Cloudbeds' slanted bars and status colours, and bookings opening in a side drawer.
+
+Each person's choice is remembered in their own browser. Files: `assets/css/staff-cloudbeds.css`, `assets/js/staff-cloudbeds.js` (re-run `python3 pages_staff.py` after editing them so the cache-busting `?v=` updates).
