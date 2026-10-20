@@ -612,3 +612,35 @@ Suggested Cloudbeds schedules (create the two templates, then a schedule for eac
 
 - **Pre-arrival** — *Before arrival, 3 days*. Subject: `[hotel name] - See you soon! Your stay on [arrival date]`. Body: check-in from 2:00 PM / check-out 12:00 NN, directions and parking, meal times for the full-board package, what to bring (valid ID, proof of payment), pet policy reminder, contact number.
 - **Thank you** — *After departure, 1 day*. Subject: `[hotel name] - Thank you for staying with us`. Body: thanks, link to leave a review, invitation to book direct on the website next time.
+
+## 14. Statuses, payment rules and the Cloudbeds folio (v19)
+
+**Run** `supabase-functions/booking-v19-status-payments-folio.sql`, then redeploy **both** Edge Functions (`send-booking-email` and `cloudbeds-sync`).
+
+**One set of status names** — the dashboard, every email and Cloudbeds now say the same thing:
+
+| Website status | Shown as | Cloudbeds | Guest email |
+|---|---|---|---|
+| pending | Confirmation Pending | Confirmation Pending | Quotation + how to pay |
+| pending_payment | Payment Under Review | Confirmation Pending | "Payment Under Review" (proof received) |
+| confirmed | Confirmed / Checked In | Confirmed / Checked In | Confirmation |
+| completed | Checked Out (villas) · Completed (day trips) | Checked Out | — (thank-you comes from Cloudbeds) |
+| declined | Cancelled / No-Show | Canceled / No-Show | Cancellation (none for no-shows) |
+| expired | Cancelled · payment not received | Canceled | "Hold released — payment not received" |
+
+Other guest emails: proof rejected (with the reason and a fresh deadline), change notice (also when Cloudbeds staff move dates/casitas/price of a website booking), balance due / overdue, paid in full. Bookings made in Cloudbeds or on OTAs never get website emails.
+
+**Payment rules**
+
+- A booking expires when its deadline passes and there is **no payment waiting to be checked or already verified**. A rejected or junk upload no longer holds the cabana/casita.
+- **Rejecting a proof** (Payments → Reject, with a reason) puts the booking back to Confirmation Pending, gives the guest a **fresh deadline** (24 h, or 8:00 AM on the trip date if sooner) and emails them.
+- Confirming a booking in Cloudbeds **does not** approve payments nobody has checked — verify them in Payments.
+- A proof uploaded by **staff** in the booking form now records a **verified payment** (pick full / 50% / balance next to the file). It shows in Payments, confirms the booking, and reaches the Cloudbeds folio.
+
+**Cloudbeds folio** (once live) — when a website villa booking is sent to Cloudbeds:
+
+- Cloudbeds charges the **room** from its own rates (they match the website's villa rates).
+- The website posts the **full-board meals, extra mattresses, pets and each add-on** as their own folio lines, and the **Senior/PWD, Convenience (5%) and staff discounts** as adjustments, so the Cloudbeds total matches the website total. If it still differs, the dashboard shows the difference on the booking ("Cloudbeds folio: …").
+- Each **verified payment** is posted to the folio, and its **proof screenshot is attached to the reservation's Documents** in Cloudbeds.
+
+**Before going live, do one test**: make a website booking for a far-off date, verify a small payment, and check in Cloudbeds that the meal/add-on lines, the discount adjustments, the payment and the proof document look right; then cancel it. (The Cloudbeds API names for custom items and documents were taken from their documentation and can only be confirmed against the live account.)

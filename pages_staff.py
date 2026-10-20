@@ -495,12 +495,12 @@ html = """<!doctype html>
         <div class="modal-field" style="margin-bottom:0;">
           <label for="addStatus">Status</label>
           <select id="addStatus">
-            <option value="pending">Pending</option>
-            <option value="pending_payment">Pending Payment</option>
+            <option value="pending">Confirmation Pending</option>
+            <option value="pending_payment">Payment Under Review</option>
             <option value="confirmed">Confirmed</option>
-            <option value="declined">Declined</option>
+            <option value="declined">Cancelled</option>
             <option value="completed">Completed</option>
-            <option value="expired">Expired (unpaid)</option>
+            <option value="expired">Cancelled · payment not received</option>
           </select>
         </div>
       </div>
@@ -594,7 +594,8 @@ html = """<!doctype html>
         <label for="addPayFile">Payment Proof</label>
         <div id="addPayExisting" class="modal-pay-existing"></div>
         <input id="addPayFile" type="file" accept="image/*,application/pdf">
-        <p class="modal-hint">Uploading a proof marks a Pending booking as Confirmed when you save.</p>
+        <select id="addPayPortion" style="margin-top:8px;"><option value="full">This proof is for the full payment</option><option value="deposit">This proof is for the 50% down payment</option><option value="balance">This proof is for the remaining balance</option></select>
+        <p class="modal-hint">Saving records the payment as verified (it appears under Payments and, for villas, on the Cloudbeds folio) and confirms a pending booking.</p>
       </div>
       <div class="modal-field" id="addStaffNotesField">
         <label for="addStaffNotes">Staff Notes</label>
@@ -640,11 +641,11 @@ html = """<!doctype html>
           <label for="vStatus">Status</label>
           <select id="vStatus">
             <option value="pending">Confirmation Pending</option>
-            <option value="pending_payment">Confirmation Pending &middot; proof received</option>
+            <option value="pending_payment">Payment Under Review</option>
             <option value="confirmed">Confirmed</option>
             <option value="completed">Checked Out</option>
             <option value="declined">Cancelled</option>
-            <option value="expired">Cancelled &middot; unpaid</option>
+            <option value="expired">Cancelled &middot; payment not received</option>
           </select>
         </div>
         <div class="modal-field" style="margin-bottom:0;">
@@ -712,7 +713,8 @@ html = """<!doctype html>
         <label for="vPayFile">Payment Proof</label>
         <div id="vPayExisting" class="modal-pay-existing"></div>
         <input id="vPayFile" type="file" accept="image/*,application/pdf">
-        <p class="modal-hint">Uploading a proof marks a Pending booking as Confirmed when you save (the guest gets the confirmation email).</p>
+        <select id="vPayPortion" style="margin-top:8px;"><option value="full">This proof is for the full payment</option><option value="deposit">This proof is for the 50% down payment</option><option value="balance">This proof is for the remaining balance</option></select>
+        <p class="modal-hint">Saving records the payment as verified (Payments, and the Cloudbeds folio once live) and confirms a pending booking — the guest gets the confirmation email.</p>
       </div>
       </div><aside class="bk-mail" id="vMail"></aside></div>
       <label class="modal-check" id="vNotifyWrap"><input type="checkbox" id="vNotify"> <span id="vNotifyText">Email the guest</span></label>

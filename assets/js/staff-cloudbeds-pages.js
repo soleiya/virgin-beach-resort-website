@@ -305,7 +305,8 @@
         "<div><small>Balance</small><b>" + (bal == null ? "—" : esc(peso(bal))) + "</b></div></div>" +
         '<div class="cbp-actions"><button type="button" class="cb-btn" data-p="breakdown">Price breakdown</button><button type="button" class="cb-btn" data-p="pay">' + ico("cash") + "Payments</button></div>" +
         '<table class="cbp-table"><thead><tr><th>Date</th><th>Description</th><th class="num">Amount</th><th>Status</th></tr></thead><tbody id="cbpPays"><tr><td colspan="4" class="cb-dim">Loading…</td></tr></tbody></table>' +
-        (r.cb_owned ? '<p class="cb-dim">This stay was booked in Cloudbeds — its folio (charges and payments) is kept in Cloudbeds.</p>' : "") + "</div>";
+        (r.cb_owned ? '<p class="cb-dim">This stay was booked in Cloudbeds — its folio (charges and payments) is kept in Cloudbeds.</p>' : "") +
+        (r.cb_folio_note ? '<p class="cbp-warn">Cloudbeds folio: ' + esc(r.cb_folio_note) + "</p>" : r.cb_folio_state === "done" ? '<p class="cb-dim">Meals, add-ons and discounts are on the Cloudbeds folio.</p>' : "") + "</div>";
     }
     if (t === "notes") {
       return '<div class="cbp-notes"><h4>Guest requests</h4><p class="cbp-box">' + (r.notes ? esc(r.notes) : '<span class="cb-dim">None</span>') + "</p>" +

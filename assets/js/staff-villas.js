@@ -483,10 +483,9 @@
         var saved = Array.isArray(res.data) ? res.data[0] : res.data;
         var jobs = Promise.resolve();
         if (file) {
+          // A proof uploaded by staff is a verified payment (Payments, Cloudbeds folio, confirmation).
           jobs = jobs.then(function () { return D.uploadProof({ id: saved.id }, file); }).then(function (path) {
-            var patch = { payment_screenshot_path: path, payment_uploaded_at: new Date().toISOString() };
-            if (["pending", "pending_payment"].indexOf(payload.status) !== -1) patch.status = "confirmed";
-            return sb.from("booking_requests").update(patch).eq("id", saved.id).then(function (u) { if (u.error) throw u.error; });
+            return D.attachProof(saved.id, path, $("vPayPortion"));
           });
         }
         if (!r && notify) {

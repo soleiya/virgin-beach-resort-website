@@ -54,14 +54,15 @@
     corporate: "Corporate", partner: "Partner / Referral", returnee: "Returning guest", staff_stay: "Employee / friend stay",
   };
   var STATUS_ORDER = ["pending", "pending_payment", "confirmed", "declined", "completed", "expired"];
+  // One vocabulary everywhere — dashboard, guest emails and Cloudbeds.
   var STATUS_LABELS = {
-    pending: "Pending", pending_payment: "Pending Payment", confirmed: "Confirmed",
-    declined: "Declined", completed: "Completed", expired: "Expired",
+    pending: "Confirmation Pending", pending_payment: "Payment Under Review", confirmed: "Confirmed",
+    declined: "Cancelled", completed: "Completed", expired: "Cancelled · payment not received",
   };
   // Villas use Cloudbeds' status names so both systems read the same.
   var VILLA_STATUS = {
-    pending: "Confirmation Pending", pending_payment: "Confirmation Pending", confirmed: "Confirmed",
-    completed: "Checked Out", declined: "Cancelled", expired: "Cancelled",
+    pending: "Confirmation Pending", pending_payment: "Payment Under Review", confirmed: "Confirmed",
+    completed: "Checked Out", declined: "Cancelled", expired: "Cancelled · payment not received",
   };
   function statusLabel(r) {
     if (r && r.stay_type === "overnight") {
@@ -695,7 +696,7 @@
     Array.prototype.forEach.call(filterStatus.options, function (o) {
       if (!o.value) return;
       o.textContent = activeSection === "villas"
-        ? (VILLA_STATUS[o.value] || o.value) + (o.value === "pending_payment" ? " · proof received" : o.value === "expired" ? " · unpaid" : "")
+        ? (VILLA_STATUS[o.value] || o.value)
         : (STATUS_LABELS[o.value] || o.value);
     });
   }
@@ -1479,6 +1480,10 @@
 
   // Staff-uploaded proofs go under staff/ — the email function treats those as
   // already verified (no "please verify" alert to the team).
+  function attachProof(bookingId, path, portionEl) {
+    return sb.rpc("staff_attach_proof", { p_booking_id: bookingId, p_path: path, p_portion: (portionEl && portionEl.value) || "full" })
+      .then(function (res) { if (res.error) throw res.error; return res.data; });
+  }
   function uploadProof(r, file) {
     var ext = (file.name.split(".").pop() || "jpg").toLowerCase().replace(/[^a-z0-9]/g, "") || "jpg";
     var path = "staff/" + r.id + "-" + Date.now() + "." + ext;
@@ -1535,14 +1540,11 @@
       var upload = file ? uploadProof(r, file) : Promise.resolve(null);
       upload
         .then(function (path) {
-          if (path) {
-            patch.payment_screenshot_path = path;
-            patch.payment_uploaded_at = new Date().toISOString();
-            var st = patch.status || r.status;
-            if (st === "pending" || st === "pending_payment") patch.status = "confirmed";
-          }
-          if (!Object.keys(patch).length) return;
-          return sb.from("booking_requests").update(patch).eq("id", r.id).then(function (res) { if (res.error) throw res.error; });
+          var save = !Object.keys(patch).length ? Promise.resolve()
+            : sb.from("booking_requests").update(patch).eq("id", r.id).then(function (res) { if (res.error) throw res.error; });
+          // A proof uploaded by staff is a verified payment (Payments, Cloudbeds folio, confirmation).
+          if (!path) return save;
+          return save.then(function () { return attachProof(r.id, path, document.getElementById("addPayPortion")); });
         })
         .then(function () { return syncCabanas(r.id, beforeCabanas, afterCabanas); })
         .then(function () {
@@ -2068,7 +2070,7 @@
     openLog: openLogModal,
     villaRows: villaRows, billRow: billRow,
     esc: esc, peso: peso, fmtDate: fmtDate, fmtDateTime: fmtDateTime,
-    proofLinks: proofLinks, openSignedUrl: openSignedUrl, uploadProof: uploadProof,
+    proofLinks: proofLinks, openSignedUrl: openSignedUrl, uploadProof: uploadProof, attachProof: attachProof,
     cbUrl: cbUrl, loadCbStatus: loadCbStatus,
     STATUS_LABELS: STATUS_LABELS, SOURCE_LABELS: SOURCE_LABELS,
     TYPE_LABELS: TYPE_LABELS, statusLabel: statusLabel, openModal: openModal,

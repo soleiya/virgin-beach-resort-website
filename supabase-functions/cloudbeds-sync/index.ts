@@ -11,7 +11,12 @@
 //   push     { booking_id } a villa booked on the website → new Cloudbeds
 //            reservation on the same casita(s).
 //   status   { booking_id } website confirmed / cancelled it → same in Cloudbeds.
-//   payments verified website payments → Cloudbeds folio (postPayment).
+//   payments verified website payments → Cloudbeds folio (postPayment), and
+//            their proof screenshots → the reservation's Documents
+//            (postReservationDocument).
+// A pushed booking also gets its folio lines: meals, extra beds, pets, add-ons
+// (postCustomItem) and discounts (postAdjustment); a total that still differs
+// is noted for staff (booking_requests.cb_folio_note).
 //   setup    link villas to Cloudbeds rooms (by name) + register webhooks.
 //   test     check the API key.
 // TEST MODE (cb_sync_state.push_enabled = false, the default): nothing is
@@ -370,6 +375,10 @@ async function push(bookingId: string): Promise<Any> {
     if (created.status !== wantStatus) {
       await cb("PUT", "putReservation", { reservationID: reservationId, status: wantStatus, sendStatusChangeEmail: "false" }).catch((e) => notes.push(`status: ${e.message}`));
     }
+    // meals, extra beds, pets, add-ons and discounts → the Cloudbeds folio, so its total matches the website's
+    const folio = await postFolio(reservationId, b).catch((e) => ({ state: "partial", notes: [`folio: ${(e as Error).message}`] }));
+    await rpc("cb_folio_result", { p_booking_id: bookingId, p_state: folio.state, p_note: folio.notes.join(" · ") || null }).catch(() => null);
+    if (folio.state !== "done") notes.push(...folio.notes);
     await cb("POST", "postReservationNote", {
       reservationID: reservationId,
       reservationNote: `Booked on the website${b.booked_by ? " by " + b.booked_by : ""} (${b.source}) · ${b.order_code} · ` +
@@ -386,6 +395,85 @@ async function push(bookingId: string): Promise<Any> {
   return { booking_id: bookingId, reservation_id: reservationId, notes };
 }
 
+// ---------------------------------------------------------------- folio lines
+// The room is charged by Cloudbeds from its own rates (they match the website's
+// villa rates). Everything else the website priced is posted as its own folio
+// line, and discounts as adjustments; then the totals are compared.
+const r2 = (n: number) => Math.round(n * 100) / 100;
+export function folioLines(b: Any): Array<{ ref: string; name: string; price: number; qty: number; note?: string }> {
+  const lines: Array<{ ref: string; name: string; price: number; qty: number; note?: string }> = [];
+  const code = String(b.order_code || b.id);
+  const nights = Number(b.nights) || 0;
+  const guests = (Number(b.adults) || 0) + (Number(b.children_6_12) || 0);
+  if (Number(b.meal_total) > 0) lines.push({ ref: `${code}-meals`, name: "Full-board meal package", price: r2(Number(b.meal_total)), qty: 1, note: `${guests} guest(s) × ${nights} night(s)` });
+  if (Number(b.extra_bed_total) > 0) lines.push({ ref: `${code}-beds`, name: "Extra floor mattress", price: r2(Number(b.extra_bed_total)), qty: 1, note: `${b.extra_beds || ""} mattress(es) × ${nights} night(s)` });
+  if (Number(b.pet_total) > 0) lines.push({ ref: `${code}-pets`, name: "Pet fee", price: r2(Number(b.pet_total)), qty: 1, note: `${b.pet_count || ""} pet(s) × ${nights} night(s)` });
+  for (const a of (b.addon_lines || []) as Any[]) {
+    if (Number(a.price) > 0 && Number(a.qty) > 0) lines.push({ ref: `${code}-addon-${a.slug}`, name: String(a.name), price: r2(Number(a.price)), qty: Number(a.qty) });
+  }
+  return lines;
+}
+export function folioDiscounts(b: Any): Array<{ name: string; amount: number }> {
+  const d: Array<{ name: string; amount: number }> = [];
+  if (Number(b.senior_discount) > 0) d.push({ name: "Senior Citizen / PWD discount", amount: r2(Number(b.senior_discount)) });
+  if (Number(b.online_discount) > 0) d.push({ name: "Convenience Discount (booked on the website)", amount: r2(Number(b.online_discount)) });
+  if (Number(b.discount_amount) > 0) d.push({ name: "Discount" + (b.discount_reason ? ` — ${b.discount_reason}` : ""), amount: r2(Number(b.discount_amount)) });
+  return d;
+}
+async function cbTotal(reservationId: string): Promise<number | null> {
+  const d = (await cb("GET", "getReservation", { reservationID: reservationId })).data || {};
+  const t = d.total ?? d.grandTotal ?? d.balanceDetailed?.grandTotal;
+  return t === undefined || t === null ? null : Number(t);
+}
+async function postFolio(reservationId: string, b: Any): Promise<{ state: string; notes: string[] }> {
+  const notes: string[] = [];
+  for (const l of folioLines(b)) {
+    try {
+      await cb("POST", "postCustomItem", {
+        reservationID: reservationId,
+        referenceID: l.ref, // Cloudbeds ignores a repeat of the same reference
+        items: [{ itemID: l.ref, itemName: l.name, itemQuantity: l.qty, itemPrice: l.price, itemNote: l.note || "", itemPaid: "false" }],
+      });
+    } catch (e) {
+      notes.push(`${l.name}: ${(e as Error).message}`);
+    }
+  }
+  for (const d of folioDiscounts(b)) {
+    try {
+      await cb("POST", "postAdjustment", { reservationID: reservationId, type: "rate", amount: d.amount, notes: `${d.name} · ${b.order_code}` });
+    } catch (e) {
+      notes.push(`${d.name}: ${(e as Error).message}`);
+    }
+  }
+  // Compare totals; a difference is reported to staff (never auto-corrected).
+  const total = await cbTotal(reservationId).catch(() => null);
+  const site = Number(b.total_amount);
+  if (total !== null && Number.isFinite(site) && Math.abs(total - site) > 1) {
+    notes.push(`Cloudbeds total ${peso(total)} vs website ${peso(site)} (difference ${peso(r2(site - total))}) — check the folio`);
+  }
+  return { state: notes.length ? "partial" : "done", notes };
+}
+
+// ---------------------------------------------------------------- proof → Cloudbeds Documents
+async function postProofDocument(reservationId: string, path: string, label: string): Promise<void> {
+  const key = env("CLOUDBEDS_API_KEY");
+  const obj = await fetch(`${SB_URL()}/storage/v1/object/payment-proofs/${path.split("/").map(encodeURIComponent).join("/")}`, {
+    headers: { apikey: SR(), Authorization: `Bearer ${SR()}` },
+  });
+  if (!obj.ok) throw new Error(`proof file: HTTP ${obj.status}`);
+  const blob = await obj.blob();
+  const ext = (path.split(".").pop() || "jpg").toLowerCase();
+  const fd = new FormData();
+  fd.append("propertyID", PROPERTY());
+  fd.append("reservationID", reservationId);
+  fd.append("file", blob, `${label}.${ext}`);
+  const res = await fetch(`${CB}/postReservationDocument`, { method: "POST", headers: { "x-api-key": key, Accept: "application/json" }, body: fd });
+  const text = await res.text();
+  let json: Any = null;
+  try { json = JSON.parse(text); } catch { /* not JSON */ }
+  if (!res.ok || json?.success === false) throw new Error(`postReservationDocument: ${json?.message || "HTTP " + res.status}`);
+}
+
 // Payment method on the website → Cloudbeds payment type
 export function cbPaymentType(method: unknown): string {
   return String(method || "").toLowerCase() === "cash" ? "cash" : "ebanking";
@@ -394,26 +482,41 @@ export function cbPaymentType(method: unknown): string {
 // Verified website payments → Cloudbeds folio (each once; retried by every pull).
 async function postPayments(deadline = Date.now() + 50_000): Promise<Any> {
   const list: Any[] = (await rpc("cb_pending_payment_posts")) || [];
-  let posted = 0;
+  let posted = 0, docs = 0;
   const errors: string[] = [];
   for (const p of list) {
     if (Date.now() > deadline) break;
-    try {
-      await cb("POST", "postPayment", {
-        reservationID: String(p.reservation_id),
-        type: cbPaymentType(p.method),
-        amount: Number(p.amount),
-        description: `Website payment · ${p.kind || "payment"} · ${p.order_code || ""}${p.note ? " · " + String(p.note).slice(0, 120) : ""}`,
-      });
-      await rpc("cb_payment_posted", { p_payment_id: p.payment_id, p_error: null });
-      posted++;
-    } catch (e) {
-      const msg = String((e as Error).message || e);
-      await rpc("cb_payment_posted", { p_payment_id: p.payment_id, p_error: msg });
-      errors.push(`payment ${p.payment_id}: ${msg}`);
+    if (p.need_payment) {
+      try {
+        await cb("POST", "postPayment", {
+          reservationID: String(p.reservation_id),
+          type: cbPaymentType(p.method),
+          amount: Number(p.amount),
+          description: `Website payment · ${p.kind || "payment"} · ${p.order_code || ""}${p.note ? " · " + String(p.note).slice(0, 120) : ""}`,
+        });
+        await rpc("cb_payment_posted", { p_payment_id: p.payment_id, p_error: null });
+        posted++;
+      } catch (e) {
+        const msg = String((e as Error).message || e);
+        await rpc("cb_payment_posted", { p_payment_id: p.payment_id, p_error: msg });
+        errors.push(`payment ${p.payment_id}: ${msg}`);
+        continue; // attach the proof once the payment itself is on the folio
+      }
+    }
+    // the guest's (or staff's) proof screenshot → the reservation's Documents in Cloudbeds
+    if (p.need_doc && p.proof_path) {
+      try {
+        await postProofDocument(String(p.reservation_id), String(p.proof_path), `Proof of payment ${p.order_code || ""} ${p.kind || ""}`.trim().replace(/\s+/g, "-"));
+        await rpc("cb_payment_doc_posted", { p_payment_id: p.payment_id, p_error: null });
+        docs++;
+      } catch (e) {
+        const msg = String((e as Error).message || e);
+        await rpc("cb_payment_doc_posted", { p_payment_id: p.payment_id, p_error: msg });
+        errors.push(`proof ${p.payment_id}: ${msg}`);
+      }
     }
   }
-  return { waiting: list.length, posted, errors };
+  return { waiting: list.length, posted, docs, errors };
 }
 
 export function cbStatusFor(status: string): string | null {

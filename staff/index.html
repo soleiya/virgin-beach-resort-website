@@ -9,7 +9,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400..600;1,9..144,400..600&family=Manrope:wght@400;500;600;700;800&family=Poppins:wght@400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="../assets/css/style.css?v=d3f7f41687">
-<link rel="stylesheet" href="../assets/css/staff-cloudbeds.css?v=38101252c7">
+<link rel="stylesheet" href="../assets/css/staff-cloudbeds.css?v=944d40d475">
 <style>
   body { background: var(--sand); min-height: 100vh; }
   .dash-wrap { max-width: 1280px; margin: 0 auto; padding: 28px 20px 80px; }
@@ -473,12 +473,12 @@
         <div class="modal-field" style="margin-bottom:0;">
           <label for="addStatus">Status</label>
           <select id="addStatus">
-            <option value="pending">Pending</option>
-            <option value="pending_payment">Pending Payment</option>
+            <option value="pending">Confirmation Pending</option>
+            <option value="pending_payment">Payment Under Review</option>
             <option value="confirmed">Confirmed</option>
-            <option value="declined">Declined</option>
+            <option value="declined">Cancelled</option>
             <option value="completed">Completed</option>
-            <option value="expired">Expired (unpaid)</option>
+            <option value="expired">Cancelled · payment not received</option>
           </select>
         </div>
       </div>
@@ -572,7 +572,8 @@
         <label for="addPayFile">Payment Proof</label>
         <div id="addPayExisting" class="modal-pay-existing"></div>
         <input id="addPayFile" type="file" accept="image/*,application/pdf">
-        <p class="modal-hint">Uploading a proof marks a Pending booking as Confirmed when you save.</p>
+        <select id="addPayPortion" style="margin-top:8px;"><option value="full">This proof is for the full payment</option><option value="deposit">This proof is for the 50% down payment</option><option value="balance">This proof is for the remaining balance</option></select>
+        <p class="modal-hint">Saving records the payment as verified (it appears under Payments and, for villas, on the Cloudbeds folio) and confirms a pending booking.</p>
       </div>
       <div class="modal-field" id="addStaffNotesField">
         <label for="addStaffNotes">Staff Notes</label>
@@ -618,11 +619,11 @@
           <label for="vStatus">Status</label>
           <select id="vStatus">
             <option value="pending">Confirmation Pending</option>
-            <option value="pending_payment">Confirmation Pending &middot; proof received</option>
+            <option value="pending_payment">Payment Under Review</option>
             <option value="confirmed">Confirmed</option>
             <option value="completed">Checked Out</option>
             <option value="declined">Cancelled</option>
-            <option value="expired">Cancelled &middot; unpaid</option>
+            <option value="expired">Cancelled &middot; payment not received</option>
           </select>
         </div>
         <div class="modal-field" style="margin-bottom:0;">
@@ -690,7 +691,8 @@
         <label for="vPayFile">Payment Proof</label>
         <div id="vPayExisting" class="modal-pay-existing"></div>
         <input id="vPayFile" type="file" accept="image/*,application/pdf">
-        <p class="modal-hint">Uploading a proof marks a Pending booking as Confirmed when you save (the guest gets the confirmation email).</p>
+        <select id="vPayPortion" style="margin-top:8px;"><option value="full">This proof is for the full payment</option><option value="deposit">This proof is for the 50% down payment</option><option value="balance">This proof is for the remaining balance</option></select>
+        <p class="modal-hint">Saving records the payment as verified (Payments, and the Cloudbeds folio once live) and confirms a pending booking — the guest gets the confirmation email.</p>
       </div>
       </div><aside class="bk-mail" id="vMail"></aside></div>
       <label class="modal-check" id="vNotifyWrap"><input type="checkbox" id="vNotify"> <span id="vNotifyText">Email the guest</span></label>
@@ -909,12 +911,12 @@
 <script src="../assets/js/booking-config.js?v=c116a3a0ae"></script>
 <script src="../assets/js/cabana-map.js?v=8f4f80dcb3"></script>
 <script src="../assets/js/pricing.js?v=89ca03abac"></script>
-<script src="../assets/js/staff-dashboard.js?v=46b739aeff"></script>
+<script src="../assets/js/staff-dashboard.js?v=2dc97ce102"></script>
 <script src="../assets/js/staff-email.js?v=ac542441c2"></script>
-<script src="../assets/js/staff-villas.js?v=6a90936883"></script>
+<script src="../assets/js/staff-villas.js?v=68fc0e116c"></script>
 <script src="../assets/js/staff-payments.js?v=f943aa5e21"></script>
 <script src="../assets/js/staff-activity.js?v=2ed22c66bb"></script>
 <script src="../assets/js/staff-cloudbeds.js?v=234be7f7b9"></script>
-<script src="../assets/js/staff-cloudbeds-pages.js?v=07a575bf80"></script>
+<script src="../assets/js/staff-cloudbeds-pages.js?v=fe1c9eb8fb"></script>
 </body>
 </html>

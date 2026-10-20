@@ -4,32 +4,59 @@
 // mailbox reservations@virginbeachresort.com (Gmail SMTP), so every message,
 // every guest reply and every follow-up lives in that one inbox.
 //
-// What it sends, and when (fired by the database trigger in
-// supabase-functions/booking-email-trigger.sql):
+// What it sends, and when (fired by the database triggers in
+// supabase-functions/booking-email-trigger.sql and later booking-v*.sql).
+// Status names follow ONE vocabulary everywhere (dashboard, emails,
+// Cloudbeds) — see statusLabel() below.
 //
-//   New website booking (INSERT)
-//     → GUEST:  quotation + bank details + next steps, with the
-//               Reservations Agreement PDF attached  (kind: guest_quote)
-//     → STAFF:  "New web booking" alert with the full transaction, contact
-//               links, flags and a follow-up checklist  (kind: staff_new)
+//   New booking (INSERT, website / auto-email sources), or staff tick "Send
+//   this booking to the guest" (UPDATE flips email_guest to true)
+//     → GUEST:  quotation + bank details + next steps, with the Reservations
+//               Agreement PDF attached  (kind: guest_quote)
+//               — if the booking is ALREADY Confirmed / completed (staff took
+//               payment before sending), the guest gets the confirmation
+//               instead (kind: guest_confirmed); nothing for Cancelled ones
+//     → STAFF:  "New booking" alert with the full transaction, contact links,
+//               flags and a follow-up checklist  (kind: staff_new)
 //
 //   Guest uploads a payment screenshot on /pay (payment_uploaded_at changes)
-//     → STAFF:  "Payment proof — please verify", screenshot attached
-//     → GUEST:  "We received your proof of payment, verifying now"
+//     → STAFF:  "Payment proof — please verify", screenshot attached  (proof_staff:<ts>)
+//     → GUEST:  "We received your proof — Payment Under Review"  (proof_guest:<ts>)
 //
-//   Staff set the booking to Confirmed in the dashboard
-//     → GUEST:  "Your Day Trip is confirmed" + arrival guide
+//   Guest uploads Senior/PWD IDs or pet vaccination cards (type DOCS)
+//     → STAFF:  documents attached  (kind: docs_staff:<upload_id>)
 //
-//   Still unpaid 24 hours after booking (process_booking_deadlines cron job)
-//     (no reminder email any more — booking-v7.sql)
-//     After 24 hours (or 8:00 AM on the trip date, whichever is first) the
-//     booking is set to Expired and its cabanas are released.
+//   Staff click Verify on a payment → booking becomes Confirmed (UPDATE)
+//     → GUEST:  "Your booking is confirmed" + arrival guide  (kind: guest_confirmed)
+//
+//   Staff reject a payment proof in the dashboard (type PROOF_REJECTED)
+//     → GUEST:  "We couldn't verify your payment" + re-upload link and the
+//               new payment deadline  (kind: proof_rejected:<payment_id>)
+//
+//   Booking set to Cancelled — status 'declined' (UPDATE)
+//     → GUEST:  "Your reservation has been cancelled"  (kind: guest_cancelled)
+//               — not sent for Cloudbeds No-Shows
+//
+//   Unpaid at the payment deadline — booked + 24 h, never later than 8:00 AM
+//   on the trip date (process_booking_deadlines cron → status 'expired')
+//     → GUEST:  "Cancelled · payment not received", hold released  (kind: guest_expired)
+//
+//   Balance due 15 days before arrival (types BALANCE_DUE / BALANCE_OVERDUE)
+//     → GUEST:  balance reminder  (kind: balance_due / balance_overdue_guest)
+//     → STAFF:  overdue alert  (kind: balance_overdue_staff)
+//
+//   Last payment verified, nothing left to pay (type PAID_IN_FULL)
+//     → GUEST:  "Fully paid"  (kind: paid_in_full) — not once Checked Out / Completed
 //
 //   Staff edit a booking in the dashboard (✎) and leave "Email the guest"
-//   ticked — sent via notify_booking_change(), see booking-change-email.sql
+//   ticked, or Cloudbeds staff move the dates / casitas / price of a website
+//   booking (type CHANGE, source "cloudbeds") — see booking-change-email.sql
 //     → GUEST:  "Changes to your reservation" — each changed detail shown as
 //               before → now, plus the full updated reservation  (kind: guest_changed:<id>)
-//     Sent for any source, as long as the booking has a valid guest email.
+//
+// Guest emails are sent only for auto-email sources (or email_guest = true),
+// never for bookings made in Cloudbeds (cb_owned — OTA guests), and only to a
+// valid guest email address.
 //
 // Guest emails all share one subject line so Gmail keeps them in ONE thread
 // (the guest's replies land in that same thread in reservations@). Staff
@@ -71,13 +98,21 @@ const FROM = `Virgin Beach Resort Reservations <${MAILBOX}>`;
 const EVENTS_EMAIL = "events@virginbeachresort.com";
 const MSGID_DOMAIN = "virginbeachresort.com";
 
+// Payment window in hours. MUST match booking_deadlines() in SQL (24 h) — the
+// database is what actually expires the booking; this is only the wording.
+// Every deadline and every "expires after N hours" line uses this one value.
+export const DEFAULT_DEADLINE_HOURS = 24;
+function deadlineHours() {
+  return Number(env("PAYMENT_DEADLINE_HOURS", String(DEFAULT_DEADLINE_HOURS))) || DEFAULT_DEADLINE_HOURS;
+}
+
 function cfg() {
   const site = env("SITE_URL", "https://soleiya.github.io/virgin-beach-resort-website").replace(/\/+$/, "");
   return {
     site,
     testMode: env("TEST_MODE") === "true",
     staffEmails: env("STAFF_EMAILS", MAILBOX).split(",").map((s) => s.trim()).filter(Boolean),
-    deadlineHours: Number(env("PAYMENT_DEADLINE_HOURS", "24")) || 24,
+    deadlineHours: deadlineHours(),
     proofCc: env("PROOF_CC_EMAILS").split(",").map((s) => s.trim()).filter(Boolean),
     // "auto" = show the seawater-pool notice June–November (rainy season).
     poolNotice: env("POOL_NOTICE", "auto"),
@@ -146,6 +181,28 @@ const TIMES: Record<string, { in: string; out: string }> = {
 
 export const isOvernight = (r: Any) => r?.stay_type === "overnight";
 
+// The ONE status vocabulary used by the dashboard, the emails and Cloudbeds.
+// Overnight (villa) bookings also follow Cloudbeds' own check-in / no-show.
+export function statusLabel(r: Any): string {
+  const s = String(r?.status || "");
+  const cbs = r?.cb_info?.status;
+  if (s === "pending") return "Confirmation Pending";
+  if (s === "pending_payment") return "Payment Under Review";
+  if (s === "confirmed") return isOvernight(r) && cbs === "checked_in" ? "Checked In" : "Confirmed";
+  if (s === "completed") return isOvernight(r) ? "Checked Out" : "Completed";
+  if (s === "declined") return isOvernight(r) && cbs === "no_show" ? "No-Show" : "Cancelled";
+  if (s === "expired") return "Cancelled · payment not received";
+  return s || "—";
+}
+
+// Short name of the booking type for guest-facing sentences ("your … on …").
+const TRIP_LABELS: Record<string, string> = {
+  day_trip: "Day Trip", half_day: "Half-Day Trip", flash_sale: "Flash Sale Day Trip",
+  all_inclusive_family: "All-Inclusive Family Day Trip", all_inclusive_barkada: "All-Inclusive Barkada Day Trip",
+  corporate: "Corporate Outing", overnight: "Overnight Stay", other: "Booking",
+};
+export const tripLabel = (r: Any) => TRIP_LABELS[String(r?.stay_type || "")] || "Booking";
+
 // ---------- helpers ----------------------------------------------------------
 
 export function esc(s: unknown): string {
@@ -194,14 +251,14 @@ function daysUntil(checkIn: string | null, now: Date): number | null {
   return Math.round((trip - today) / 86400000);
 }
 
-// Payment deadline — must match booking_deadlines() in booking-v7.sql:
-//   booked + 24h — the booking expires then if still unpaid — but never
-//   later than 8:00 AM on the trip date. Bookings made on/after 8:00 AM of the trip date
-//   (same-day walk-ins) are paid on arrival.
+// Payment deadline — must match booking_deadlines() in SQL (booking-v7.sql):
+//   booked + 24h (DEFAULT_DEADLINE_HOURS) — the booking expires then if still
+//   unpaid — but never later than 8:00 AM on the trip date. Bookings made
+//   on/after 8:00 AM of the trip date (same-day walk-ins) are paid on arrival.
 function trip8(checkIn: string | null): Date | null {
   return checkIn ? new Date(checkIn + "T08:00:00+08:00") : null;
 }
-export function paymentDeadline(record: Any, hours = 24): { date: Date | null; label: string } {
+export function paymentDeadline(record: Any, hours = deadlineHours()): { date: Date | null; label: string } {
   const created = new Date(record.created_at || Date.now());
   const t8 = trip8(record.check_in);
   if (t8 && t8.getTime() <= created.getTime()) return { date: null, label: "upon arrival at the resort" };
@@ -209,11 +266,11 @@ export function paymentDeadline(record: Any, hours = 24): { date: Date | null; l
   if (t8 && t8 < deadline) deadline = t8;
   return { date: deadline, label: fmtDateTime(deadline) };
 }
-export function finalDeadline(record: Any): { date: Date | null; label: string; isTripMorning: boolean } {
+export function finalDeadline(record: Any, hours = deadlineHours()): { date: Date | null; label: string; isTripMorning: boolean } {
   const created = new Date(record.created_at || Date.now());
   const t8 = trip8(record.check_in);
   if (t8 && t8.getTime() <= created.getTime()) return { date: null, label: "upon arrival at the resort", isTripMorning: false };
-  let d = new Date(created.getTime() + 24 * 3600_000);
+  let d = new Date(created.getTime() + hours * 3600_000);
   let isTripMorning = false;
   if (t8 && t8 < d) { d = t8; isTripMorning = true; }
   return { date: d, label: fmtDateTime(d), isTripMorning };
@@ -242,12 +299,12 @@ export type PaySummary = {
   last: { kind: string; amount: number; method: string; status: string; at: string } | null;
 };
 export const KIND_WORDS: Record<string, string> = { deposit: "50% down payment", full: "full payment", balance: "remaining balance", other: "payment" };
-// "To secure your reservation, pay at least 50% …" (quotation + 24-hour reminder)
+// "To secure your reservation, pay at least 50% …" (quotation)
 function securePara(r: Any, total: number, dl: { label: string }, units: string) {
   const t = payTerms(r, total);
   return t.half
-    ? `<strong>To secure your reservation, pay at least 50% (${esc(peso(t.deposit))}) &mdash; or the full ${esc(peso(t.total))} &mdash; by ${esc(dl.label)}</strong>, and send us your proof of payment. The remaining balance is due by <strong>${esc(t.balanceDueLabel)}</strong> (${BALANCE_DAYS} days before arrival). Unpaid bookings are automatically canceled and the ${units} released.`
-    : `<strong>Full payment of ${esc(peso(t.total))} is required by ${esc(dl.label)}</strong> to secure the reservation, as ${isOvernight(r) ? "your stay" : "your visit"} is less than ${BALANCE_DAYS} days away. Unpaid bookings are automatically canceled and the ${units} released.`;
+    ? `<strong>To secure your reservation, pay at least 50% (${esc(peso(t.deposit))}) &mdash; or the full ${esc(peso(t.total))} &mdash; by ${esc(dl.label)}</strong>, and send us your proof of payment. The remaining balance is due by <strong>${esc(t.balanceDueLabel)}</strong> (${BALANCE_DAYS} days before arrival). Unpaid bookings are automatically cancelled and the ${units} released.`
+    : `<strong>Full payment of ${esc(peso(t.total))} is required by ${esc(dl.label)}</strong> to secure the reservation, as ${isOvernight(r) ? "your stay" : "your visit"} is less than ${BALANCE_DAYS} days away. Unpaid bookings are automatically cancelled and the ${units} released.`;
 }
 function secureRows(r: Any, total: number, dl: { label: string }): [string, string][] {
   const t = payTerms(r, total);
@@ -490,12 +547,13 @@ function cabanaNote(cabanas: Any[]) {
   return cabanas.length ? p(esc(PREFERRED_CABANA_NOTE), `font-size:12.5px;color:${C.soft};margin-top:8px;`) : "";
 }
 
-// Rebooking: unpaid bookings simply expire after 24 hours; paid guests reply
+// Rebooking: unpaid bookings simply expire after the payment window
+// (deadlineHours, 24 h — same as booking_deadlines() in SQL); paid guests reply
 // to change their date. (The cancellation & postponement table applies to
 // overnight casitas, not Day Trips, so it's no longer in these emails.)
-function rebookNote(paid = false) {
+function rebookNote(paid = false, hours = deadlineHours()) {
   return p("<strong>Need to change your date?</strong> Just reply to this email and we'll help you rebook." +
-    (paid ? "" : " Haven't paid yet? You can simply ignore this booking — unpaid bookings expire automatically after 24 hours — and make a new one."),
+    (paid ? "" : ` Haven't paid yet? You can simply ignore this booking — unpaid bookings expire automatically after ${hours} hours — and make a new one.`),
     `font-size:13.5px;color:${C.soft};margin-top:14px;`);
 }
 
@@ -661,6 +719,20 @@ ${signature(c)}`;
   };
 }
 
+// What the guest was sent with a new booking: the quotation, the confirmation
+// (staff created / sent an already-Confirmed booking) or nothing (Cancelled).
+export function staffSentMode(r: Any): "quote" | "confirmed" | "none" {
+  if (r.status === "confirmed" || r.status === "completed") return "confirmed";
+  if (r.status === "declined" || r.status === "expired") return "none";
+  return "quote";
+}
+function staffSentLine(r: Any, mode: "confirmed" | "none", guestSent: { ok: boolean; error?: string }, now: Date) {
+  if (mode === "none") return `This booking is <strong>${esc(statusLabel(r))}</strong>, so no email was sent to the guest.`;
+  return guestSent.ok
+    ? `Booking confirmation sent to <strong>${esc(r.guest_email)}</strong> at ${esc(fmtDateTime(now))}. It's in the <strong>Sent</strong> folder — the guest's replies will land in that same thread.`
+    : `<strong style="color:${C.red};">The guest has NOT received an email.</strong>`;
+}
+
 export function staffNewEmail(r: Any, cabanas: Any[], q: Quote | null, c: ReturnType<typeof cfg>, guestSent: { ok: boolean; error?: string }, now = new Date()) {
   if (isOvernight(r)) return staffNewEmailOvernight(r, cabanas, q, c, guestSent, now);
   const d = daysUntil(r.check_in, now);
@@ -669,7 +741,8 @@ export function staffNewEmail(r: Any, cabanas: Any[], q: Quote | null, c: Return
   const flag = (t: string, tone: "warn" | "red" = "warn") =>
     flags.push(`<li style="margin:0 0 6px;color:${tone === "red" ? C.red : C.warn};">${t}</li>`);
 
-  if (!guestSent.ok) flag(`<strong>Guest email FAILED to send</strong> (${esc(guestSent.error || "unknown error")}). Send the quotation manually.`, "red");
+  const mode = staffSentMode(r);
+  if (!guestSent.ok && mode !== "none") flag(`<strong>Guest email FAILED to send</strong> (${esc(guestSent.error || "unknown error")}). Send the ${mode === "confirmed" ? "confirmation" : "quotation"} manually.`, "red");
   const needDocs = docsNeeded(r);
   if (needDocs.any) flag(`Guest still has to upload ${[needDocs.seniors ? "Senior/PWD ID(s)" : "", needDocs.pets ? "pet vaccination card(s)" : ""].filter(Boolean).join(" and ")} — the quotation email links to the upload page.`);
   if (q?.mismatch) flag(`${isStaffMade(r) ? "The dashboard saved" : "Website showed the guest"} <strong>${peso(q.websiteTotal)}</strong>, but the rate sheet${Number(r.discount_amount) > 0 ? " (less the discount)" : ""} gives <strong>${peso(q.total)}</strong> (the amount emailed). Double-check before accepting payment.`, "red");
@@ -694,10 +767,10 @@ export function staffNewEmail(r: Any, cabanas: Any[], q: Quote | null, c: Return
   const body = `${statusBox([
     ["Booking ID", esc(r.order_code || "—")],
     ["Amount due", q ? esc(peso(q.total)) : "Quote needed"],
-    ["Status", "Unpaid"],
+    ["Status", esc(statusLabel(r))],
   ])}
-${isStaffMade(r) ? p(`Added in the staff dashboard${r.booked_by ? ` by <strong>${esc(r.booked_by)}</strong>` : ""} (${esc(label(r.source))}) and sent to the guest as a quotation.`) : ""}
-${p(guestSent.ok
+${isStaffMade(r) ? p(`Added in the staff dashboard${r.booked_by ? ` by <strong>${esc(r.booked_by)}</strong>` : ""} (${esc(label(r.source))})${mode === "confirmed" ? " as an already-Confirmed booking — the guest was sent the confirmation email, not a quotation." : mode === "none" ? "." : " and sent to the guest as a quotation."}`) : ""}
+${p(mode !== "quote" ? staffSentLine(r, mode, guestSent, now) : guestSent.ok
     ? `Quotation${q ? " + bank details" : ""} sent to <strong>${esc(r.guest_email)}</strong> at ${esc(fmtDateTime(now))}. It's in the <strong>Sent</strong> folder — the guest's replies will land in that same thread.${q ? ` Pay-by date given: <strong>${esc(dl.label)}</strong>.` : ""}`
     : `<strong style="color:${C.red};">The guest has NOT received an email.</strong>`)}
 ${flags.length ? `${h2("Needs attention")}<ul style="margin:0;padding-left:20px;font-size:14px;">${flags.join("")}</ul>` : ""}
@@ -718,7 +791,7 @@ ${h2("Follow-up checklist")}
 <ol style="margin:0 0 14px;padding-left:20px;font-size:14px;">
 <li>Watch the guest thread (search the Booking ID) for proof of payment, the signed agreement and one valid ID. Website uploads also alert this inbox.</li>
 <li>Guest asks for card / e-wallet? Create a Xendit invoice for <strong>${q ? esc(peso(q.total)) : "the quoted amount"}</strong> with description <strong>Booking# ${esc(r.order_code)}</strong>, and reply in the guest's thread with the link and the same pay-by time.</li>
-<li>Verify the deposit against the bank statement, then set the booking to <strong>Confirmed</strong> in the dashboard — the guest gets the confirmation email automatically.</li>
+<li>Verify the deposit against the bank statement, then click <strong>Verify</strong> on the payment in the dashboard (Payments) — that confirms the booking and emails the guest.</li>
 <li>No payment by ${esc(dl.label)}? The booking automatically turns <strong>Expired</strong> and the cabana(s) are released. Nothing to do unless the guest calls.</li>
 </ol>
 ${button(dash, "Open in staff dashboard")}${button(gmail, "Find guest thread in Gmail")}`;
@@ -765,7 +838,7 @@ ${p(`Thank you! We've received ${last ? `the proof of ${what}` : what} for <stro
 ${statusBox([
     ["Booking ID", esc(r.order_code || "—")],
     [isOvernight(r) ? "Stay" : "Date", esc(isOvernight(r) ? stayRange(r) : fmtDate(r.check_in, "short"))],
-    ["Status", "Payment being verified"],
+    ["Status", esc(statusLabel({ ...r, status: "pending_payment" }))],
   ])}
 ${p(isBalance
     ? "Our team is now verifying it against our bank records. Once it's confirmed, we'll email you in this same thread &mdash; and you're all set for your arrival."
@@ -805,11 +878,11 @@ export function guestConfirmedEmail(r: Any, cabanas: Any[], q: Quote | null, c: 
   const t = TIMES[r.stay_type] || TIMES.day_trip;
   const map = "https://www.google.com/maps/search/?api=1&query=" + encodeURIComponent("Virgin Beach Resort, Laiya, San Juan, Batangas");
   const body = `${p(`Hi ${first},`)}
-${paidThanks(r, q, ps, c)}${p(`We are delighted to confirm your reservation for a <strong>${esc(r.stay_type === "half_day" ? "Half-Day Trip" : "Day Trip")}</strong> on <strong>${esc(fmtDate(r.check_in))}</strong>.`)}
+${paidThanks(r, q, ps, c)}${p(`We are delighted to confirm your reservation for a <strong>${esc(tripLabel(r))}</strong> on <strong>${esc(fmtDate(r.check_in))}</strong>.`)}
 ${statusBox([
     ["Booking ID", esc(r.order_code || "—")],
     ["Date", esc(fmtDate(r.check_in, "short"))],
-    ["Status", "Confirmed"],
+    ["Status", esc(statusLabel({ ...r, status: "confirmed" }))],
   ], "ok")}
 ${h2("Your reservation")}${kv([
     ...reservationRows(r, cabanas).slice(1),
@@ -827,36 +900,82 @@ ${signature(c)}`;
   };
 }
 
-export function guestReminderEmail(r: Any, cabanas: Any[], q: Quote | null, c: ReturnType<typeof cfg>) {
+// ---------- cancelled / expired / payment proof rejected -----------------------
+// All reply in the guest's existing thread (same subject as the quotation).
+
+function unitsWord(r: Any) {
+  return isOvernight(r) ? "casita(s)" : "cabana(s)";
+}
+function whenText(r: Any) {
+  return isOvernight(r) ? stayRange(r) : fmtDate(r.check_in);
+}
+
+export function guestCancelledEmail(r: Any, c: ReturnType<typeof cfg>) {
   const first = esc(String(r.guest_name || "there").trim().split(/\s+/)[0]);
-  const fin = finalDeadline(r);
-  const payUrl = uploadUrl(r, c);
-  const need = docsNeeded(r);
+  const paid = Number(r.amount_paid) || 0;
   const body = `${p(`Hi ${first},`)}
-${p(`We haven't received payment yet for your reservation <strong>${esc(r.order_code || "")}</strong> on <strong>${esc(fmtDate(r.check_in))}</strong>, and the 24-hour payment window has passed.`)}
-${p(fin.isTripMorning
-    ? `We're holding your booking${cabanas.length ? " and cabana(s)" : ""} until <strong>${esc(fin.label)}</strong> — the morning of your visit. If payment isn't settled by then, the booking will be canceled and the cabana(s) released to other guests.`
-    : `As a courtesy, we've <strong>extended your hold by 12 hours, until ${esc(fin.label)}</strong>. If payment isn't settled by then, the booking will be canceled and the cabana(s) released to other guests.`)}
+${p(`This is to let you know that your reservation <strong>${esc(r.order_code || "")}</strong> for ${isOvernight(r) ? "your overnight stay" : `your <strong>${esc(tripLabel(r))}</strong>`} on <strong>${esc(whenText(r))}</strong> has been <strong>cancelled</strong>.`)}
 ${statusBox([
     ["Booking ID", esc(r.order_code || "—")],
-    ["Amount due", q ? (payTerms(r, q.total).half ? `50%: ${esc(peso(r2(q.total / 2)))}<br>or 100%: ${esc(peso(q.total))}` : esc(peso(q.total))) : "See quotation"],
-    ["Final deadline", esc(fin.label)],
+    [isOvernight(r) ? "Stay" : "Date", esc(isOvernight(r) ? stayRange(r) : fmtDate(r.check_in, "short"))],
+    ["Status", esc(statusLabel(r))],
   ])}
-${p("Already paid? Just upload your proof of payment (or reply to this email with it) and we'll take it from here.")}
-${need.any ? p(`On the same page, please also upload ${[need.seniors ? "the Senior Citizen / PWD ID(s)" : "", need.pets ? "your pet's vaccination card(s)" : ""].filter(Boolean).join(" and ")}.`) : ""}
-${button(payUrl, need.any ? "Upload payment & documents" : "Upload proof of payment")}
-${h2("Bank details")}${bankTable()}
-${p(`Please put <strong>${esc(r.order_code)}</strong> and your name in the reference / remarks. Prefer card or e-wallet? Reply to this email and we'll send a secure Xendit link.`, "margin-top:12px;")}
+${paid > 0.5 ? p(`We have a payment of <strong>${esc(peso(paid))}</strong> on record for this booking. Our reservations team will contact you in this same email thread about it, in line with the cancellation policy in your Reservations Agreement.`) : ""}
+${p("If this is unexpected, or you'd like to rebook for another date, simply reply to this email and we'll be happy to help. You can also make a new booking any time on our website.")}
+${button(c.site, "Book again on our website")}
 ${signature(c)}`;
   return {
     subject: "Re: " + guestSubject(r, c),
-    html: shell({ preheader: `Payment reminder — ${r.order_code} held until ${fin.label}`, body, c }),
+    html: shell({ preheader: `Your reservation ${r.order_code} has been cancelled`, body: applyIntro(body, customOf(r, "cancelled"), r), c }),
+  };
+}
+
+export function guestExpiredEmail(r: Any, c: ReturnType<typeof cfg>) {
+  const first = esc(String(r.guest_name || "there").trim().split(/\s+/)[0]);
+  const units = unitsWord(r);
+  const body = `${p(`Hi ${first},`)}
+${p(`We didn't receive payment for your reservation <strong>${esc(r.order_code || "")}</strong> (${esc(whenText(r))}) by the payment deadline, so the booking has been cancelled and the hold on your ${units} released. ${isOvernight(r) ? "The dates and casita(s)" : "The date and cabana(s)"} may now be booked by other guests.`)}
+${statusBox([
+    ["Booking ID", esc(r.order_code || "—")],
+    [isOvernight(r) ? "Stay" : "Date", esc(isOvernight(r) ? stayRange(r) : fmtDate(r.check_in, "short"))],
+    ["Status", esc(statusLabel(r))],
+  ])}
+${p("<strong>Still planning to visit?</strong> You're welcome to book again on our website &mdash; we'll hold your new booking while you pay.")}
+${button(c.site, "Book again on our website")}
+${p(`<strong>Already paid?</strong> Please reply to this email with your proof of payment (screenshot or transaction slip) attached, and our team will check it and get back to you as soon as possible.`, "margin-top:14px;")}
+${signature(c)}`;
+  return {
+    subject: "Re: " + guestSubject(r, c),
+    html: shell({ preheader: `Payment not received — ${r.order_code} has been released`, body: applyIntro(body, customOf(r, "expired"), r), c }),
+  };
+}
+
+export function guestProofRejectedEmail(r: Any, c: ReturnType<typeof cfg>, reason: string, deadline: Date | null) {
+  const first = esc(String(r.guest_name || "there").trim().split(/\s+/)[0]);
+  const need = docsNeeded(r);
+  const body = `${p(`Hi ${first},`)}
+${p(`Thank you for sending your proof of payment for <strong>${esc(r.order_code || "")}</strong>. Unfortunately, we couldn't verify it against our bank records.`)}
+${reason ? p(`<strong>Reason:</strong> ${esc(reason)}`, `background:${C.warnBg};color:${C.warn};border-radius:8px;padding:10px 14px;font-size:14px;`) : ""}
+${statusBox([
+    ["Booking ID", esc(r.order_code || "—")],
+    [isOvernight(r) ? "Stay" : "Date", esc(isOvernight(r) ? stayRange(r) : fmtDate(r.check_in, "short"))],
+    ...(deadline ? [["Please pay by", esc(fmtDateTime(deadline))] as [string, string]] : []),
+  ])}
+${p(`Please upload a clearer or the correct proof of payment &mdash; a screenshot or transaction slip that shows the amount, date, reference number and the receiving account (${esc(ACCOUNT_NAME)}) &mdash; using the button below, or simply reply to this email with it attached.`)}
+${deadline ? p(`To keep your reservation, please send it by <strong>${esc(fmtDateTime(deadline))}</strong>. If we don't receive a valid payment by then, the booking will be cancelled and the ${unitsWord(r)} released.`) : ""}
+${button(uploadUrl(r, c), need.any ? "Upload payment & documents" : "Upload proof of payment")}
+${h2("Bank details")}${bankTable()}
+${p(`Please put <strong>${esc(r.order_code)}</strong> and your name in the reference / remarks. If you have any questions, just reply to this email.`, "margin-top:12px;")}
+${signature(c)}`;
+  return {
+    subject: "Re: " + guestSubject(r, c),
+    html: shell({ preheader: `We couldn't verify your payment for ${r.order_code} — please upload it again`, body: applyIntro(body, customOf(r, "proof_rejected"), r), c }),
   };
 }
 
 export type Change = { label: string; before: string; after: string };
 
-export function guestChangedEmail(r: Any, cabanas: Any[], changes: Change[], c: ReturnType<typeof cfg>, threadRecord: Any) {
+export function guestChangedEmail(r: Any, cabanas: Any[], changes: Change[], c: ReturnType<typeof cfg>, threadRecord: Any, source = "") {
   const first = esc(String(r.guest_name || "there").trim().split(/\s+/)[0]);
   const td = `padding:8px 8px;border-bottom:1px solid ${C.line};font-size:13.5px;vertical-align:top;`;
   const rows = changes.map((ch) =>
@@ -866,7 +985,9 @@ export function guestChangedEmail(r: Any, cabanas: Any[], changes: Change[], c: 
 <tr style="color:${C.soft};font-size:11.5px;text-transform:uppercase;letter-spacing:.06em;"><td style="padding:6px 8px;">Detail</td><td style="padding:6px 8px;">Original</td><td style="padding:6px 8px;">Updated</td></tr>
 ${rows}</table>`;
   const body = `${p(`Hi ${first},`)}
-${p(`We've made the following ${changes.length === 1 ? "change" : "changes"} to your reservation <strong>${esc(r.order_code || "")}</strong>:`)}
+${p(source === "cloudbeds"
+    ? `Our reservations team has updated your booking <strong>${esc(r.order_code || "")}</strong>. Here ${changes.length === 1 ? "is the change" : "are the changes"}:`
+    : `We've made the following ${changes.length === 1 ? "change" : "changes"} to your reservation <strong>${esc(r.order_code || "")}</strong>:`)}
 ${table}
 ${h2("Your updated reservation")}${kv([
     ...reservationRows(r, cabanas),
@@ -1033,7 +1154,8 @@ export function staffNewEmailOvernight(r: Any, villas: Any[], q: Quote | null, c
   const flags: string[] = [];
   const flag = (t: string, tone: "warn" | "red" = "warn") =>
     flags.push(`<li style="margin:0 0 6px;color:${tone === "red" ? C.red : C.warn};">${t}</li>`);
-  if (!guestSent.ok) flag(`<strong>Guest email FAILED to send</strong> (${esc(guestSent.error || "unknown error")}). Send the quotation manually.`, "red");
+  const mode = staffSentMode(r);
+  if (!guestSent.ok && mode !== "none") flag(`<strong>Guest email FAILED to send</strong> (${esc(guestSent.error || "unknown error")}). Send the ${mode === "confirmed" ? "confirmation" : "quotation"} manually.`, "red");
   if (q?.mismatch) flag(`${isStaffMade(r) ? "The dashboard saved" : "Website showed the guest"} <strong>${peso(q.websiteTotal)}</strong>, but the rate sheet${Number(r.discount_amount) > 0 ? " (less the discount)" : ""} gives <strong>${peso(q.total)}</strong> (the amount emailed). Double-check before accepting payment.`, "red");
   if (!villas.length) flag("No casita assigned — assign one in the dashboard before taking payment.", "red");
   if (d !== null && d <= 1) flag(`Arrival is <strong>${d <= 0 ? "today" : "tomorrow"}</strong> — call the guest now to arrange payment.`, "red");
@@ -1054,9 +1176,10 @@ export function staffNewEmailOvernight(r: Any, villas: Any[], q: Quote | null, c
     ["Booking ID", esc(r.order_code || "—")],
     ["Amount due", q ? esc(peso(q.total)) : "Quote needed"],
     ["Stay", esc(`${fmtDate(r.check_in, "short").replace(/^\w+, /, "")} · ${plural(nightsOf(r), "night")}`)],
+    ["Status", esc(statusLabel(r))],
   ])}
-${isStaffMade(r) ? p(`Added in the staff dashboard${r.booked_by ? ` by <strong>${esc(r.booked_by)}</strong>` : ""} (${esc(label(r.source))}) and sent to the guest as a quotation.`) : ""}
-${p(guestSent.ok
+${isStaffMade(r) ? p(`Added in the staff dashboard${r.booked_by ? ` by <strong>${esc(r.booked_by)}</strong>` : ""} (${esc(label(r.source))})${mode === "confirmed" ? " as an already-Confirmed booking — the guest was sent the confirmation email, not a quotation." : mode === "none" ? "." : " and sent to the guest as a quotation."}`) : ""}
+${p(mode !== "quote" ? staffSentLine(r, mode, guestSent, now) : guestSent.ok
     ? `Quotation + bank details sent to <strong>${esc(r.guest_email)}</strong> at ${esc(fmtDateTime(now))}. It's in the <strong>Sent</strong> folder — the guest's replies will land in that same thread. Pay-by date given: <strong>${esc(dl.label)}</strong>.`
     : `<strong style="color:${C.red};">The guest has NOT received an email.</strong>`)}
 ${flags.length ? `${h2("Needs attention")}<ul style="margin:0;padding-left:20px;font-size:14px;">${flags.join("")}</ul>` : ""}
@@ -1077,7 +1200,7 @@ ${h2("Follow-up checklist")}
 <ol style="margin:0 0 14px;padding-left:20px;font-size:14px;">
 <li>Watch the guest thread (search the Booking ID) for proof of payment, the signed agreement and a valid ID. Website uploads also alert this inbox.</li>
 <li>Guest asks for card / e-wallet? Create a Xendit invoice for <strong>${q ? esc(peso(q.cardTotal ?? q.total)) : "the quoted amount"}</strong>${q && q.onlineDiscount ? " (no Convenience Discount on card payments)" : ""} with description <strong>Booking# ${esc(r.order_code)}</strong>, and reply in the guest's thread with the link and the same pay-by time.</li>
-<li>Verify the deposit against the bank statement, then set the booking to <strong>Confirmed</strong> in the dashboard — the guest gets the confirmation email automatically.</li>
+<li>Verify the deposit against the bank statement, then click <strong>Verify</strong> on the payment in the dashboard (Payments) — that confirms the booking and emails the guest.</li>
 <li>No payment by ${esc(dl.label)}? The booking automatically turns <strong>Expired</strong> and the casita(s) are released.</li>
 <li>Share the guest count with the kitchen (full board, ${plural(nightsOf(r), "night")}) and any extra mattress with Housekeeping once confirmed.</li>
 </ol>
@@ -1096,7 +1219,7 @@ ${paidThanks(r, q, ps, c)}${p(`We are delighted to confirm your <strong>overnigh
 ${statusBox([
     ["Booking ID", esc(r.order_code || "—")],
     ["Arrival", esc(fmtDate(r.check_in, "short"))],
-    ["Status", "Confirmed"],
+    ["Status", esc(statusLabel({ ...r, status: "confirmed" }))],
   ], "ok")}
 ${h2("Your reservation")}${kv([
     ...overnightRows(r, villas).slice(1),
@@ -1396,8 +1519,18 @@ async function onInsert(r: Any) {
   if (!autoEmail(r, c)) return { skipped: "source " + r.source };
   const cabanas = await loadUnits(r);
   const q = await quoteFor(r, cabanas);
-  let guest: { ok: boolean; error?: string } = { ok: false, error: "no guest email on booking" };
-  if (r.guest_email) {
+  const mode = staffSentMode(r);
+  let guest: Any = { ok: false, error: "no guest email on booking" };
+  let confirmed: Any = undefined;
+  if (mode === "none") {
+    // Already Cancelled when staff sent it: nothing goes to the guest.
+    guest = { ok: false, skipped: true, error: "booking is " + statusLabel(r) };
+  } else if (mode === "confirmed") {
+    // Staff took payment before sending: the guest gets the confirmation,
+    // not a quotation asking them to pay.
+    confirmed = await onConfirmed(r);
+    guest = confirmed && "ok" in confirmed ? confirmed : { ok: false, error: String(confirmed?.skipped || "not sent") };
+  } else if (r.guest_email) {
     const g = guestQuoteEmail(r, cabanas, q, c);
     guest = await send({
       booking: r, kind: "guest_quote", to: r.guest_email, subject: g.subject, html: g.html,
@@ -1407,7 +1540,7 @@ async function onInsert(r: Any) {
   const s = staffNewEmail(r, cabanas, q, c, guest);
   const to = r.stay_type === "corporate" ? [...c.staffEmails, EVENTS_EMAIL] : c.staffEmails;
   const staff = await send({ booking: r, kind: "staff_new", to, subject: s.subject, html: s.html, thread: "staff", first: true });
-  return { guest, staff };
+  return mode === "confirmed" ? { confirmed, staff } : { guest, staff };
 }
 
 // Staff-added bookings (phone, Messenger, email, walk-in) are handled by hand
@@ -1453,6 +1586,7 @@ ${button(dash, "Open in staff dashboard")}`;
 
 async function onDocs(r: Any, payload: Any) {
   const c = cfg();
+  if (!autoEmail(r, c)) return { skipped: "source " + r.source };
   const nS = Math.min(int(payload.senior_ids), 10), nP = Math.min(int(payload.pet_cards), 6);
   if (!nS && !nP) return { skipped: "nothing uploaded" };
   const sp: string[] = Array.isArray(r.senior_id_paths) ? r.senior_id_paths.slice(-nS || r.senior_id_paths.length) : [];
@@ -1468,6 +1602,7 @@ async function onDocs(r: Any, payload: Any) {
 async function onConfirmed(r: Any) {
   const c = cfg();
   if (!autoEmail(r, c)) return { skipped: "source " + r.source };
+  if (r.cb_owned === true) return { skipped: "made in Cloudbeds" };
   if (!r.guest_email) return { skipped: "no guest email" };
   const cabanas = await loadUnits(r);
   const q = await quoteFor(r, cabanas);
@@ -1498,6 +1633,7 @@ async function onBalance(r: Any, overdue: boolean) {
 async function onPaidInFull(r: Any) {
   const c = cfg();
   if (!autoEmail(r, c)) return { skipped: "source " + r.source };
+  if (r.status === "completed") return { skipped: "already completed" };
   if (!r.guest_email || !EMAIL_RE.test(String(r.guest_email).trim())) return { skipped: "no valid guest email" };
   const ps = await paySummary(r.id);
   if (!ps || !ps.fully_paid) return { skipped: "not fully paid" };
@@ -1505,19 +1641,51 @@ async function onPaidInFull(r: Any) {
   return await send({ booking: r, kind: "paid_in_full", to: String(r.guest_email).trim(), subject: g.subject, html: g.html, thread: "guest" });
 }
 
-async function onReminder(r: Any) {
-  const c = cfg();
+// Shared gate for the guest-only notices below: auto-email source (or staff
+// ticked "send to guest"), not a Cloudbeds-made booking, valid guest email.
+function guestGate(r: Any, c: ReturnType<typeof cfg>): { skipped: string } | null {
   if (!autoEmail(r, c)) return { skipped: "source " + r.source };
-  if (!["pending", "pending_payment"].includes(r.status) || r.payment_uploaded_at) return { skipped: "no longer unpaid" };
+  if (r.cb_owned === true) return { skipped: "made in Cloudbeds" };
   if (!r.guest_email || !EMAIL_RE.test(String(r.guest_email).trim())) return { skipped: "no valid guest email" };
-  const cabanas = await loadUnits(r);
-  const q = await quoteFor(r, cabanas);
-  const g = guestReminderEmail(r, cabanas, q, c);
-  return await send({ booking: r, kind: "payment_reminder", to: String(r.guest_email).trim(), subject: g.subject, html: g.html, thread: "guest" });
+  return null;
+}
+
+async function onCancelled(r: Any) {
+  const c = cfg();
+  const skip = guestGate(r, c);
+  if (skip) return skip;
+  if (r.status !== "declined") return { skipped: "no longer cancelled" };
+  if (r.cb_info?.status === "no_show") return { skipped: "no-show" };
+  const g = guestCancelledEmail(r, c);
+  return await send({ booking: r, kind: "guest_cancelled", to: String(r.guest_email).trim(), subject: g.subject, html: g.html, thread: "guest" });
+}
+
+async function onExpired(r: Any) {
+  const c = cfg();
+  const skip = guestGate(r, c);
+  if (skip) return skip;
+  if (r.status !== "expired") return { skipped: "no longer expired" };
+  const g = guestExpiredEmail(r, c);
+  return await send({ booking: r, kind: "guest_expired", to: String(r.guest_email).trim(), subject: g.subject, html: g.html, thread: "guest" });
+}
+
+// PROOF_REJECTED: { record: {id}, payment_id, reason?, deadline? (ISO) }
+async function onProofRejected(r: Any, payload: Any) {
+  const c = cfg();
+  const skip = guestGate(r, c);
+  if (skip) return skip;
+  if (!payload.payment_id) return { skipped: "no payment_id" };
+  const reason = String(payload.reason ?? "").trim().slice(0, 500);
+  const dl = payload.deadline ? new Date(String(payload.deadline)) : null;
+  const deadline = dl && !isNaN(dl.getTime()) ? dl : null;
+  const g = guestProofRejectedEmail(r, c, reason, deadline);
+  return await send({ booking: r, kind: `proof_rejected:${String(payload.payment_id)}`, to: String(r.guest_email).trim(), subject: g.subject, html: g.html, thread: "guest" });
 }
 
 async function onChanged(r: Any, payload: Any) {
   const c = cfg();
+  if (!autoEmail(r, c)) return { skipped: "source " + r.source };
+  if (r.cb_owned === true) return { skipped: "made in Cloudbeds" };
   if (!r.guest_email || !EMAIL_RE.test(String(r.guest_email).trim())) return { skipped: "no valid guest email" };
   const raw = Array.isArray(payload.changes) ? payload.changes.slice(0, 30) : [];
   const changes: Change[] = raw
@@ -1528,7 +1696,7 @@ async function onChanged(r: Any, payload: Any) {
   const threadRecord = { ...r, check_in: payload.old_check_in || r.check_in };
   const custom = payload.message ? { message: String(payload.message).slice(0, 5000) } : null;
   const rc = custom ? { ...r, email_custom: { ...(r.email_custom || {}), change: custom } } : r;
-  const g = guestChangedEmail(rc, cabanas, changes, c, threadRecord);
+  const g = guestChangedEmail(rc, cabanas, changes, c, threadRecord, String(payload.source || ""));
   const kind = `guest_changed:${String(payload.change_id || Date.now())}`;
   return await send({ booking: r, kind, to: String(r.guest_email).trim(), subject: g.subject, html: g.html, thread: "guest" });
 }
@@ -1574,7 +1742,7 @@ export async function preview(req: Request): Promise<Response> {
   let b: Any;
   try { b = await req.json(); } catch { return json({ error: "Bad request" }, 400); }
   const c = cfg();
-  const kind = ["quote", "change", "confirmed"].includes(b.kind) ? b.kind : "quote";
+  const kind = ["quote", "change", "confirmed", "cancelled", "expired", "proof_rejected"].includes(b.kind) ? b.kind : "quote";
   let r: Any = b.booking_id ? await loadBooking(String(b.booking_id)) : null;
   if (b.booking_id && !r) return json({ error: "Booking not found" }, 404);
   r = r ? { ...r } : { id: "00000000-0000-0000-0000-000000000000", order_code: "VBR-····", created_at: new Date().toISOString(), source: "phone" };
@@ -1597,9 +1765,16 @@ export async function preview(req: Request): Promise<Response> {
   if (kind === "change") {
     const raw = Array.isArray(b.changes) ? b.changes.slice(0, 30) : [];
     const changes: Change[] = raw.map((x: Any) => ({ label: String(x?.label ?? "").slice(0, 80), before: String(x?.before ?? "").slice(0, 300), after: String(x?.after ?? "").slice(0, 300) })).filter((x: Change) => x.label);
-    out = guestChangedEmail(r, units, changes.length ? changes : [{ label: "(no changes yet)", before: "—", after: "—" }], c, r);
+    out = guestChangedEmail(r, units, changes.length ? changes : [{ label: "(no changes yet)", before: "—", after: "—" }], c, r, String(b.source || ""));
   } else if (kind === "confirmed") {
     out = guestConfirmedEmail(r, units, q, c);
+  } else if (kind === "cancelled") {
+    out = guestCancelledEmail({ ...r, status: "declined" }, c);
+  } else if (kind === "expired") {
+    out = guestExpiredEmail({ ...r, status: "expired" }, c);
+  } else if (kind === "proof_rejected") {
+    const dl = b.deadline ? new Date(String(b.deadline)) : null;
+    out = guestProofRejectedEmail(r, c, String(b.reason ?? "").trim().slice(0, 500), dl && !isNaN(dl.getTime()) ? dl : null);
   } else {
     out = guestQuoteEmail(r, units, q, c);
   }
@@ -1639,11 +1814,11 @@ export async function handle(req: Request): Promise<Response> {
   try {
     if (payload.type === "INSERT") out.insert = await onInsert(r);
     if (payload.type === "CHANGE") out.changed = await onChanged(r, payload);
-    if (payload.type === "REMINDER") out.reminder = await onReminder(r);
     if (payload.type === "DOCS") out.docs = await onDocs(r, payload);
     if (payload.type === "BALANCE_DUE") out.balance = await onBalance(r, false);
     if (payload.type === "BALANCE_OVERDUE") out.balance = await onBalance(r, true);
     if (payload.type === "PAID_IN_FULL") out.paid = await onPaidInFull(r);
+    if (payload.type === "PROOF_REJECTED") out.rejected = await onProofRejected(r, payload);
     if (payload.type === "UPDATE") {
       // Staff ticked "Send this booking to the guest" — the dashboard flips
       // email_guest after the cabanas are attached, so the quote lists them.
@@ -1652,6 +1827,8 @@ export async function handle(req: Request): Promise<Response> {
         out.proof = await onProof(r);
       }
       if (payload.record.status === "confirmed" && old.status !== "confirmed") out.confirmed = await onConfirmed(r);
+      if (payload.record.status === "declined" && old.status !== "declined") out.cancelled = await onCancelled(r);
+      if (payload.record.status === "expired" && old.status !== "expired") out.expired = await onExpired(r);
     }
   } catch (err) {
     console.error(err);

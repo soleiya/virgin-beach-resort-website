@@ -492,3 +492,5 @@ body.cbv .cb-date-range b small { font-size: 28px; margin: 0 4px; color: var(--c
 body.cbv .cb-fc-pill { padding: 0 6px 0 0; }
 body.cbv .cb-fc-open { appearance: none; border: 0; background: none; height: 100%; padding: 0 6px 0 16px; display: inline-flex; align-items: center; gap: 8px; font: inherit; color: inherit; cursor: pointer; }
 body.cbv .cb-fc-pill .cb-ico { width: 16px; height: 16px; }
+
+body.cbv .cbp-warn { margin: 8px 0 0; padding: 8px 10px; border-radius: 6px; background: #fff4e5; color: #8a4b00; font-size: 12px; }
