@@ -102,6 +102,9 @@
     villa_changed: "Villa changed",
     villa_blocked: "Villa blocked",
     villa_unblocked: "Villa block removed",
+    cabana_blocked: "Cabana blocked",
+    cabana_unblocked: "Cabana block removed",
+    cabana_block_changed: "Cabana block changed",
   };
 
   var loginScreen = document.getElementById("loginScreen");
@@ -185,6 +188,37 @@
     });
   }
 
+  // ---------- cabana blocks (booking-v20-cabana-blocks.sql) ----------
+  // Staff can take a cabana off sale for a date range: under repair,
+  // unavailable or blocked. The public map greys them out; the database
+  // refuses to put a booking on a blocked cabana-day.
+  var BLOCK_REASONS = { under_repair: "Under repair", unavailable: "Unavailable", blocked: "Blocked" };
+  var cabanaBlocks = [];
+  function loadCabanaBlocks() {
+    return sb.from("cabana_blocks").select("*").order("start_date", { ascending: true }).then(function (res) {
+      // Before booking-v20 is run the table doesn't exist: carry on without blocks.
+      cabanaBlocks = res.error ? [] : (res.data || []);
+      return cabanaBlocks;
+    }, function () { cabanaBlocks = []; return cabanaBlocks; });
+  }
+  function blockDates(b) {
+    return b.start_date === b.end_date ? fmtDate(b.start_date) : fmtDate(b.start_date) + " → " + fmtDate(b.end_date);
+  }
+  function blockText(b) {
+    return (BLOCK_REASONS[b.reason] || "Blocked") + (b.note ? ": " + b.note : "") + " (" + blockDates(b) + ")";
+  }
+  function blocksForDate(dateStr) {
+    var set = new Set(), info = {}, byCabana = {};
+    if (!dateStr) return { set: set, info: info, byCabana: byCabana };
+    cabanaBlocks.forEach(function (b) {
+      if (dateStr < b.start_date || dateStr > b.end_date) return;
+      set.add(b.cabana_id);
+      byCabana[b.cabana_id] = b;
+      info[b.cabana_id] = blockText(b);
+    });
+    return { set: set, info: info, byCabana: byCabana };
+  }
+
   function showDash() {
     loginScreen.style.display = "none";
     dashScreen.style.display = "block";
@@ -192,7 +226,7 @@
     populateStaticFilterOptions();
     // Wait until every dashboard script (villas, email panel) has run.
     var go = function () {
-      Promise.all([loadCabanaOptions(), window.VBRVillas ? window.VBRVillas.init().catch(function () {}) : null]).then(loadBookings);
+      Promise.all([loadCabanaOptions(), loadCabanaBlocks(), window.VBRVillas ? window.VBRVillas.init().catch(function () {}) : null]).then(loadBookings);
     };
     if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", go); else go();
   }
@@ -600,12 +634,18 @@
     if (!assignedIds.length) { td.innerHTML = '<span class="muted">—</span>'; return; }
     var chipWrap = document.createElement("div");
     chipWrap.className = "cabana-cell-chips";
+    var rowBlocks = releasesCabanas(r.status) ? null : blocksForDate(r.check_in);
     assignedIds.forEach(function (id) {
       var c = cabanasById[id];
       var chip = document.createElement("span");
       chip.className = "cabana-mini-chip";
       chip.style.paddingRight = "10px";
       chip.textContent = c ? c.label.replace(/^Section /, "") : "Unknown cabana";
+      if (rowBlocks && rowBlocks.set.has(id)) {
+        chip.classList.add("is-blocked-conflict");
+        chip.textContent = "⚠ " + chip.textContent;
+        chip.title = "This cabana is blocked on this date — " + rowBlocks.info[id] + ". Move the party in the Cabana Map.";
+      }
       chipWrap.appendChild(chip);
     });
     td.appendChild(chipWrap);
@@ -1173,7 +1213,9 @@
         info[bc.cabana_id] = "booked by " + (r.guest_name || "a guest") + (r.order_code ? " (" + r.order_code + ")" : "");
       });
     });
-    return { held: held, info: info };
+    var bl = blocksForDate(dateStr);
+    bl.set.forEach(function (id) { held.add(id); info[id] = bl.info[id]; });
+    return { held: held, info: info, blocked: bl.set, blockedInfo: bl.info };
   }
 
   function renderModalSelected() {
@@ -1214,17 +1256,26 @@
     var dateStr = addDateEl.value;
     var h = holdsForDate(dateStr);
     // If the date changed and a picked cabana is now taken, drop it.
-    var dropped = modalCabanaIds.filter(function (id) { return h.held.has(id); });
-    if (dropped.length) modalCabanaIds = modalCabanaIds.filter(function (id) { return !h.held.has(id); });
+    // A booking's own cabana that was blocked after it was booked stays put
+    // (staff move it on purpose); anything else that's taken is dropped.
+    var ownBlocked = editingRow && dateStr === editingRow.check_in
+      ? (editingRow.booking_cabanas || []).map(function (bc) { return bc.cabana_id; }).filter(function (id) { return h.blocked.has(id); })
+      : [];
+    var dropped = modalCabanaIds.filter(function (id) { return h.held.has(id) && ownBlocked.indexOf(id) === -1; });
+    if (dropped.length) modalCabanaIds = modalCabanaIds.filter(function (id) { return dropped.indexOf(id) === -1; });
     addMapStatus.textContent = dateStr
       ? (dropped.length
           ? dropped.length + " picked cabana(s) are already booked on this date and were removed — pick another."
-          : "Showing availability for " + fmtDate(dateStr) + ". Hover a taken cabana to see who has it.")
+          : ownBlocked.length
+            ? "Heads-up: " + ownBlocked.map(cabLabel).join(", ") + " is now blocked on this date (" + ownBlocked.map(function (id) { return h.blockedInfo[id]; }).join("; ") + "). Pick another cabana for this party."
+            : "Showing availability for " + fmtDate(dateStr) + ". Hover a taken cabana to see who has it.")
       : "Pick a preferred date to see which cabanas are free that day.";
     window.VBRCabanaMap.render(addMapEl, {
       cabanas: cabanasList,
       heldSet: h.held,
       heldInfo: h.info,
+      blockedSet: h.blocked,
+      blockedInfo: h.blockedInfo,
       selectedIds: modalCabanaIds,
       crop: { top: 0.33, bottom: 0.56 },
       onSelect: function (c) {
@@ -1538,7 +1589,15 @@
       saveBookingBtn.textContent = "Saving…";
 
       var upload = file ? uploadProof(r, file) : Promise.resolve(null);
+      var removedFirst = ("check_in" in patch || "status" in patch)
+        ? beforeCabanas.filter(function (id) { return afterCabanas.indexOf(id) === -1; }) : [];
+      var keptBefore = beforeCabanas.filter(function (id) { return removedFirst.indexOf(id) === -1; });
       upload
+        .then(function (path) {
+          if (!removedFirst.length) return path;
+          return sb.from("booking_cabanas").delete().eq("booking_id", r.id).in("cabana_id", removedFirst)
+            .then(function (res) { if (res.error) throw res.error; return path; });
+        })
         .then(function (path) {
           var save = !Object.keys(patch).length ? Promise.resolve()
             : sb.from("booking_requests").update(patch).eq("id", r.id).then(function (res) { if (res.error) throw res.error; });
@@ -1546,7 +1605,7 @@
           if (!path) return save;
           return save.then(function () { return attachProof(r.id, path, document.getElementById("addPayPortion")); });
         })
-        .then(function () { return syncCabanas(r.id, beforeCabanas, afterCabanas); })
+        .then(function () { return syncCabanas(r.id, keptBefore, afterCabanas); })
         .then(function () {
           if (!notify) return null;
           var mv = dtMail ? dtMail.value() : { message: "" };
@@ -1617,6 +1676,8 @@
   var plannerList = $("plannerList");
   var plannerSource = null;   // { cabanaId, row }
   var plannerPending = null;  // { from, to, row, other }
+  var blockMode = false;      // "Block cabanas…" panel open: map clicks pick cabanas to block
+  var blockPicked = [];       // cabana ids picked for the new block
 
   function plannerHolds(dateStr) {
     var byCabana = {};
@@ -1633,12 +1694,22 @@
     var dateStr = plannerDateEl.value;
     var holds = plannerHolds(dateStr);
     var heldSet = new Set(Object.keys(holds));
+    var blocks = blocksForDate(dateStr);
+    // Parties already sitting on a cabana that was blocked after they booked.
+    var conflicts = Object.keys(holds).filter(function (id) { return blocks.set.has(id); });
     var info = {};
     Object.keys(holds).forEach(function (id) {
       var r = holds[id];
       info[id] = (r.guest_name || "Guest") + (r.order_code ? " (" + r.order_code + ")" : "") + " · " + partySize(r) + " pax";
     });
-    if (plannerPending) {
+    if (blockMode) {
+      plannerConfirm.classList.remove("open");
+      plannerStatus.className = "planner-status is-pending";
+      plannerStatus.textContent = blockPicked.length
+        ? blockPicked.length + " cabana(s) picked to block. Click more on the map, or click one again to un-pick it."
+        : "Click the cabanas you want to block on the map.";
+      renderBlockPicked();
+    } else if (plannerPending) {
       plannerStatus.className = "planner-status is-pending";
       plannerStatus.textContent = plannerPending.other
         ? "Swap: " + plannerPending.row.guest_name + " → " + cabLabel(plannerPending.to) + ", and " + plannerPending.other.guest_name + " → " + cabLabel(plannerPending.from) + "?"
@@ -1649,19 +1720,46 @@
       plannerStatus.className = "planner-status";
       plannerStatus.textContent = plannerSource
         ? "Picked up " + cabLabel(plannerSource.cabanaId) + " (" + plannerSource.row.guest_name + "). Click a free cabana to move it there, another booked cabana to swap, or the same one to put it back."
-        : (heldSet.size ? heldSet.size + " cabana(s) booked on " + fmtDate(dateStr) + ". Hover to see who has each; click one to move it." : "No cabanas booked on " + fmtDate(dateStr) + ".");
+        : (heldSet.size ? heldSet.size + " cabana(s) booked on " + fmtDate(dateStr) + ". Hover to see who has each; click one to move it." : "No cabanas booked on " + fmtDate(dateStr) + ".") +
+          (blocks.set.size ? " " + blocks.set.size + " blocked (hatched) — click one to remove its block." : "");
+    }
+    if (conflicts.length && !plannerPending) {
+      var warn = document.createElement("span");
+      warn.className = "planner-warn";
+      warn.textContent = "⚠ " + conflicts.map(function (id) { return (holds[id].guest_name || "A guest") + " is on " + cabLabel(id); }).join("; ") +
+        " — blocked on this date. Pick that cabana up and move the party to a free one.";
+      plannerStatus.appendChild(warn);
     }
     window.VBRCabanaMap.render(plannerMapEl, {
       cabanas: cabanasList,
       heldSet: heldSet,
       heldInfo: info,
+      blockedSet: blocks.set,
+      blockedInfo: blocks.info,
       clickableHeld: true,
-      highlightId: plannerPending ? plannerPending.to : (plannerSource ? plannerSource.cabanaId : null),
-      selectedLabel: "Picked up / moving to",
+      clickableBlocked: true,
+      selectedIds: blockMode ? blockPicked : null,
+      highlightId: blockMode ? null : (plannerPending ? plannerPending.to : (plannerSource ? plannerSource.cabanaId : null)),
+      selectedLabel: blockMode ? "Picked to block" : "Picked up / moving to",
       crop: { top: 0.33, bottom: 0.56 },
       onSelect: function (c) {
         if (plannerPending) return;
         var holder = holds[c.id];
+        var block = blocks.byCabana[c.id];
+        if (blockMode) {
+          if (block) { plannerStatus.textContent = cabLabel(c.id) + " is already blocked on this date (" + blocks.info[c.id] + ")."; return; }
+          var k = blockPicked.indexOf(c.id);
+          if (k >= 0) blockPicked.splice(k, 1); else blockPicked.push(c.id);
+          renderPlanner();
+          return;
+        }
+        if (block) {
+          if (plannerSource) {
+            plannerStatus.textContent = cabLabel(c.id) + " is blocked on this date (" + blocks.info[c.id] + ") — pick a free cabana.";
+            return;
+          }
+          if (!holder) { removeBlock(block); return; }
+        }
         if (!plannerSource) {
           if (holder) plannerSource = { cabanaId: c.id, row: holder };
         } else if (c.id === plannerSource.cabanaId) {
@@ -1687,7 +1785,116 @@
       });
       plannerList.appendChild(tr);
     });
+    renderBlockList(dateStr);
   }
+
+  // ---------- cabana blocks: list, add, remove ----------
+  function renderBlockList(dateStr) {
+    var ul = $("plannerBlockList");
+    if (!ul) return;
+    var upcoming = cabanaBlocks.filter(function (b) { return b.end_date >= (dateStr || todayStr()); })
+      .sort(function (a, b) { return a.start_date < b.start_date ? -1 : a.start_date > b.start_date ? 1 : (cabLabel(a.cabana_id) < cabLabel(b.cabana_id) ? -1 : 1); });
+    $("plannerBlocksHint").textContent = upcoming.length ? "on or after " + fmtDate(dateStr) : "";
+    ul.innerHTML = upcoming.length ? "" : '<li class="muted">No cabanas blocked on or after ' + esc(fmtDate(dateStr)) + ".</li>";
+    upcoming.forEach(function (b) {
+      var li = document.createElement("li");
+      if (dateStr >= b.start_date && dateStr <= b.end_date) li.className = "is-today";
+      li.innerHTML = '<span><span class="block-reason r-' + esc(b.reason) + '">' + esc(BLOCK_REASONS[b.reason] || "Blocked") + "</span><b>" + esc(cabLabel(b.cabana_id)) + "</b> · " +
+        esc(blockDates(b)) + (b.note ? " · " + esc(b.note) : "") +
+        '<span class="block-meta">' + (b.created_by_email ? "by " + esc(b.created_by_email) + " · " : "") + esc(fmtDateTime(b.created_at)) + "</span></span>" +
+        '<button class="btn-sm ghost" type="button">Remove</button>';
+      li.querySelector("button").addEventListener("click", function () { removeBlock(b); });
+      ul.appendChild(li);
+    });
+  }
+
+  function removeBlock(b) {
+    if (!confirm("Remove the block on " + cabLabel(b.cabana_id) + "?\n\n" + blockText(b) + "\n\nIt becomes bookable again on all of those dates.")) return;
+    sb.from("cabana_blocks").delete().eq("id", b.id).then(function (res) {
+      if (res.error) { alert("Couldn't remove the block: " + res.error.message); return; }
+      loadCabanaBlocks().then(function () { renderPlanner(); render(); });
+    });
+  }
+
+  function renderBlockPicked() {
+    var wrap = $("blkCabPicked");
+    wrap.innerHTML = "";
+    if (!blockPicked.length) { wrap.innerHTML = '<span class="muted" style="font-size:0.8rem;">No cabana picked yet.</span>'; return; }
+    blockPicked.forEach(function (id) {
+      var chip = document.createElement("span");
+      chip.className = "cabana-mini-chip";
+      chip.textContent = cabLabel(id);
+      var rm = document.createElement("button");
+      rm.type = "button";
+      rm.className = "cabana-mini-remove";
+      rm.textContent = "×";
+      rm.addEventListener("click", function () { blockPicked = blockPicked.filter(function (x) { return x !== id; }); renderPlanner(); });
+      chip.appendChild(rm);
+      wrap.appendChild(chip);
+    });
+  }
+
+  function openBlockMode() {
+    blockMode = true;
+    blockPicked = [];
+    plannerSource = null; plannerPending = null;
+    $("blkCabFrom").value = plannerDateEl.value || todayStr();
+    $("blkCabTo").value = plannerDateEl.value || todayStr();
+    $("blkCabNote").value = "";
+    $("blkCabError").style.display = "none";
+    $("plannerBlockPanel").hidden = false;
+    renderPlanner();
+  }
+  function closeBlockMode() {
+    blockMode = false;
+    blockPicked = [];
+    $("plannerBlockPanel").hidden = true;
+    renderPlanner();
+  }
+
+  function saveBlocks() {
+    var err = $("blkCabError");
+    var fail = function (m) { err.textContent = m; err.style.display = "block"; };
+    err.style.display = "none";
+    var from = $("blkCabFrom").value, to = $("blkCabTo").value;
+    var reason = $("blkCabReason").value, note = $("blkCabNote").value.trim();
+    if (!blockPicked.length) return fail("Pick at least one cabana on the map.");
+    if (!from || !to) return fail("Set the first and last day of the block.");
+    if (to < from) return fail("The last day can't be before the first day.");
+    // Bookings already on those cabanas in that range keep them — warn first.
+    var hits = [];
+    allRows.forEach(function (r) {
+      if (!r.check_in || r.check_in < from || r.check_in > to || releasesCabanas(r.status)) return;
+      (r.booking_cabanas || []).forEach(function (bc) {
+        if (blockPicked.indexOf(bc.cabana_id) >= 0) hits.push(fmtDate(r.check_in) + " · " + cabLabel(bc.cabana_id) + " · " + (r.guest_name || "Guest") + (r.order_code ? " (" + r.order_code + ")" : ""));
+      });
+    });
+    if (hits.length && !confirm(hits.length + " existing booking(s) are on these cabanas in that range:\n\n" + hits.slice(0, 12).join("\n") + (hits.length > 12 ? "\n…and " + (hits.length - 12) + " more" : "") +
+        "\n\nThey keep their cabana until you move them (they'll be flagged ⚠ on the dashboard). Block anyway?")) return;
+    var btn = $("blkCabSave");
+    btn.disabled = true;
+    var rows = blockPicked.map(function (id) { return { cabana_id: id, start_date: from, end_date: to, reason: reason, note: note || null }; });
+    sb.from("cabana_blocks").insert(rows).then(function (res) {
+      btn.disabled = false;
+      if (res.error) {
+        return fail(/overlap|exclusion|conflict|cabana_blocks_no_overlap/i.test(res.error.message)
+          ? "One of those cabanas already has a block on some of those dates. Remove or shorten that block first (list below the map)."
+          : /relation .*cabana_blocks.* does not exist/i.test(res.error.message)
+            ? "Cabana blocks aren't set up in the database yet — run supabase-functions/booking-v20-cabana-blocks.sql first."
+            : "Couldn't save the block: " + res.error.message);
+      }
+      blockMode = false;
+      blockPicked = [];
+      $("plannerBlockPanel").hidden = true;
+      loadCabanaBlocks().then(function () { renderPlanner(); render(); });
+    });
+  }
+  $("plannerBlockBtn").addEventListener("click", function () { if (blockMode) closeBlockMode(); else openBlockMode(); });
+  $("blkCabCancel").addEventListener("click", closeBlockMode);
+  $("blkCabSave").addEventListener("click", saveBlocks);
+  $("blkCabFrom").addEventListener("change", function () {
+    if ($("blkCabFrom").value && (!$("blkCabTo").value || $("blkCabTo").value < $("blkCabFrom").value)) $("blkCabTo").value = $("blkCabFrom").value;
+  });
 
   function emailMove(r, beforeIds, afterIds) {
     if (!$("plannerNotify").checked || !EMAIL_RE.test(String(r.guest_email || "").trim())) return Promise.resolve();
@@ -1738,8 +1945,10 @@
   $("plannerBtn").addEventListener("click", function () {
     if (!plannerDateEl.value) plannerDateEl.value = todayStr();
     plannerSource = null; plannerPending = null;
+    blockMode = false; blockPicked = []; $("plannerBlockPanel").hidden = true;
     plannerBackdrop.classList.add("open");
     renderPlanner();
+    loadCabanaBlocks().then(renderPlanner); // pick up blocks another staff member just made
   });
   $("closePlannerBtn").addEventListener("click", function () { plannerBackdrop.classList.remove("open"); });
   plannerBackdrop.addEventListener("click", function (e) { if (e.target === plannerBackdrop) plannerBackdrop.classList.remove("open"); });
@@ -1834,6 +2043,12 @@
       var ch = entry.changes || {};
       return esc((LOG_ACTION_LABELS[entry.action] || entry.action) + ": " + (ch.from_villa ? ch.from_villa + " → " : "") + (ch.villa || "a villa") +
         (ch.check_in ? " (" + fmtDate(ch.check_in) + " → " + fmtDate(ch.check_out) + ")" : "") + (ch.reason ? " — " + ch.reason : ""));
+    }
+    if (entry.action && entry.action.indexOf("cabana_block") === 0 || entry.action === "cabana_unblocked") {
+      var bc = entry.changes || {};
+      return esc((LOG_ACTION_LABELS[entry.action] || entry.action) + ": " + (bc.cabana || "a cabana") +
+        (bc.start_date ? " (" + fmtDate(bc.start_date) + (bc.end_date && bc.end_date !== bc.start_date ? " → " + fmtDate(bc.end_date) : "") + ")" : "") +
+        (bc.reason ? " — " + bc.reason : "") + (bc.note ? ": " + bc.note : ""));
     }
     if (entry.action === "cabana_added" || entry.action === "cabana_removed") {
       var cid = entry.changes && entry.changes.cabana_id;

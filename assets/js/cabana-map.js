@@ -39,8 +39,9 @@
       });
   }
 
-  // Returns a Set of cabana_id strings that are already held (booked, not
-  // declined) for the given YYYY-MM-DD date.
+  // Returns a Set of cabana_id strings that can't be booked for the given
+  // YYYY-MM-DD date: booked (not declined/expired) or blocked by staff.
+  // The public view never says which — guests just see "not available".
   function loadHolds(sb, dateStr) {
     if (!dateStr) return Promise.resolve(new Set());
     return sb
@@ -75,7 +76,10 @@
   // planner, for moving a party). highlightId: one tile drawn as "picked up".
   // heldInfo (optional): { [cabana_id]: "extra text for the tile's tooltip" }
   // — used by the staff dashboard to show who's holding a cabana; the public
-  // booking page omits it and gets the generic "already booked" tooltip.
+  // booking page omits it and gets the generic "not available" tooltip.
+  // blockedSet / blockedInfo (optional, staff only): cabanas staff have
+  // blocked (under repair, unavailable…) — drawn hatched, with the reason in
+  // the tooltip. clickableBlocked lets the planner click them to unblock.
   // selectedIds (optional): a Set/array of cabana ids to show as selected —
   // a booking can include more than one cabana, so this is plural. onSelect
   // fires on every click (including on an already-selected tile, so the
@@ -84,6 +88,8 @@
     var cabanas = opts.cabanas || [];
     var heldSet = opts.heldSet || new Set();
     var heldInfo = opts.heldInfo || null;
+    var blockedSet = opts.blockedSet || new Set();
+    var blockedInfo = opts.blockedInfo || {};
     var selectedIds = opts.selectedIds ? new Set(opts.selectedIds) : new Set();
     var onSelect = opts.onSelect || function () {};
     var imageSrc = opts.imageSrc || MAP_IMAGE_SRC_DEFAULT;
@@ -122,19 +128,20 @@
         skipped++;
         return;
       }
-      var isHeld = heldSet.has(c.id);
+      var isBlocked = blockedSet.has(c.id);
+      var isHeld = heldSet.has(c.id) && !isBlocked;
       var isSelected = selectedIds.has(c.id) || (opts.highlightId && opts.highlightId === c.id);
       var tile = document.createElement("button");
       tile.type = "button";
       tile.className =
-        "cabana-hotspot cabana-" + c.cabana_type + (isHeld ? " is-held" : "") + (isSelected ? " is-selected" : "");
+        "cabana-hotspot cabana-" + c.cabana_type + (isHeld ? " is-held" : "") + (isBlocked ? " is-blocked" : "") + (isSelected ? " is-selected" : "");
       tile.style.left = layout.left + "%";
       tile.style.top = layout.top + "%";
       tile.style.width = layout.width + "%";
       tile.style.height = layout.height + "%";
-      var heldNote = isHeld ? (heldInfo && heldInfo[c.id] ? heldInfo[c.id] : "already booked for this date") : null;
-      tile.title = c.label + (isHeld ? " — " + heldNote : " — available");
-      tile.disabled = isHeld && !opts.clickableHeld;
+      var heldNote = isHeld ? (heldInfo && heldInfo[c.id] ? heldInfo[c.id] : "not available on this date") : null;
+      tile.title = c.label + (isBlocked ? " — " + (blockedInfo[c.id] || "blocked") : isHeld ? " — " + heldNote : " — available");
+      tile.disabled = (isHeld && !opts.clickableHeld) || (isBlocked && !opts.clickableBlocked);
       tile.setAttribute("aria-pressed", isSelected ? "true" : "false");
       tile.setAttribute("aria-label", c.label);
       tile.addEventListener("click", function () {
@@ -150,7 +157,8 @@
     legend.innerHTML =
       '<span><i class="cabana-swatch cabana-dining_cabana"></i> Dining Cabana</span>' +
       '<span><i class="cabana-swatch cabana-lounge_cabana"></i> Lounge Cabana</span>' +
-      '<span><i class="cabana-swatch is-held"></i> Already booked</span>' +
+      '<span><i class="cabana-swatch is-held"></i> ' + (heldInfo ? "Already booked" : "Not available") + '</span>' +
+      (opts.blockedSet ? '<span><i class="cabana-swatch is-blocked"></i> Blocked by staff</span>' : "") +
       '<span><i class="cabana-swatch is-selected"></i> ' + (opts.selectedLabel || "Your selection") + '</span>';
     container.appendChild(legend);
 

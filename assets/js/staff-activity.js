@@ -95,7 +95,8 @@
     return "until " + (da === db ? sb2.split(" ").slice(2).join(" ") : sb2);
   }
   var ACTION_WORDS = { insert: "Created booking", update: "Edited booking", "delete": "Deleted booking",
-    cabana_added: "Added a cabana", cabana_removed: "Removed a cabana" };
+    cabana_added: "Added a cabana", cabana_removed: "Removed a cabana",
+    cabana_blocked: "Blocked a cabana", cabana_unblocked: "Removed a cabana block", cabana_block_changed: "Changed a cabana block" };
 
   // ---------------------------------------------------------------- modal
   var backdrop = $("teamModalBackdrop"), teamBody = $("teamBody"), histBody = $("teamHistBody");

@@ -644,3 +644,23 @@ Other guest emails: proof rejected (with the reason and a fresh deadline), chang
 - Each **verified payment** is posted to the folio, and its **proof screenshot is attached to the reservation's Documents** in Cloudbeds.
 
 **Before going live, do one test**: make a website booking for a far-off date, verify a small payment, and check in Cloudbeds that the meal/add-on lines, the discount adjustments, the payment and the proof document look right; then cancel it. (The Cloudbeds API names for custom items and documents were taken from their documentation and can only be confirmed against the live account.)
+
+## 15. Blocking Day Trip cabanas (under repair, unavailable, blocked)
+
+**Run** `supabase-functions/booking-v20-cabana-blocks.sql` once in the SQL Editor (safe to re-run). No Edge Function changes.
+
+**How staff use it** — Day Trips → **Cabana Map** → **⛔ Block cabanas…**
+
+1. Pick a reason: **Under repair**, **Unavailable** or **Blocked**, plus an optional staff-only note (e.g. "roof leak").
+2. Set the first and last day (a single day is fine).
+3. Click the cabanas on the map, then **Block selected cabanas**.
+
+Blocked cabanas show hatched (⛔) on the staff map, with the reason in the tooltip, and are listed under the map. To unblock one, click it on the map or press **Remove** in the list.
+
+**What a block does**
+
+- Guests see the cabana as **not available** on the booking page for those dates; the reason is never shown to them.
+- The database refuses to put a booking on a blocked cabana for a blocked date — from the website, the staff booking form or the Cabana Map — and won't let a booking that holds cabanas be moved onto a date when one of them is blocked.
+- Bookings already on the cabana before it was blocked keep it. Staff are warned when blocking, and those bookings show **⚠** next to the cabana on the dashboard and in the Cabana Map, so the party can be moved.
+- Two blocks on the same cabana can't overlap; shorten or remove the old one first.
+- Every block and unblock is in the activity log ("Cabana blocked" / "Cabana block removed").

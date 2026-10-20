@@ -157,6 +157,28 @@ html = """<!doctype html>
   .planner-list table { min-width: 0; }
   .planner-list td, .planner-list th { padding: 8px 12px; font-size: 0.8rem; }
   .planner-list tr.is-source td { background: var(--lagoon-tint); }
+  /* ---------- cabana blocks (under repair / unavailable / blocked) ---------- */
+  .planner-block { border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; margin-bottom: 12px; background: #f6f3ee; }
+  .planner-block-head { font-size: 0.86rem; margin-bottom: 10px; }
+  .planner-block-head .muted { font-size: 0.8rem; margin-left: 6px; }
+  .planner-block-fields { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; margin-bottom: 10px; }
+  .planner-block-fields .grow { flex: 1 1 220px; }
+  .planner-block-fields input[type="text"] { border: 1px solid var(--line); background: var(--sand); font-family: var(--font-body); font-size: 0.82rem; padding: 7px 10px; border-radius: 8px; width: 100%; }
+  .planner-block-actions { display: flex; gap: 8px; margin-top: 10px; }
+  .planner-blocks { margin-top: 16px; }
+  .planner-blocks h4 { font-size: 0.86rem; margin: 0 0 8px; }
+  .planner-blocks h4 .muted { font-weight: 400; font-size: 0.78rem; margin-left: 6px; }
+  .planner-block-list { list-style: none; margin: 0; padding: 0; border: 1px solid var(--line); border-radius: 10px; max-height: 200px; overflow-y: auto; }
+  .planner-block-list li { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 12px; font-size: 0.8rem; border-bottom: 1px solid var(--line); }
+  .planner-block-list li:last-child { border-bottom: none; }
+  .planner-block-list li.is-today { background: #f1ece3; }
+  .planner-block-list li.muted { color: var(--ink-soft); justify-content: flex-start; }
+  .block-reason { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 0.7rem; font-weight: 700; background: #6b6559; color: #fff; margin-right: 6px; white-space: nowrap; }
+  .block-reason.r-under_repair { background: #9c4a3f; }
+  .block-reason.r-unavailable { background: #7d6a3f; }
+  .block-meta { display: block; color: var(--ink-soft); font-size: 0.72rem; margin-top: 2px; }
+  .cabana-mini-chip.is-blocked-conflict { background: #f6dcd6; color: #7a2e24; }
+  .planner-warn { display: block; margin-top: 6px; color: #7a2e24; font-weight: 600; }
 
   .more-row td { text-align: center; padding: 18px 14px; }
   .more-row .muted { font-size: 0.8rem; margin-left: 8px; }
@@ -778,7 +800,7 @@ html = """<!doctype html>
 <div class="modal-backdrop" id="plannerBackdrop">
   <div class="modal modal-planner">
     <h2>Cabana Map</h2>
-    <p style="color:var(--ink-soft); font-size:0.85rem; margin:-10px 0 16px;">See every cabana for a day and move parties around &mdash; e.g. to keep a large group together. Click a booked cabana to pick it up, then click a free cabana to move it there (or another booked cabana to swap the two).</p>
+    <p style="color:var(--ink-soft); font-size:0.85rem; margin:-10px 0 16px;">See every cabana for a day and move parties around &mdash; e.g. to keep a large group together. Click a booked cabana to pick it up, then click a free cabana to move it there (or another booked cabana to swap the two). Use <b>Block cabanas</b> to take cabanas off sale (under repair, unavailable or blocked); click a blocked cabana to remove its block.</p>
     <div class="planner-bar">
       <div class="filter-field">
         <label for="plannerDate">Date</label>
@@ -787,7 +809,30 @@ html = """<!doctype html>
       <button class="btn-sm ghost" type="button" id="plannerPrev">&larr; Prev day</button>
       <button class="btn-sm ghost" type="button" id="plannerToday">Today</button>
       <button class="btn-sm ghost" type="button" id="plannerNext">Next day &rarr;</button>
+      <button class="btn-sm ghost" type="button" id="plannerBlockBtn" title="Take cabanas off sale: under repair, unavailable or blocked">&#9940; Block cabanas&hellip;</button>
       <label class="modal-check" style="margin-left:auto;"><input type="checkbox" id="plannerNotify" checked> Email guests whose cabana is moved</label>
+    </div>
+    <div class="planner-block" id="plannerBlockPanel" hidden>
+      <div class="planner-block-head"><b>Block cabanas</b><span class="muted">Click cabanas on the map to pick them. Guests can't book them on these dates; the reason is only shown to staff.</span></div>
+      <div class="planner-block-fields">
+        <div class="filter-field">
+          <label for="blkCabReason">Reason</label>
+          <select id="blkCabReason">
+            <option value="under_repair">Under repair</option>
+            <option value="unavailable">Unavailable</option>
+            <option value="blocked">Blocked</option>
+          </select>
+        </div>
+        <div class="filter-field"><label for="blkCabFrom">From</label><input type="date" id="blkCabFrom"></div>
+        <div class="filter-field"><label for="blkCabTo">To (last day)</label><input type="date" id="blkCabTo"></div>
+        <div class="filter-field grow"><label for="blkCabNote">Note (staff only, optional)</label><input type="text" id="blkCabNote" maxlength="200" placeholder="e.g. Roof leak, waiting for supplier"></div>
+      </div>
+      <div class="cabana-cell-chips" id="blkCabPicked"></div>
+      <div class="planner-block-actions">
+        <button class="btn-sm primary" type="button" id="blkCabSave">Block selected cabanas</button>
+        <button class="btn-sm ghost" type="button" id="blkCabCancel">Cancel</button>
+      </div>
+      <p class="modal-error" id="blkCabError"></p>
     </div>
     <div class="planner-status" id="plannerStatus"></div>
     <div class="planner-confirm" id="plannerConfirm">
@@ -800,6 +845,10 @@ html = """<!doctype html>
         <thead><tr><th>Guest</th><th>Booking ID</th><th>Party</th><th>Cabana(s)</th><th>Status</th></tr></thead>
         <tbody id="plannerList"></tbody>
       </table>
+    </div>
+    <div class="planner-blocks">
+      <h4>Blocked cabanas <span class="muted" id="plannerBlocksHint"></span></h4>
+      <ul class="planner-block-list" id="plannerBlockList"></ul>
     </div>
     <div class="modal-actions">
       <button type="button" class="btn-sm ghost" id="closePlannerBtn">Close</button>

@@ -523,12 +523,26 @@ form.inquiry .field-hint { font-size: 0.8rem; color: var(--ink-soft); margin-top
   color: #fff; font-weight: 700; font-size: 0.85em;
   text-shadow: 0 1px 3px rgba(0,0,0,0.7);
 }
+.cabana-hotspot.is-blocked {
+  cursor: not-allowed;
+  background: repeating-linear-gradient(45deg, rgba(107,101,89,0.92), rgba(107,101,89,0.92) 3px, rgba(125,119,108,0.92) 3px, rgba(125,119,108,0.92) 6px);
+  border-color: #3e3a33;
+}
+.cabana-hotspot.is-blocked:not(:disabled) { cursor: pointer; }
+.cabana-hotspot.is-blocked::after {
+  content: "\26D4";
+  position: absolute; inset: 0;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 0.7em;
+}
+.cabana-hotspot.is-blocked.is-selected { box-shadow: 0 0 0 3px rgba(238,231,214,0.9), 0 0 0 5px var(--ink); }
 .cabana-legend { display: flex; flex-wrap: wrap; gap: 18px; margin-top: 20px; font-size: 0.82rem; color: var(--ink-soft); }
 .cabana-legend span { display: inline-flex; align-items: center; gap: 8px; }
 .cabana-swatch { width: 16px; height: 16px; border-radius: 4px; display: inline-block; background: #1a788c; }
 .cabana-swatch.cabana-dining_cabana { background: #1a788c; }
 .cabana-swatch.cabana-lounge_cabana { background: #d68634; }
 .cabana-swatch.is-held { background: rgba(18,32,29,0.58); position: relative; }
+.cabana-swatch.is-blocked { background: repeating-linear-gradient(45deg, #6b6559, #6b6559 3px, #7d776c 3px, #7d776c 6px); }
 .cabana-swatch.is-selected { background: rgba(255,255,255,0.18); border: 2px solid var(--ink); }
 .cabana-fineprint { font-size: 0.78rem; margin-top: -2px; }
 .pet-policy { margin: 10px 0; border: 1px solid var(--line); border-radius: 8px; padding: 10px 14px; background: var(--surface); }

@@ -523,7 +523,20 @@
         var row = Array.isArray(rows) ? rows[0] : rows;
         showSuccess(payload, false, row && row.order_code);
       })
-      .catch(function () {
+      .catch(function (err) {
+        // A cabana can be blocked (or taken) between loading the map and
+        // sending — say so plainly and refresh the map instead of the
+        // generic "something went wrong".
+        if (err && /Cabana not available/i.test(err.message || "")) {
+          statusEl.hidden = false;
+          statusEl.className = "form-status form-status-error";
+          statusEl.textContent = "Sorry — one of the cabanas you picked is no longer available on that date. The map has been refreshed; please pick another and send again.";
+          submitBtn.disabled = false;
+          submitBtn.textContent = "Send Request";
+          clearSelection();
+          refreshCabanaStep();
+          return;
+        }
         showError(payload, bill);
       });
   });
