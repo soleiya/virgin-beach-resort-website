@@ -722,8 +722,50 @@
       bookingsBody.innerHTML = '<tr class="empty-row"><td colspan="16">No bookings match this view.</td></tr>';
       return;
     }
+    // Only the first rows are drawn; more are added as you scroll (drawing
+    // thousands of rows at once is slow on older computers). Summaries,
+    // filters, search and CSV export still cover every booking.
+    var viewKey = renderViewKey();
+    var keepShown = viewKey === lastViewKey ? renderShown : 0;
+    lastViewKey = viewKey;
     bookingsBody.innerHTML = "";
-    rows.forEach(function (r) {
+    renderQueue = rows;
+    renderShown = 0;
+    appendRows(Math.max(ROW_BATCH, keepShown));
+  }
+
+  var ROW_BATCH = 50, renderQueue = [], renderShown = 0, lastViewKey = null, moreRow = null;
+  var moreObserver = "IntersectionObserver" in window ? new IntersectionObserver(function (entries) {
+    if (entries.some(function (e) { return e.isIntersecting; })) appendRows(ROW_BATCH);
+  }, { rootMargin: "800px 0px" }) : null;
+  function renderViewKey() {
+    var parts = [activeSection, searchBox.value];
+    Array.prototype.forEach.call(document.querySelectorAll("#filtersRow select, #filtersRow input, #filterPills .pill.active, thead th.sort-active"), function (el) {
+      parts.push(el.value !== undefined && el.tagName !== "BUTTON" && el.tagName !== "TH" ? el.value : el.className + el.textContent);
+    });
+    return parts.join("|");
+  }
+  function appendRows(count) {
+    if (moreRow) { if (moreObserver) moreObserver.unobserve(moreRow); if (moreRow.parentNode) moreRow.parentNode.removeChild(moreRow); }
+    var frag = document.createDocumentFragment();
+    var end = Math.min(renderShown + count, renderQueue.length);
+    for (var i = renderShown; i < end; i++) frag.appendChild(buildBookingRow(renderQueue[i]));
+    renderShown = end;
+    bookingsBody.appendChild(frag);
+    if (renderShown < renderQueue.length) {
+      moreRow = document.createElement("tr");
+      moreRow.className = "more-row";
+      moreRow.innerHTML = '<td colspan="16"><button type="button" class="btn-sm ghost">Show more</button> <span class="muted">Showing ' +
+        renderShown.toLocaleString() + " of " + renderQueue.length.toLocaleString() + " · more load as you scroll</span></td>";
+      moreRow.querySelector("button").addEventListener("click", function () { appendRows(ROW_BATCH * 4); });
+      bookingsBody.appendChild(moreRow);
+      if (moreObserver) moreObserver.observe(moreRow);
+    } else {
+      moreRow = null;
+    }
+  }
+
+  function buildBookingRow(r) {
       var tr = document.createElement("tr");
 
       var tdOrder = document.createElement("td");
@@ -916,8 +958,7 @@
       tdLog.appendChild(actions);
       tr.appendChild(tdLog);
 
-      bookingsBody.appendChild(tr);
-    });
+      return tr;
   }
 
   filterPills.addEventListener("click", function (e) {

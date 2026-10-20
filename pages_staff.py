@@ -158,6 +158,8 @@ html = """<!doctype html>
   .planner-list td, .planner-list th { padding: 8px 12px; font-size: 0.8rem; }
   .planner-list tr.is-source td { background: var(--lagoon-tint); }
 
+  .more-row td { text-align: center; padding: 18px 14px; }
+  .more-row .muted { font-size: 0.8rem; margin-left: 8px; }
   .empty-row td { text-align: center; padding: 48px 20px; color: var(--ink-soft); }
   .order-code { font-family: var(--font-body); font-weight: 700; font-size: 0.78rem; color: var(--ink-soft); white-space: nowrap; }
   .cabana-select { border: 1px solid var(--line); background: var(--sand); font-family: var(--font-body); font-size: 0.8rem; padding: 5px 8px; border-radius: 6px; min-width: 150px; }
