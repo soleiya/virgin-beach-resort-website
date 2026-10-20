@@ -41,6 +41,8 @@
     out: '<path d="M15 4h4v16h-4M10 8l-4 4 4 4M6 12h10"/>',
     chevL: '<path d="M14 6l-6 6 6 6"/>',
     chevR: '<path d="M10 6l6 6-6 6"/>',
+    chevD: '<path d="M6 9l6 6 6-6"/>',
+    sort: '<path d="M8 10l4-4 4 4M8 14l4 4 4-4"/>',
     check: '<circle cx="12" cy="12" r="8"/><path d="M8.5 12.5l2.5 2.5 4.5-5"/>',
     user: '<circle cx="12" cy="9" r="3.5"/><path d="M5 20c0-3.6 3.1-6 7-6s7 2.4 7 6"/>',
     refresh: '<path d="M20 11a8 8 0 0 0-14.3-4.3L4 9M4 4v5h5M4 13a8 8 0 0 0 14.3 4.3L20 15M20 20v-5h-5"/>',
@@ -180,7 +182,7 @@
   }
   function accomLine(r) {
     if (isVilla(r)) {
-      var v = V() && V().labelsFor ? V().labelsFor(r) : [];
+      var v = V() && V().villasFor ? V().villasFor(r) : [];
       var names = v.map(function (x) { return x.unit_label; }).join(", ");
       return esc(names || r.room_name || "Not assigned");
     }
@@ -217,75 +219,122 @@
     return L;
   }
   var TABS = [["arrivals", "Arrivals"], ["departures", "Departures"], ["inhouse", "In-house"], ["stayovers", "Stayovers"], ["daytrips", "Day Trips"], ["bookings", "Bookings"], ["cancellations", "Cancelations"]];
-  var EMPTY = { arrivals: "There are no arrivals", departures: "There are no departures", inhouse: "Nobody is in-house", stayovers: "There are no stayovers", daytrips: "No day trip guests", bookings: "No bookings made", cancellations: "No cancelations" };
+  var EMPTY = { arrivals: "There are no arrivals", departures: "There are no departures", inhouse: "Nobody is in-house", stayovers: "There are no stayovers", daytrips: "There are no day trip guests", bookings: "No bookings were made", cancellations: "There are no cancelations" };
+  var fcStart = null, blocksFor = {}, blocksBusy = {};
+  function money(n) { return "₱" + Number(n || 0).toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+  function loadBlocks(day) {
+    if (blocksFor[day] !== undefined || blocksBusy[day]) return;
+    blocksBusy[day] = 1;
+    D.sb.from("booking_villas").select("villa_id").is("booking_id", null).eq("active", true).lte("check_in", day).gt("check_out", day).then(function (res) {
+      blocksFor[day] = res && !res.error ? (res.data || []).length : 0;
+      delete blocksBusy[day];
+      drawDash();
+    });
+  }
+  function remaining(r, kind) {
+    var c = r.cb_info && r.cb_info.status;
+    return kind === "arrivals" ? c !== "checked_in" && c !== "checked_out" : c !== "checked_out";
+  }
+  function forecast(start, days, units) {
+    var end = addDays(start, days), roomNights = 0, revenue = 0, dtGuests = 0, dtRevenue = 0;
+    (D.rows() || []).forEach(function (r) {
+      if (!active(r) || !r.check_in) return;
+      if (!isVilla(r)) {
+        if (r.check_in >= start && r.check_in < end) { dtGuests += pax(r); dtRevenue += Number(r.total_amount) || 0; }
+        return;
+      }
+      if (!r.check_out || r.check_out <= start || r.check_in >= end) return;
+      var n = Math.max(1, Math.round((new Date(r.check_out + "T00:00:00Z") - new Date(r.check_in + "T00:00:00Z")) / 864e5));
+      var a = r.check_in > start ? r.check_in : start, b2 = r.check_out < end ? r.check_out : end;
+      var inRange = Math.round((new Date(b2 + "T00:00:00Z") - new Date(a + "T00:00:00Z")) / 864e5);
+      var rooms = Math.max(1, (r.booking_villas || []).length);
+      roomNights += inRange * rooms;
+      revenue += (Number(r.total_amount) || 0) / n * inRange;
+    });
+    var cap = units * days;
+    return { occ: cap ? roomNights / cap * 100 : 0, roomNights: roomNights, adr: roomNights ? revenue / roomNights : 0, revpar: cap ? revenue / cap : 0, revenue: revenue, dtGuests: dtGuests, dtRevenue: dtRevenue };
+  }
 
   function drawDash() {
     if (!body.classList.contains("cbv") || page !== "dashboard") return;
     var day = dashDay, L = lists(day);
-    var units = V() && V().villas ? V().villas().length : 18;
+    var units = V() && V().villas ? V().villas().length || 18 : 18;
     var occ = {};
     L.inhouse.forEach(function (r) { (r.booking_villas || []).forEach(function (bv) { occ[bv.villa_id] = 1; }); });
     var booked = Object.keys(occ).length, pct = units ? booked / units * 100 : 0;
+    loadBlocks(day);
+    var oos = blocksFor[day] || 0;
     var dt = new Date(day + "T00:00:00Z");
     var dtGuests = L.daytrips.reduce(function (s, r) { return s + pax(r); }, 0);
-
-    // next 7 days forecast
-    var nights = 0, arr7 = 0, dt7 = 0, rows = D.rows() || [];
-    for (var i = 0; i < 7; i++) {
-      var d = addDays(day, i), o = {};
-      rows.forEach(function (r) {
-        if (!active(r)) return;
-        if (isVilla(r) && r.check_in <= d && r.check_out > d) (r.booking_villas || []).forEach(function (bv) { o[bv.villa_id] = 1; });
-        if (isVilla(r) && r.check_in === d) arr7++;
-        if (!isVilla(r) && r.check_in === d) dt7 += pax(r);
-      });
-      nights += Object.keys(o).length;
-    }
-
+    if (!fcStart) fcStart = day;
+    var F = forecast(fcStart, 14, units);
     var list = L[dashTab] || [];
-    var isDT = dashTab === "daytrips" || (dashTab === "bookings" || dashTab === "cancellations");
+    var dtTab = dashTab === "daytrips";
+    var cols = dtTab ? ["Guest", "Booking", "Guests", "Status"] : ["Guest", "Accommodation", "Stay", "Status"];
+    var badge = function (k) {
+      if (k !== "arrivals" && k !== "departures") return "";
+      var n = L[k].filter(function (r) { return remaining(r, k); }).length;
+      return n ? '<em class="cb-rem">' + n + " Remaining</em>" : "";
+    };
     dash.innerHTML =
       '<div class="cb-dash-head"><h1>Dashboard</h1>' +
-      '<div class="cb-dash-nav"><button type="button" class="cb-round" data-dd="-1" aria-label="Previous day">' + ico("chevL") + "</button>" +
-      '<button type="button" class="cb-pill" data-dd="0">' + ico("cal") + "Today</button>" +
-      '<button type="button" class="cb-round" data-dd="1" aria-label="Next day">' + ico("chevR") + "</button>" +
-      '<button type="button" class="cb-round" data-dd="r" aria-label="Refresh" title="Refresh">' + ico("refresh") + "</button></div></div>" +
+      '<div class="cb-dash-nav"><button type="button" class="cb-round" data-dd="r" aria-label="Refresh" title="Refresh">' + ico("refresh") + "</button>" +
+      '<button type="button" class="cb-round" data-dd="-1" aria-label="Previous day">' + ico("chevL") + "</button>" +
+      '<label class="cb-pill cb-datepick">' + ico("cal") + (day === today() ? "Today" : dmy(day)) + '<input type="date" id="cbDashDate" value="' + day + '" aria-label="Pick a date"></label>' +
+      '<button type="button" class="cb-round" data-dd="1" aria-label="Next day">' + ico("chevR") + "</button></div></div>" +
       '<div class="cb-dash-grid">' +
       '<div class="cb-col">' +
       '<div class="cb-card cb-date"><div>' + dt.toLocaleDateString("en-US", { timeZone: "UTC", weekday: "long" }) + "</div><b>" + dt.getUTCDate() + "</b><div>" +
       dt.toLocaleDateString("en-US", { timeZone: "UTC", month: "long" }) + "</div></div>" +
       '<div class="cb-card cb-occ"><div class="cb-donut" style="--p:' + pct.toFixed(2) + '"><div><b>' + pct.toFixed(2) + "%</b><span>Occupancy</span></div></div>" +
-      "<ul><li><b>" + units + "</b> Available units</li><li><b>" + booked + "</b> Booked units</li><li><b>" + L.arrivals.length + "</b> Arrivals</li><li><b>" + dtGuests + "</b> Day trip guests</li></ul></div>" +
+      "<ul><li><b>" + Math.max(0, units - booked - oos) + "</b> Available units</li><li><b>" + booked + "</b> Booked units</li><li><b>" + oos + "</b> Out of service</li><li><b>" + dtGuests + "</b> Day trip guests</li></ul></div>" +
       "</div>" +
       '<div class="cb-card cb-activity"><div class="cb-act-head"><h2>Activity</h2></div><div class="cb-tabs">' +
       TABS.map(function (t) {
-        return '<button type="button" class="cb-tab' + (t[0] === dashTab ? " is-on" : "") + '" data-tab="' + t[0] + '"><b>' + L[t[0]].length + "</b><span>" + t[1] + "</span></button>";
+        return '<button type="button" class="cb-tab' + (t[0] === dashTab ? " is-on" : "") + '" data-tab="' + t[0] + '"><b>' + L[t[0]].length + badge(t[0]) + "</b><span>" + t[1] + "</span></button>";
       }).join("") + "</div>" +
-      '<div class="cb-table-wrap"><table class="cb-table"><thead><tr><th>Guest</th><th>' + (isDT ? "Booking" : "Accommodation") + "</th><th>" + (isDT ? "Date" : "Stay") + "</th><th>" + (isDT ? "Guests" : "Guests") + "</th><th>Status</th></tr></thead><tbody>" +
+      '<div class="cb-table-wrap"><table class="cb-table"><thead><tr>' + cols.map(function (c) { return "<th>" + c + ico("sort") + "</th>"; }).join("") + "</tr></thead><tbody>" +
       (list.length ? list.slice().sort(function (a, b) { return String(a.guest_name).localeCompare(String(b.guest_name)); }).map(function (r) {
         return '<tr data-id="' + esc(r.id) + '"><td><a href="#" class="cb-link" data-open="' + esc(r.id) + '">' + esc(r.guest_name || "—") + "</a>" +
-          '<small class="cb-dim">' + esc(r.cb_reservation_id || r.order_code || "") + "</small></td><td>" + accomLine(r) + "</td><td>" + stayLine(r) + "</td><td>" + pax(r) + "</td><td>" + statusHtml(r) + "</td></tr>";
-      }).join("") : '<tr class="cb-empty"><td colspan="5">' + ico("check") + "<div>" + EMPTY[dashTab] + (day === today() ? " today" : " on this day") + "</div></td></tr>") +
+          '<small class="cb-dim">' + esc(r.cb_reservation_id || r.order_code || "") + "</small></td><td>" + accomLine(r) + "</td><td>" + (dtTab ? pax(r) : stayLine(r)) + "</td><td>" + statusHtml(r) + "</td></tr>";
+      }).join("") : '<tr class="cb-empty"><td colspan="4">' + ico("check") + "<div>" + EMPTY[dashTab] + (day === today() ? " today" : " on this day") + "</div></td></tr>") +
       "</tbody></table></div></div></div>" +
-      '<div class="cb-card cb-forecast"><div class="cb-fc-head"><h2>Forecast</h2><span class="cb-pill cb-static">' + ico("cal") + dmy(day) + " – " + dmy(addDays(day, 6)) + "</span></div>" +
-      '<div class="cb-kpis"><div><b>' + (units ? (nights / (units * 7) * 100).toFixed(2) : "0.00") + "%</b><span>Occupancy</span></div><div><b>" + nights + "</b><span>Room nights</span></div><div><b>" + arr7 + "</b><span>Villa arrivals</span></div><div><b>" + dt7 + "</b><span>Day trip guests</span></div></div>" +
-      '<div class="cb-quick"><button type="button" class="cb-btn" data-go="calendar">' + ico("cal") + 'Open calendar</button><button type="button" class="cb-btn" data-go="reservations">' + ico("bed") + 'All reservations</button><button type="button" class="cb-btn" data-go="daytrips">' + ico("sun") + "All day trips</button></div></div>";
+      '<div class="cb-card cb-forecast"><div class="cb-fc-head"><h2>Forecast</h2><div class="cb-dash-nav">' +
+      '<button type="button" class="cb-round sm" data-fc="-14" aria-label="Previous two weeks">' + ico("chevL") + "</button>" +
+      '<span class="cb-pill cb-static">' + ico("cal") + dmy(fcStart) + " – " + dmy(addDays(fcStart, 13)) + (fcStart !== day ? '<button type="button" class="cb-x" data-fc="0" aria-label="Reset">×</button>' : "") + "</span>" +
+      '<button type="button" class="cb-round sm" data-fc="14" aria-label="Next two weeks">' + ico("chevR") + "</button></div></div>" +
+      '<div class="cb-kpis">' +
+      "<div><b>" + F.occ.toFixed(2) + "%</b><span>Occupancy</span></div>" +
+      "<div><b>" + F.roomNights + "</b><span>Room nights</span></div>" +
+      "<div><b>" + money(F.adr) + "</b><span>Adr</span></div>" +
+      "<div><b>" + money(F.revpar) + "</b><span>Revpar</span></div>" +
+      "<div><b>" + money(F.revenue) + "</b><span>Revenue</span></div>" +
+      '<div class="cb-kpi-vbr"><b>' + F.dtGuests.toLocaleString() + "</b><span>Day trip guests</span></div>" +
+      '<div class="cb-kpi-vbr"><b>' + money(F.dtRevenue) + "</b><span>Day trip revenue</span></div></div>" +
+      '<p class="cb-dim cb-fc-note">Villa revenue is each stay\'s total spread evenly over its nights (cancelled stays excluded).</p></div>';
   }
+  dash.addEventListener("change", function (e) {
+    if (e.target.id === "cbDashDate" && e.target.value) { dashDay = e.target.value; fcStart = dashDay; drawDash(); }
+  });
   dash.addEventListener("click", function (e) {
     var t = e.target.closest("[data-tab]");
     if (t) { dashTab = t.getAttribute("data-tab"); drawDash(); return; }
     var dd = e.target.closest("[data-dd]");
     if (dd) {
       var v = dd.getAttribute("data-dd");
-      if (v === "r") { D.reload(); return; }
+      if (v === "r") { blocksFor = {}; D.reload(); return; }
       dashDay = v === "0" ? today() : addDays(dashDay, Number(v));
+      fcStart = dashDay;
       drawDash();
       return;
     }
+    var fc = e.target.closest("[data-fc]");
+    if (fc) { var n = Number(fc.getAttribute("data-fc")); fcStart = n ? addDays(fcStart || dashDay, n) : dashDay; drawDash(); return; }
     var o = e.target.closest("[data-open]");
     if (o) { e.preventDefault(); openRow(o.getAttribute("data-open")); }
   });
   function openRow(id) {
+    if (window.VBRPanel) { window.VBRPanel.openById(id); return; }
     var r = (D.rows() || []).filter(function (x) { return x.id === id; })[0];
     if (!r) return;
     if (isVilla(r) && V()) V().openBooking(r);
@@ -311,7 +360,15 @@
   var oldLegend = calBackdrop.querySelector(".cal-legend");
   if (oldLegend) oldLegend.parentNode.insertBefore(legend, oldLegend.nextSibling);
 
-  var calBusy = false;
+  var calBusy = false, collapsed = {};
+  calTable.addEventListener("click", function (e) {
+    var g = e.target.closest("tr.cb-grp");
+    if (!g || !body.classList.contains("cbv")) return;
+    var t = g.getAttribute("data-grp");
+    collapsed[t] = !collapsed[t];
+    g.classList.toggle("is-collapsed", !!collapsed[t]);
+    Array.prototype.forEach.call(calTable.querySelectorAll("tr[data-of]"), function (r) { if (r.getAttribute("data-of") === t) r.hidden = !!collapsed[t]; });
+  });
   function decorateCal() {
     if (!body.classList.contains("cbv") || calBusy) return;
     var head = calTable.querySelector("thead tr");
@@ -349,13 +406,27 @@
       var num = b ? b.textContent.replace(/[^0-9]/g, "") : "";
       th.innerHTML = '<span class="cb-dow">' + esc(dname) + '</span><span class="cb-dnum">' + esc(num) + '</span><span class="cb-dpct">' + (total ? (occAll[i] / total * 100).toFixed(2) : "0.00") + "%</span>";
     });
+    // nightly rate per room type (weekday / weekend & peak), from the villa rate sheet
+    var rates = {};
+    (V() && V().villas ? V().villas() : []).forEach(function (v) {
+      var t = v.room_type_name, x = rates[t] || (rates[t] = { wd: Infinity, we: Infinity });
+      x.wd = Math.min(x.wd, Number(v.weekday_rate) || Infinity);
+      x.we = Math.min(x.we, Number(v.weekend_rate) || Infinity);
+    });
     groups.forEach(function (g) {
       var tr = document.createElement("tr");
-      tr.className = "cb-grp";
-      tr.innerHTML = '<th class="unit">' + ico("bed") + esc(g.type || "Casitas") + "</th>" + g.free.map(function (f, i) {
-        return '<td class="' + (ths[i].className || "") + '"><span class="cb-avail' + (f ? "" : " is-full") + '">' + ico("bed") + f + "</span></td>";
+      tr.className = "cb-grp" + (collapsed[g.type] ? " is-collapsed" : "");
+      tr.setAttribute("data-grp", g.type);
+      var rt = rates[g.type];
+      tr.innerHTML = '<th class="unit"><button type="button" class="cb-grp-tg" aria-label="Show or hide ' + esc(g.type) + '">' + ico("chevD") + "</button>" + esc(g.type || "Casitas") + "</th>" + g.free.map(function (f, i) {
+        var we = /\b(we|peak)\b/.test(ths[i].className || "");
+        var rate = rt ? (we ? rt.we : rt.wd) : Infinity;
+        return '<td class="' + (ths[i].className || "") + '"><span class="cb-avail' + (f ? "" : " is-full") + '">' + ico("bed") + f + "</span>" +
+          (isFinite(rate) ? '<span class="cb-rate">₱' + Number(rate).toLocaleString("en-PH", { minimumFractionDigits: 2 }) + "</span>" : "") + "</td>";
       }).join("");
       g.first.parentNode.insertBefore(tr, g.first);
+      var el = g.first;
+      for (var k = 0; k < g.rows && el; k++, el = el.nextElementSibling) { el.setAttribute("data-of", g.type); el.hidden = !!collapsed[g.type]; }
     });
     calBusy = false;
   }
@@ -411,7 +482,11 @@
       if (calBackdrop.classList.contains("open")) calBackdrop.classList.remove("open");
     }
     syncAuth();
+    if (ready && D.rows && (D.rows() || []).length) D.render();
+    try { document.dispatchEvent(new CustomEvent("vbr:view")); } catch (e) {}
   }
+  var ready = false;
   setView(store(KEY) === "cloudbeds" ? "cloudbeds" : "new");
-  window.VBRView = { set: setView, go: goPage };
+  ready = true;
+  window.VBRView = { set: setView, go: goPage, page: function () { return page; } };
 })();

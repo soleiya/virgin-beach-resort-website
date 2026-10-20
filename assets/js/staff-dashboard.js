@@ -720,7 +720,9 @@
       tail: from ? " · loaded from " + fmtDate(from) + " (change under “Bookings loaded”)" : " · all years loaded" };
     updateCountLine(0);
     if (!rows.length) {
+      renderQueue = [];
       bookingsBody.innerHTML = '<tr class="empty-row"><td colspan="16">No bookings match this view.</td></tr>';
+      listChanged();
       return;
     }
     // Only the first rows are drawn; more are added as you scroll (drawing
@@ -732,8 +734,11 @@
     bookingsBody.innerHTML = "";
     renderQueue = rows;
     renderShown = 0;
-    appendRows(Math.max(ROW_BATCH, keepShown));
+    // The Cloudbeds view draws its own paged list from the same rows.
+    if (!document.body.classList.contains("cbv")) appendRows(Math.max(ROW_BATCH, keepShown));
+    listChanged();
   }
+  function listChanged() { try { document.dispatchEvent(new CustomEvent("vbr:list")); } catch (e) {} }
 
   var ROW_BATCH = 50, renderQueue = [], renderShown = 0, lastViewKey = null, moreRow = null, countInfo = null;
   function updateCountLine(shown) {
@@ -2067,5 +2072,7 @@
     cbUrl: cbUrl, loadCbStatus: loadCbStatus,
     STATUS_LABELS: STATUS_LABELS, SOURCE_LABELS: SOURCE_LABELS,
     TYPE_LABELS: TYPE_LABELS, statusLabel: statusLabel, openModal: openModal,
+    openBreakdown: openBreakdown, listRows: function () { return renderQueue; },
+    section: function () { return activeSection; }, sort: function () { return { field: sortField, dir: sortDir }; }, cabanaLabel: function (id) { return cabanasById[id] ? cabanasById[id].label : ""; },
   };
 })();

@@ -11,6 +11,7 @@
 //   push     { booking_id } a villa booked on the website → new Cloudbeds
 //            reservation on the same casita(s).
 //   status   { booking_id } website confirmed / cancelled it → same in Cloudbeds.
+//   payments verified website payments → Cloudbeds folio (postPayment).
 //   setup    link villas to Cloudbeds rooms (by name) + register webhooks.
 //   test     check the API key.
 // TEST MODE (cb_sync_state.push_enabled = false, the default): nothing is
@@ -248,6 +249,9 @@ async function pull() {
     const r = await push(String(id));
     if (r?.reservation_id) totals.pushed++; else if (r?.error) { totals.push_failed++; errors.push(`push ${id}: ${r.error}`); }
   }
+  // verified website payments not on the Cloudbeds folio yet
+  const pay = await postPayments(deadline).catch((e) => { errors.push("payments: " + (e as Error).message); return null; });
+  if (pay?.errors?.length) errors.push(...pay.errors);
   // only move the window forward when everything in it was handled
   const value = { at: complete && totals.failed === 0 ? started.toISOString() : (st?.at || from.toISOString()), ran_at: new Date().toISOString(), ...totals, complete, blocks };
   await stateSet("last_pull", value);
@@ -327,6 +331,8 @@ export function reservationParams(b: Any) {
     adults: villas.map((v, i) => ({ roomTypeID: v.cb_room_type_id, quantity: adults[i] })),
     children: villas.map((v, i) => ({ roomTypeID: v.cb_room_type_id, quantity: kids[i] })),
     paymentMethod: "ebanking",
+    // optional: a Cloudbeds source made for the website (Settings → Sources), e.g. "VBR Website"
+    sourceID: env("CLOUDBEDS_SOURCE_ID") || undefined,
     thirdPartyIdentifier: b.order_code || undefined,
     sendEmailConfirmation: "false",
   };
@@ -367,7 +373,7 @@ async function push(bookingId: string): Promise<Any> {
     await cb("POST", "postReservationNote", {
       reservationID: reservationId,
       reservationNote: `Booked on the website${b.booked_by ? " by " + b.booked_by : ""} (${b.source}) · ${b.order_code} · ` +
-        `website total ${peso(b.total_amount)} incl. full-board meals — the website handles this guest's quotation, payment and emails.`,
+        `website total ${peso(b.total_amount)} incl. full-board meals — the website handles this guest's quotation, payment and booking emails; verified payments are posted to this folio. Change dates, casitas, guests or status here in Cloudbeds — the website follows.`,
     }).catch(() => null);
   } catch (e) {
     const msg = String((e as Error).message || e);
@@ -376,7 +382,38 @@ async function push(bookingId: string): Promise<Any> {
   }
   await rpc("cb_push_result", { p_booking_id: bookingId, p_reservation_id: reservationId, p_error: notes.length ? notes.join(" · ") : null });
   await syncOne(reservationId).catch(() => null);
+  await postPayments().catch(() => null); // e.g. a proof verified before it reached Cloudbeds
   return { booking_id: bookingId, reservation_id: reservationId, notes };
+}
+
+// Payment method on the website → Cloudbeds payment type
+export function cbPaymentType(method: unknown): string {
+  return String(method || "").toLowerCase() === "cash" ? "cash" : "ebanking";
+}
+
+// Verified website payments → Cloudbeds folio (each once; retried by every pull).
+async function postPayments(deadline = Date.now() + 50_000): Promise<Any> {
+  const list: Any[] = (await rpc("cb_pending_payment_posts")) || [];
+  let posted = 0;
+  const errors: string[] = [];
+  for (const p of list) {
+    if (Date.now() > deadline) break;
+    try {
+      await cb("POST", "postPayment", {
+        reservationID: String(p.reservation_id),
+        type: cbPaymentType(p.method),
+        amount: Number(p.amount),
+        description: `Website payment · ${p.kind || "payment"} · ${p.order_code || ""}${p.note ? " · " + String(p.note).slice(0, 120) : ""}`,
+      });
+      await rpc("cb_payment_posted", { p_payment_id: p.payment_id, p_error: null });
+      posted++;
+    } catch (e) {
+      const msg = String((e as Error).message || e);
+      await rpc("cb_payment_posted", { p_payment_id: p.payment_id, p_error: msg });
+      errors.push(`payment ${p.payment_id}: ${msg}`);
+    }
+  }
+  return { waiting: list.length, posted, errors };
 }
 
 export function cbStatusFor(status: string): string | null {
@@ -513,6 +550,7 @@ export async function handle(req: Request): Promise<Response> {
       case "full": background(full(Number(body.page) || 1, body.force !== false)); return json({ started: true });
       case "push": return json(await push(String(body.booking_id)));
       case "status": return json(await pushStatus(String(body.booking_id)));
+      case "payments": return json(await postPayments());
       case "sync_one": return json(await syncOne(String(body.reservation_id)));
       case "setup": return json(await setup());
       case "webhooks": return json(await webhooks(body.dedupe === true));

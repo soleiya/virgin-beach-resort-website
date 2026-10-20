@@ -574,6 +574,41 @@ Copying payment screenshots into your Google Drive is ready to turn on whenever 
 The staff dashboard has a switch at the top — **Cloudbeds view** / **New version**. It only changes the interface; both views read and save the same bookings with the same forms.
 
 - **New version** — the dashboard as it was.
-- **Cloudbeds view** — laid out like the Cloudbeds front office: top bar with search and a **+** for new reservations, the ☰ side menu (Dashboard, Calendar, Reservations, Day Trips, Cabana Map, Activity Log, Team Activity, Export), a front-desk **Dashboard** (today's arrivals, departures, in-house, stayovers, day trips, bookings, cancellations, occupancy and a 7-day forecast), the **Calendar** as a full-page gantt with Cloudbeds' slanted bars and status colours, and bookings opening in a side drawer.
+- **Cloudbeds view** — laid out like the Cloudbeds front office: top bar with search and a **+** for new reservations, the ☰ side menu (Dashboard, Calendar, Reservations, Day Trips, Cabana Map, Activity Log, Team Activity, Export), a front-desk **Dashboard** (arrivals / departures with "Remaining", in-house, stayovers, day trips, bookings, cancellations, occupancy, out-of-service units, and a 14-day forecast with occupancy, room nights, ADR, RevPAR and revenue), a **Reservations** list with Cloudbeds' columns, filter chips and pages of 10/25/50/100, a reservation **side panel** (Overview, Folio, Notes, Guest, Accommodations, Activity), and the **Calendar** as a full-page gantt with Cloudbeds' toolbar, slanted bars, status colours, collapsible room types and nightly rates. New bookings and edits still use our own booking forms.
 
-Each person's choice is remembered in their own browser. Files: `assets/css/staff-cloudbeds.css`, `assets/js/staff-cloudbeds.js` (re-run `python3 pages_staff.py` after editing them so the cache-busting `?v=` updates).
+Each person's choice is remembered in their own browser. Files: `assets/css/staff-cloudbeds.css`, `assets/js/staff-cloudbeds.js`, `assets/js/staff-cloudbeds-pages.js` (re-run `python3 pages_staff.py` after editing them so the cache-busting `?v=` updates).
+
+## 12. The website as our own "OTA" — Cloudbeds is the official record
+
+**Run** `supabase-functions/booking-v18-cloudbeds-ota.sql`, then redeploy the `cloudbeds-sync` Edge Function with the updated `index.ts`. Nothing changes for guests until you go live (below).
+
+**How it works once live**
+
+1. A villa booked on the website — by a guest, or by staff with our booking form — is created in Cloudbeds straight away as **Confirmation Pending**, on the same casita, so Booking.com and the other OTAs stop selling it. Cloudbeds' own confirmation emails are switched off for these (the website sends its own).
+2. The website runs the payment step as before (24-hour deadline, 50% or full, proof check). **Verifying a payment** confirms the booking in Cloudbeds and **adds the payment to the Cloudbeds folio** (Cash → Cash, everything else → Bank transfer / e-banking). Unpaid → the website marks it expired and cancels it in Cloudbeds.
+3. From then on the stay **follows Cloudbeds**: dates, casitas, guest details, head count, status, check-in/out, cancellations and no-shows. Make those changes in Cloudbeds — the dashboard locks them and shows "now in Cloudbeds". The website keeps its quoted total (what the guest was asked to pay) unless the dates or casitas are changed in Cloudbeds, then it takes Cloudbeds' total.
+4. Day trips stay on the website only.
+
+Optional: create a source in Cloudbeds (e.g. **VBR Website**) and add its ID as the Edge Function secret `CLOUDBEDS_SOURCE_ID`, so these bookings show under that source instead of the API default.
+
+**Go live** (only bookings made from this moment are sent — earlier test bookings stay on the website):
+
+```sql
+select cb_go_live();
+```
+
+Back to test mode: `select cb_state_set('push_enabled', 'false'::jsonb);`
+
+## 13. Who sends which email
+
+| Email | Sent by |
+|---|---|
+| Quotation / how to pay, proof received, confirmation, payment deadline & expiry, balance reminders, paid in full — for **website** villa bookings | Website |
+| All **day trip** emails | Website |
+| Pre-arrival (3 days before) and thank-you / review (1 day after check-out) — **every villa guest**, any channel | Cloudbeds (Settings → Email → Email Scheduling) |
+| Anything to Booking.com / OTA guests | Never from the website |
+
+Suggested Cloudbeds schedules (create the two templates, then a schedule for each):
+
+- **Pre-arrival** — *Before arrival, 3 days*. Subject: `[hotel name] - See you soon! Your stay on [arrival date]`. Body: check-in from 2:00 PM / check-out 12:00 NN, directions and parking, meal times for the full-board package, what to bring (valid ID, proof of payment), pet policy reminder, contact number.
+- **Thank you** — *After departure, 1 day*. Subject: `[hotel name] - Thank you for staying with us`. Body: thanks, link to leave a review, invitation to book direct on the website next time.
