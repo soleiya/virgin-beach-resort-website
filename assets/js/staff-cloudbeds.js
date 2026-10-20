@@ -172,7 +172,7 @@
   }).observe(calBackdrop, { attributes: true, attributeFilter: ["class"] });
 
   // ---------------------------------------------------------------- dashboard
-  var dashDay = today(), dashTab = "arrivals";
+  var dashFrom = today(), dashTo = dashFrom, dashTab = "arrivals";
   function stayLine(r) {
     if (isVilla(r)) {
       var n = r.check_out ? Math.round((new Date(r.check_out + "T00:00:00Z") - new Date(r.check_in + "T00:00:00Z")) / 864e5) : 0;
@@ -199,28 +199,117 @@
     var lbl = D.statusLabel ? D.statusLabel(r) : r.status;
     return '<span class="cb-st cb-st-' + statusKey(r) + '"><i></i>' + esc(lbl) + "</span>";
   }
-  function lists(day) {
+  // Activity for one day or a date range (inclusive): arrivals / departures on
+  // those dates, stays in-house on any of those nights, stayovers staying
+  // through the whole range, day trips, bookings made and cancellations.
+  function lists(from, to) {
     var rows = D.rows() || [], L = { arrivals: [], departures: [], inhouse: [], stayovers: [], daytrips: [], bookings: [], cancellations: [] };
+    var inR = function (d) { return d && d >= from && d <= to; };
     rows.forEach(function (r) {
       var made = r.created_at ? new Date(r.created_at).toLocaleDateString("en-CA", { timeZone: "Asia/Manila" }) : "";
-      if (made === day) L.bookings.push(r);
+      if (inR(made)) L.bookings.push(r);
       if (!active(r)) {
-        var mod = (r.cb_info && r.cb_info.modified) || "";
-        if ((mod.slice(0, 10) === day || made === day) && r.check_in && r.check_in >= day) L.cancellations.push(r);
+        var mod = ((r.cb_info && r.cb_info.modified) || "").slice(0, 10);
+        if ((inR(mod) || inR(made)) && r.check_in && r.check_in >= from) L.cancellations.push(r);
         return;
       }
       if (isVilla(r)) {
-        if (r.check_in === day) L.arrivals.push(r);
-        if (r.check_out === day) L.departures.push(r);
-        if (r.check_in <= day && r.check_out > day) L.inhouse.push(r);
-        if (r.check_in < day && r.check_out > day) L.stayovers.push(r);
-      } else if (r.check_in === day) L.daytrips.push(r);
+        if (inR(r.check_in)) L.arrivals.push(r);
+        if (inR(r.check_out)) L.departures.push(r);
+        if (r.check_in <= to && r.check_out > from) L.inhouse.push(r);
+        if (r.check_in < from && r.check_out > to) L.stayovers.push(r);
+      } else if (inR(r.check_in)) L.daytrips.push(r);
     });
     return L;
   }
+  function spanDays(a, b) { return Math.round((new Date(b + "T00:00:00Z") - new Date(a + "T00:00:00Z")) / 864e5) + 1; }
+  function rangeLabel(a, b) {
+    if (a === b) return a === today() ? "Today" : dmy(a);
+    return dmy(a) + " – " + dmy(b);
+  }
+
+  // ---------------------------------------------------------------- date picker
+  // Cloudbeds-style calendar popover: pick one day, or click a start and an end.
+  var MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+  var pick = null; // { key, from, to, start, view: "YYYY-MM", anchor }
+  function pickerHtml() {
+    var y = Number(pick.view.slice(0, 4)), m = Number(pick.view.slice(5, 7)) - 1;
+    var first = new Date(Date.UTC(y, m, 1)), startDow = first.getUTCDay();
+    var days = new Date(Date.UTC(y, m + 1, 0)).getUTCDate();
+    var lo = pick.start || pick.from, hi = pick.start ? pick.start : pick.to;
+    var cells = "";
+    for (var i = 0; i < startDow; i++) cells += "<span></span>";
+    for (var d = 1; d <= days; d++) {
+      var ds = y + "-" + String(m + 1).padStart(2, "0") + "-" + String(d).padStart(2, "0");
+      var cls = (ds >= lo && ds <= hi ? " in" : "") + (ds === lo ? " lo" : "") + (ds === hi ? " hi" : "") + (ds === today() ? " now" : "");
+      cells += '<button type="button" class="cb-dp-d' + cls + '" data-day="' + ds + '">' + d + "</button>";
+    }
+    var yrs = "";
+    for (var yy = y - 3; yy <= y + 2; yy++) yrs += '<option value="' + yy + '"' + (yy === y ? " selected" : "") + ">" + yy + "</option>";
+    return '<div class="cb-dp-head"><button type="button" class="cb-dp-nav" data-dpm="-1" aria-label="Previous month">' + ico("chevL") + "</button>" +
+      '<select data-dp="m">' + MONTHS.map(function (n, i) { return '<option value="' + i + '"' + (i === m ? " selected" : "") + ">" + n + "</option>"; }).join("") + "</select>" +
+      '<select data-dp="y">' + yrs + "</select>" +
+      '<button type="button" class="cb-dp-nav" data-dpm="1" aria-label="Next month">' + ico("chevR") + "</button></div>" +
+      '<div class="cb-dp-dow"><span>Sun</span><span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span></div>' +
+      '<div class="cb-dp-grid">' + cells + "</div>" +
+      '<p class="cb-dp-hint">' + (pick.start ? "Now click the last date (or the same date again for one day)." : "Click a date, or a start and an end date for a range.") + "</p>" +
+      '<div class="cb-dp-quick"><button type="button" data-dpq="today">Today</button><button type="button" data-dpq="tomorrow">Tomorrow</button>' +
+      '<button type="button" data-dpq="week">This week</button><button type="button" data-dpq="next7">Next 7 days</button><button type="button" data-dpq="month">This month</button></div>';
+  }
+  var pop = document.createElement("div");
+  pop.className = "cb-dp";
+  pop.hidden = true;
+  body.appendChild(pop);
+  function openPicker(anchor, key, from, to, onPick) {
+    pick = { key: key, from: from, to: to, start: null, view: from.slice(0, 7), onPick: onPick };
+    pop.innerHTML = pickerHtml();
+    pop.hidden = false;
+    var r = anchor.getBoundingClientRect(), w = 300;
+    pop.style.top = (r.bottom + window.scrollY + 6) + "px";
+    pop.style.left = Math.max(8, Math.min(window.innerWidth - w - 8, r.right - w + window.scrollX)) + "px";
+  }
+  function closePicker() { pop.hidden = true; pick = null; }
+  function applyPick(a, b) { var f = pick.onPick; closePicker(); f(a <= b ? a : b, a <= b ? b : a); }
+  pop.addEventListener("click", function (e) {
+    e.stopPropagation();
+    var d = e.target.closest("[data-day]"), nav = e.target.closest("[data-dpm]"), q = e.target.closest("[data-dpq]");
+    if (nav) {
+      var y = Number(pick.view.slice(0, 4)), m = Number(pick.view.slice(5, 7)) - 1 + Number(nav.getAttribute("data-dpm"));
+      var dt = new Date(Date.UTC(y, m, 1));
+      pick.view = dt.toISOString().slice(0, 7);
+      pop.innerHTML = pickerHtml();
+      return;
+    }
+    if (q) {
+      var t = today(), k = q.getAttribute("data-dpq"), dow = new Date(t + "T00:00:00Z").getUTCDay();
+      if (k === "today") applyPick(t, t);
+      if (k === "tomorrow") applyPick(addDays(t, 1), addDays(t, 1));
+      if (k === "week") applyPick(addDays(t, -dow), addDays(t, 6 - dow));
+      if (k === "next7") applyPick(t, addDays(t, 6));
+      if (k === "month") { var ms = t.slice(0, 8) + "01"; var nx = new Date(Date.UTC(Number(t.slice(0, 4)), Number(t.slice(5, 7)), 0)); applyPick(ms, nx.toISOString().slice(0, 10)); }
+      return;
+    }
+    if (d) {
+      var ds = d.getAttribute("data-day");
+      if (!pick.start) { pick.start = ds; pop.innerHTML = pickerHtml(); return; }
+      applyPick(pick.start, ds);
+    }
+  });
+  pop.addEventListener("change", function (e) {
+    var s2 = e.target.getAttribute("data-dp");
+    if (!s2) return;
+    var y = Number(pick.view.slice(0, 4)), m = Number(pick.view.slice(5, 7)) - 1;
+    if (s2 === "m") m = Number(e.target.value); else y = Number(e.target.value);
+    pick.view = new Date(Date.UTC(y, m, 1)).toISOString().slice(0, 7);
+    pop.innerHTML = pickerHtml();
+  });
+  document.addEventListener("click", function (e) { if (pick && !e.target.closest(".cb-dp") && !e.target.closest("[data-dpopen]")) closePicker(); });
+  document.addEventListener("keydown", function (e) { if (e.key === "Escape" && pick) closePicker(); });
+  window.addEventListener("resize", function () { if (pick) closePicker(); });
+
   var TABS = [["arrivals", "Arrivals"], ["departures", "Departures"], ["inhouse", "In-house"], ["stayovers", "Stayovers"], ["daytrips", "Day Trips"], ["bookings", "Bookings"], ["cancellations", "Cancelations"]];
   var EMPTY = { arrivals: "There are no arrivals", departures: "There are no departures", inhouse: "Nobody is in-house", stayovers: "There are no stayovers", daytrips: "There are no day trip guests", bookings: "No bookings were made", cancellations: "There are no cancelations" };
-  var fcStart = null, blocksFor = {}, blocksBusy = {};
+  var fcFrom = null, fcTo = null, blocksFor = {}, blocksBusy = {};
   function money(n) { return "₱" + Number(n || 0).toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
   function loadBlocks(day) {
     if (blocksFor[day] !== undefined || blocksBusy[day]) return;
@@ -257,17 +346,21 @@
 
   function drawDash() {
     if (!body.classList.contains("cbv") || page !== "dashboard") return;
-    var day = dashDay, L = lists(day);
+    var day = dashFrom, L = lists(dashFrom, dashTo), nDays = spanDays(dashFrom, dashTo), isRange = nDays > 1;
     var units = V() && V().villas ? V().villas().length || 18 : 18;
-    var occ = {};
-    L.inhouse.forEach(function (r) { (r.booking_villas || []).forEach(function (bv) { occ[bv.villa_id] = 1; }); });
-    var booked = Object.keys(occ).length, pct = units ? booked / units * 100 : 0;
+    var occ = {}, unitNights = 0;
+    L.inhouse.forEach(function (r) {
+      var a = r.check_in > dashFrom ? r.check_in : dashFrom, z = r.check_out <= dashTo ? r.check_out : addDays(dashTo, 1);
+      var n = Math.max(0, spanDays(a, z) - 1);
+      (r.booking_villas || []).forEach(function (bv) { occ[bv.villa_id] = 1; unitNights += n; });
+    });
+    var booked = Object.keys(occ).length, pct = units ? (isRange ? unitNights / (units * nDays) : booked / units) * 100 : 0;
     loadBlocks(day);
     var oos = blocksFor[day] || 0;
     var dt = new Date(day + "T00:00:00Z");
     var dtGuests = L.daytrips.reduce(function (s, r) { return s + pax(r); }, 0);
-    if (!fcStart) fcStart = day;
-    var F = forecast(fcStart, 14, units);
+    if (!fcFrom) { fcFrom = day; fcTo = addDays(day, 13); }
+    var F = forecast(fcFrom, spanDays(fcFrom, fcTo), units);
     var list = L[dashTab] || [];
     var dtTab = dashTab === "daytrips";
     var cols = dtTab ? ["Guest", "Booking", "Guests", "Status"] : ["Guest", "Accommodation", "Stay", "Status"];
@@ -279,15 +372,18 @@
     dash.innerHTML =
       '<div class="cb-dash-head"><h1>Dashboard</h1>' +
       '<div class="cb-dash-nav"><button type="button" class="cb-round" data-dd="r" aria-label="Refresh" title="Refresh">' + ico("refresh") + "</button>" +
-      '<button type="button" class="cb-round" data-dd="-1" aria-label="Previous day">' + ico("chevL") + "</button>" +
-      '<label class="cb-pill cb-datepick">' + ico("cal") + (day === today() ? "Today" : dmy(day)) + '<input type="date" id="cbDashDate" value="' + day + '" aria-label="Pick a date"></label>' +
-      '<button type="button" class="cb-round" data-dd="1" aria-label="Next day">' + ico("chevR") + "</button></div></div>" +
+      '<button type="button" class="cb-round" data-dd="-1" aria-label="' + (isRange ? "Previous period" : "Previous day") + '">' + ico("chevL") + "</button>" +
+      '<button type="button" class="cb-pill" data-dpopen="dash" aria-haspopup="dialog">' + ico("cal") + esc(rangeLabel(dashFrom, dashTo)) + "</button>" +
+      '<button type="button" class="cb-round" data-dd="1" aria-label="' + (isRange ? "Next period" : "Next day") + '">' + ico("chevR") + "</button></div></div>" +
       '<div class="cb-dash-grid">' +
       '<div class="cb-col">' +
-      '<div class="cb-card cb-date"><div>' + dt.toLocaleDateString("en-US", { timeZone: "UTC", weekday: "long" }) + "</div><b>" + dt.getUTCDate() + "</b><div>" +
-      dt.toLocaleDateString("en-US", { timeZone: "UTC", month: "long" }) + "</div></div>" +
+      (isRange
+        ? '<div class="cb-card cb-date cb-date-range"><div>' + nDays + ' days</div><b>' + dt.getUTCDate() + "<small>–</small>" + new Date(dashTo + "T00:00:00Z").getUTCDate() + "</b><div>" +
+          dt.toLocaleDateString("en-US", { timeZone: "UTC", month: "short" }) + (dashTo.slice(0, 7) !== dashFrom.slice(0, 7) ? " – " + new Date(dashTo + "T00:00:00Z").toLocaleDateString("en-US", { timeZone: "UTC", month: "short" }) : "") + "</div></div>"
+        : '<div class="cb-card cb-date"><div>' + dt.toLocaleDateString("en-US", { timeZone: "UTC", weekday: "long" }) + "</div><b>" + dt.getUTCDate() + "</b><div>" +
+          dt.toLocaleDateString("en-US", { timeZone: "UTC", month: "long" }) + "</div></div>") +
       '<div class="cb-card cb-occ"><div class="cb-donut" style="--p:' + pct.toFixed(2) + '"><div><b>' + pct.toFixed(2) + "%</b><span>Occupancy</span></div></div>" +
-      "<ul><li><b>" + Math.max(0, units - booked - oos) + "</b> Available units</li><li><b>" + booked + "</b> Booked units</li><li><b>" + oos + "</b> Out of service</li><li><b>" + dtGuests + "</b> Day trip guests</li></ul></div>" +
+      "<ul><li><b>" + Math.max(0, units - oos) + "</b> Available units</li><li><b>" + booked + "</b> Booked units" + (isRange ? " (any night)" : "") + "</li><li><b>" + oos + "</b> Out of service" + (isRange ? " (first day)" : "") + "</li><li><b>" + dtGuests + "</b> Day trip guests</li></ul></div>" +
       "</div>" +
       '<div class="cb-card cb-activity"><div class="cb-act-head"><h2>Activity</h2></div><div class="cb-tabs">' +
       TABS.map(function (t) {
@@ -297,12 +393,13 @@
       (list.length ? list.slice().sort(function (a, b) { return String(a.guest_name).localeCompare(String(b.guest_name)); }).map(function (r) {
         return '<tr data-id="' + esc(r.id) + '"><td><a href="#" class="cb-link" data-open="' + esc(r.id) + '">' + esc(r.guest_name || "—") + "</a>" +
           '<small class="cb-dim">' + esc(r.cb_reservation_id || r.order_code || "") + "</small></td><td>" + accomLine(r) + "</td><td>" + (dtTab ? pax(r) : stayLine(r)) + "</td><td>" + statusHtml(r) + "</td></tr>";
-      }).join("") : '<tr class="cb-empty"><td colspan="4">' + ico("check") + "<div>" + EMPTY[dashTab] + (day === today() ? " today" : " on this day") + "</div></td></tr>") +
+      }).join("") : '<tr class="cb-empty"><td colspan="4">' + ico("check") + "<div>" + EMPTY[dashTab] + (isRange ? " on these dates" : day === today() ? " today" : " on this day") + "</div></td></tr>") +
       "</tbody></table></div></div></div>" +
       '<div class="cb-card cb-forecast"><div class="cb-fc-head"><h2>Forecast</h2><div class="cb-dash-nav">' +
-      '<button type="button" class="cb-round sm" data-fc="-14" aria-label="Previous two weeks">' + ico("chevL") + "</button>" +
-      '<span class="cb-pill cb-static">' + ico("cal") + dmy(fcStart) + " – " + dmy(addDays(fcStart, 13)) + (fcStart !== day ? '<button type="button" class="cb-x" data-fc="0" aria-label="Reset">×</button>' : "") + "</span>" +
-      '<button type="button" class="cb-round sm" data-fc="14" aria-label="Next two weeks">' + ico("chevR") + "</button></div></div>" +
+      '<button type="button" class="cb-round sm" data-fc="-1" aria-label="Previous period">' + ico("chevL") + "</button>" +
+      '<span class="cb-pill cb-fc-pill"><button type="button" class="cb-fc-open" data-dpopen="fc" aria-haspopup="dialog">' + ico("cal") + dmy(fcFrom) + " – " + dmy(fcTo) + "</button>" +
+      (fcFrom !== day || fcTo !== addDays(day, 13) ? '<button type="button" class="cb-x" data-fc="0" aria-label="Reset to the next two weeks">×</button>' : "") + "</span>" +
+      '<button type="button" class="cb-round sm" data-fc="1" aria-label="Next period">' + ico("chevR") + "</button></div></div>" +
       '<div class="cb-kpis">' +
       "<div><b>" + F.occ.toFixed(2) + "%</b><span>Occupancy</span></div>" +
       "<div><b>" + F.roomNights + "</b><span>Room nights</span></div>" +
@@ -313,23 +410,33 @@
       '<div class="cb-kpi-vbr"><b>' + money(F.dtRevenue) + "</b><span>Day trip revenue</span></div></div>" +
       '<p class="cb-dim cb-fc-note">Villa revenue is each stay\'s total spread evenly over its nights (cancelled stays excluded).</p></div>';
   }
-  dash.addEventListener("change", function (e) {
-    if (e.target.id === "cbDashDate" && e.target.value) { dashDay = e.target.value; fcStart = dashDay; drawDash(); }
-  });
+  function setDash(a, b) { dashFrom = a; dashTo = b; fcFrom = a; fcTo = addDays(a, 13); drawDash(); }
   dash.addEventListener("click", function (e) {
     var t = e.target.closest("[data-tab]");
     if (t) { dashTab = t.getAttribute("data-tab"); drawDash(); return; }
+    var op = e.target.closest("[data-dpopen]");
+    if (op) {
+      if (pick) { closePicker(); return; }
+      if (op.getAttribute("data-dpopen") === "dash") openPicker(op, "dash", dashFrom, dashTo, setDash);
+      else openPicker(op, "fc", fcFrom, fcTo, function (a, b) { fcFrom = a; fcTo = b; drawDash(); });
+      return;
+    }
     var dd = e.target.closest("[data-dd]");
     if (dd) {
       var v = dd.getAttribute("data-dd");
       if (v === "r") { blocksFor = {}; D.reload(); return; }
-      dashDay = v === "0" ? today() : addDays(dashDay, Number(v));
-      fcStart = dashDay;
-      drawDash();
+      var len = spanDays(dashFrom, dashTo) * Number(v);
+      setDash(addDays(dashFrom, len), addDays(dashTo, len));
       return;
     }
     var fc = e.target.closest("[data-fc]");
-    if (fc) { var n = Number(fc.getAttribute("data-fc")); fcStart = n ? addDays(fcStart || dashDay, n) : dashDay; drawDash(); return; }
+    if (fc) {
+      var k = Number(fc.getAttribute("data-fc"));
+      if (!k) { fcFrom = dashFrom; fcTo = addDays(dashFrom, 13); }
+      else { var l2 = spanDays(fcFrom, fcTo) * k; fcFrom = addDays(fcFrom, l2); fcTo = addDays(fcTo, l2); }
+      drawDash();
+      return;
+    }
     var o = e.target.closest("[data-open]");
     if (o) { e.preventDefault(); openRow(o.getAttribute("data-open")); }
   });
