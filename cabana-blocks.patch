@@ -1,0 +1,1250 @@
+From cb98c23d7f308677482a936329ba86e6f5767505 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Tue, 20 Oct 2026 17:43:18 +0800
+Subject: [PATCH] Let staff block Day Trip cabanas (under repair, unavailable,
+ blocked)
+
+- New cabana_blocks table + guards (booking-v20-cabana-blocks.sql): blocked
+  cabana-days are hidden from the public map and can't be booked or moved onto
+- Cabana Map: Block cabanas panel, hatched blocked tiles, block list with remove,
+  warnings for parties already on a blocked cabana
+- Booking page: clear message if a picked cabana becomes unavailable
+- Activity log labels; SETUP-BOOKING.md section 15
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01LiYb7KTQVvwof6y2aeN968
+---
+ SETUP-BOOKING.md                              |  20 ++
+ assets/css/style.css                          |  14 ++
+ assets/js/booking.js                          |  15 +-
+ assets/js/cabana-map.js                       |  26 +-
+ assets/js/staff-activity.js                   |   3 +-
+ assets/js/staff-dashboard.js                  | 235 +++++++++++++++++-
+ book-stay/index.html                          |   2 +-
+ book/index.html                               |   6 +-
+ contact/index.html                            |   2 +-
+ corporate/index.html                          |   2 +-
+ day-packages/index.html                       |   6 +-
+ dining/index.html                             |   2 +-
+ experiences/index.html                        |   2 +-
+ faq/index.html                                |   2 +-
+ gallery/index.html                            |   2 +-
+ index.html                                    |   2 +-
+ overnight/bamboo-casita/index.html            |   2 +-
+ overnight/bamboo-king-casita/index.html       |   2 +-
+ overnight/deluxe-king-casita/index.html       |   2 +-
+ overnight/double-queen-casita/index.html      |   2 +-
+ overnight/index.html                          |   2 +-
+ overnight/louver-window-casita/index.html     |   2 +-
+ overnight/sunrise-casita/index.html           |   2 +-
+ pages_staff.py                                |  51 +++-
+ pay/index.html                                |   2 +-
+ privacy-policy.html                           |   2 +-
+ staff/index.html                              |  59 ++++-
+ .../booking-v20-cabana-blocks.sql             | 171 +++++++++++++
+ terms-and-conditions.html                     |   2 +-
+ 29 files changed, 591 insertions(+), 51 deletions(-)
+ create mode 100644 supabase-functions/booking-v20-cabana-blocks.sql
+
+diff --git a/SETUP-BOOKING.md b/SETUP-BOOKING.md
+index e415a93..956bc4b 100644
+--- a/SETUP-BOOKING.md
++++ b/SETUP-BOOKING.md
+@@ -644,3 +644,23 @@ Other guest emails: proof rejected (with the reason and a fresh deadline), chang
+ - Each **verified payment** is posted to the folio, and its **proof screenshot is attached to the reservation's Documents** in Cloudbeds.
+ 
+ **Before going live, do one test**: make a website booking for a far-off date, verify a small payment, and check in Cloudbeds that the meal/add-on lines, the discount adjustments, the payment and the proof document look right; then cancel it. (The Cloudbeds API names for custom items and documents were taken from their documentation and can only be confirmed against the live account.)
++
++## 15. Blocking Day Trip cabanas (under repair, unavailable, blocked)
++
++**Run** `supabase-functions/booking-v20-cabana-blocks.sql` once in the SQL Editor (safe to re-run). No Edge Function changes.
++
++**How staff use it** — Day Trips → **Cabana Map** → **⛔ Block cabanas…**
++
++1. Pick a reason: **Under repair**, **Unavailable** or **Blocked**, plus an optional staff-only note (e.g. "roof leak").
++2. Set the first and last day (a single day is fine).
++3. Click the cabanas on the map, then **Block selected cabanas**.
++
++Blocked cabanas show hatched (⛔) on the staff map, with the reason in the tooltip, and are listed under the map. To unblock one, click it on the map or press **Remove** in the list.
++
++**What a block does**
++
++- Guests see the cabana as **not available** on the booking page for those dates; the reason is never shown to them.
++- The database refuses to put a booking on a blocked cabana for a blocked date — from the website, the staff booking form or the Cabana Map — and won't let a booking that holds cabanas be moved onto a date when one of them is blocked.
++- Bookings already on the cabana before it was blocked keep it. Staff are warned when blocking, and those bookings show **⚠** next to the cabana on the dashboard and in the Cabana Map, so the party can be moved.
++- Two blocks on the same cabana can't overlap; shorten or remove the old one first.
++- Every block and unblock is in the activity log ("Cabana blocked" / "Cabana block removed").
+diff --git a/assets/css/style.css b/assets/css/style.css
+index 9579c49..bd8449e 100644
+--- a/assets/css/style.css
++++ b/assets/css/style.css
+@@ -523,12 +523,26 @@ form.inquiry .field-hint { font-size: 0.8rem; color: var(--ink-soft); margin-top
+   color: #fff; font-weight: 700; font-size: 0.85em;
+   text-shadow: 0 1px 3px rgba(0,0,0,0.7);
+ }
++.cabana-hotspot.is-blocked {
++  cursor: not-allowed;
++  background: repeating-linear-gradient(45deg, rgba(107,101,89,0.92), rgba(107,101,89,0.92) 3px, rgba(125,119,108,0.92) 3px, rgba(125,119,108,0.92) 6px);
++  border-color: #3e3a33;
++}
++.cabana-hotspot.is-blocked:not(:disabled) { cursor: pointer; }
++.cabana-hotspot.is-blocked::after {
++  content: "\26D4";
++  position: absolute; inset: 0;
++  display: flex; align-items: center; justify-content: center;
++  font-size: 0.7em;
++}
++.cabana-hotspot.is-blocked.is-selected { box-shadow: 0 0 0 3px rgba(238,231,214,0.9), 0 0 0 5px var(--ink); }
+ .cabana-legend { display: flex; flex-wrap: wrap; gap: 18px; margin-top: 20px; font-size: 0.82rem; color: var(--ink-soft); }
+ .cabana-legend span { display: inline-flex; align-items: center; gap: 8px; }
+ .cabana-swatch { width: 16px; height: 16px; border-radius: 4px; display: inline-block; background: #1a788c; }
+ .cabana-swatch.cabana-dining_cabana { background: #1a788c; }
+ .cabana-swatch.cabana-lounge_cabana { background: #d68634; }
+ .cabana-swatch.is-held { background: rgba(18,32,29,0.58); position: relative; }
++.cabana-swatch.is-blocked { background: repeating-linear-gradient(45deg, #6b6559, #6b6559 3px, #7d776c 3px, #7d776c 6px); }
+ .cabana-swatch.is-selected { background: rgba(255,255,255,0.18); border: 2px solid var(--ink); }
+ .cabana-fineprint { font-size: 0.78rem; margin-top: -2px; }
+ .pet-policy { margin: 10px 0; border: 1px solid var(--line); border-radius: 8px; padding: 10px 14px; background: var(--surface); }
+diff --git a/assets/js/booking.js b/assets/js/booking.js
+index 88611e7..08b4405 100644
+--- a/assets/js/booking.js
++++ b/assets/js/booking.js
+@@ -523,7 +523,20 @@
+         var row = Array.isArray(rows) ? rows[0] : rows;
+         showSuccess(payload, false, row && row.order_code);
+       })
+-      .catch(function () {
++      .catch(function (err) {
++        // A cabana can be blocked (or taken) between loading the map and
++        // sending — say so plainly and refresh the map instead of the
++        // generic "something went wrong".
++        if (err && /Cabana not available/i.test(err.message || "")) {
++          statusEl.hidden = false;
++          statusEl.className = "form-status form-status-error";
++          statusEl.textContent = "Sorry — one of the cabanas you picked is no longer available on that date. The map has been refreshed; please pick another and send again.";
++          submitBtn.disabled = false;
++          submitBtn.textContent = "Send Request";
++          clearSelection();
++          refreshCabanaStep();
++          return;
++        }
+         showError(payload, bill);
+       });
+   });
+diff --git a/assets/js/cabana-map.js b/assets/js/cabana-map.js
+index 7ec9dbb..50fc8c6 100644
+--- a/assets/js/cabana-map.js
++++ b/assets/js/cabana-map.js
+@@ -39,8 +39,9 @@
+       });
+   }
+ 
+-  // Returns a Set of cabana_id strings that are already held (booked, not
+-  // declined) for the given YYYY-MM-DD date.
++  // Returns a Set of cabana_id strings that can't be booked for the given
++  // YYYY-MM-DD date: booked (not declined/expired) or blocked by staff.
++  // The public view never says which — guests just see "not available".
+   function loadHolds(sb, dateStr) {
+     if (!dateStr) return Promise.resolve(new Set());
+     return sb
+@@ -75,7 +76,10 @@
+   // planner, for moving a party). highlightId: one tile drawn as "picked up".
+   // heldInfo (optional): { [cabana_id]: "extra text for the tile's tooltip" }
+   // — used by the staff dashboard to show who's holding a cabana; the public
+-  // booking page omits it and gets the generic "already booked" tooltip.
++  // booking page omits it and gets the generic "not available" tooltip.
++  // blockedSet / blockedInfo (optional, staff only): cabanas staff have
++  // blocked (under repair, unavailable…) — drawn hatched, with the reason in
++  // the tooltip. clickableBlocked lets the planner click them to unblock.
+   // selectedIds (optional): a Set/array of cabana ids to show as selected —
+   // a booking can include more than one cabana, so this is plural. onSelect
+   // fires on every click (including on an already-selected tile, so the
+@@ -84,6 +88,8 @@
+     var cabanas = opts.cabanas || [];
+     var heldSet = opts.heldSet || new Set();
+     var heldInfo = opts.heldInfo || null;
++    var blockedSet = opts.blockedSet || new Set();
++    var blockedInfo = opts.blockedInfo || {};
+     var selectedIds = opts.selectedIds ? new Set(opts.selectedIds) : new Set();
+     var onSelect = opts.onSelect || function () {};
+     var imageSrc = opts.imageSrc || MAP_IMAGE_SRC_DEFAULT;
+@@ -122,19 +128,20 @@
+         skipped++;
+         return;
+       }
+-      var isHeld = heldSet.has(c.id);
++      var isBlocked = blockedSet.has(c.id);
++      var isHeld = heldSet.has(c.id) && !isBlocked;
+       var isSelected = selectedIds.has(c.id) || (opts.highlightId && opts.highlightId === c.id);
+       var tile = document.createElement("button");
+       tile.type = "button";
+       tile.className =
+-        "cabana-hotspot cabana-" + c.cabana_type + (isHeld ? " is-held" : "") + (isSelected ? " is-selected" : "");
++        "cabana-hotspot cabana-" + c.cabana_type + (isHeld ? " is-held" : "") + (isBlocked ? " is-blocked" : "") + (isSelected ? " is-selected" : "");
+       tile.style.left = layout.left + "%";
+       tile.style.top = layout.top + "%";
+       tile.style.width = layout.width + "%";
+       tile.style.height = layout.height + "%";
+-      var heldNote = isHeld ? (heldInfo && heldInfo[c.id] ? heldInfo[c.id] : "already booked for this date") : null;
+-      tile.title = c.label + (isHeld ? " — " + heldNote : " — available");
+-      tile.disabled = isHeld && !opts.clickableHeld;
++      var heldNote = isHeld ? (heldInfo && heldInfo[c.id] ? heldInfo[c.id] : "not available on this date") : null;
++      tile.title = c.label + (isBlocked ? " — " + (blockedInfo[c.id] || "blocked") : isHeld ? " — " + heldNote : " — available");
++      tile.disabled = (isHeld && !opts.clickableHeld) || (isBlocked && !opts.clickableBlocked);
+       tile.setAttribute("aria-pressed", isSelected ? "true" : "false");
+       tile.setAttribute("aria-label", c.label);
+       tile.addEventListener("click", function () {
+@@ -150,7 +157,8 @@
+     legend.innerHTML =
+       '<span><i class="cabana-swatch cabana-dining_cabana"></i> Dining Cabana</span>' +
+       '<span><i class="cabana-swatch cabana-lounge_cabana"></i> Lounge Cabana</span>' +
+-      '<span><i class="cabana-swatch is-held"></i> Already booked</span>' +
++      '<span><i class="cabana-swatch is-held"></i> ' + (heldInfo ? "Already booked" : "Not available") + '</span>' +
++      (opts.blockedSet ? '<span><i class="cabana-swatch is-blocked"></i> Blocked by staff</span>' : "") +
+       '<span><i class="cabana-swatch is-selected"></i> ' + (opts.selectedLabel || "Your selection") + '</span>';
+     container.appendChild(legend);
+ 
+diff --git a/assets/js/staff-activity.js b/assets/js/staff-activity.js
+index 1ccaac9..ab198f8 100644
+--- a/assets/js/staff-activity.js
++++ b/assets/js/staff-activity.js
+@@ -95,7 +95,8 @@
+     return "until " + (da === db ? sb2.split(" ").slice(2).join(" ") : sb2);
+   }
+   var ACTION_WORDS = { insert: "Created booking", update: "Edited booking", "delete": "Deleted booking",
+-    cabana_added: "Added a cabana", cabana_removed: "Removed a cabana" };
++    cabana_added: "Added a cabana", cabana_removed: "Removed a cabana",
++    cabana_blocked: "Blocked a cabana", cabana_unblocked: "Removed a cabana block", cabana_block_changed: "Changed a cabana block" };
+ 
+   // ---------------------------------------------------------------- modal
+   var backdrop = $("teamModalBackdrop"), teamBody = $("teamBody"), histBody = $("teamHistBody");
+diff --git a/assets/js/staff-dashboard.js b/assets/js/staff-dashboard.js
+index 4725369..860f0ad 100644
+--- a/assets/js/staff-dashboard.js
++++ b/assets/js/staff-dashboard.js
+@@ -102,6 +102,9 @@
+     villa_changed: "Villa changed",
+     villa_blocked: "Villa blocked",
+     villa_unblocked: "Villa block removed",
++    cabana_blocked: "Cabana blocked",
++    cabana_unblocked: "Cabana block removed",
++    cabana_block_changed: "Cabana block changed",
+   };
+ 
+   var loginScreen = document.getElementById("loginScreen");
+@@ -185,6 +188,37 @@
+     });
+   }
+ 
++  // ---------- cabana blocks (booking-v20-cabana-blocks.sql) ----------
++  // Staff can take a cabana off sale for a date range: under repair,
++  // unavailable or blocked. The public map greys them out; the database
++  // refuses to put a booking on a blocked cabana-day.
++  var BLOCK_REASONS = { under_repair: "Under repair", unavailable: "Unavailable", blocked: "Blocked" };
++  var cabanaBlocks = [];
++  function loadCabanaBlocks() {
++    return sb.from("cabana_blocks").select("*").order("start_date", { ascending: true }).then(function (res) {
++      // Before booking-v20 is run the table doesn't exist: carry on without blocks.
++      cabanaBlocks = res.error ? [] : (res.data || []);
++      return cabanaBlocks;
++    }, function () { cabanaBlocks = []; return cabanaBlocks; });
++  }
++  function blockDates(b) {
++    return b.start_date === b.end_date ? fmtDate(b.start_date) : fmtDate(b.start_date) + " → " + fmtDate(b.end_date);
++  }
++  function blockText(b) {
++    return (BLOCK_REASONS[b.reason] || "Blocked") + (b.note ? ": " + b.note : "") + " (" + blockDates(b) + ")";
++  }
++  function blocksForDate(dateStr) {
++    var set = new Set(), info = {}, byCabana = {};
++    if (!dateStr) return { set: set, info: info, byCabana: byCabana };
++    cabanaBlocks.forEach(function (b) {
++      if (dateStr < b.start_date || dateStr > b.end_date) return;
++      set.add(b.cabana_id);
++      byCabana[b.cabana_id] = b;
++      info[b.cabana_id] = blockText(b);
++    });
++    return { set: set, info: info, byCabana: byCabana };
++  }
++
+   function showDash() {
+     loginScreen.style.display = "none";
+     dashScreen.style.display = "block";
+@@ -192,7 +226,7 @@
+     populateStaticFilterOptions();
+     // Wait until every dashboard script (villas, email panel) has run.
+     var go = function () {
+-      Promise.all([loadCabanaOptions(), window.VBRVillas ? window.VBRVillas.init().catch(function () {}) : null]).then(loadBookings);
++      Promise.all([loadCabanaOptions(), loadCabanaBlocks(), window.VBRVillas ? window.VBRVillas.init().catch(function () {}) : null]).then(loadBookings);
+     };
+     if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", go); else go();
+   }
+@@ -600,12 +634,18 @@
+     if (!assignedIds.length) { td.innerHTML = '<span class="muted">—</span>'; return; }
+     var chipWrap = document.createElement("div");
+     chipWrap.className = "cabana-cell-chips";
++    var rowBlocks = releasesCabanas(r.status) ? null : blocksForDate(r.check_in);
+     assignedIds.forEach(function (id) {
+       var c = cabanasById[id];
+       var chip = document.createElement("span");
+       chip.className = "cabana-mini-chip";
+       chip.style.paddingRight = "10px";
+       chip.textContent = c ? c.label.replace(/^Section /, "") : "Unknown cabana";
++      if (rowBlocks && rowBlocks.set.has(id)) {
++        chip.classList.add("is-blocked-conflict");
++        chip.textContent = "⚠ " + chip.textContent;
++        chip.title = "This cabana is blocked on this date — " + rowBlocks.info[id] + ". Move the party in the Cabana Map.";
++      }
+       chipWrap.appendChild(chip);
+     });
+     td.appendChild(chipWrap);
+@@ -1173,7 +1213,9 @@
+         info[bc.cabana_id] = "booked by " + (r.guest_name || "a guest") + (r.order_code ? " (" + r.order_code + ")" : "");
+       });
+     });
+-    return { held: held, info: info };
++    var bl = blocksForDate(dateStr);
++    bl.set.forEach(function (id) { held.add(id); info[id] = bl.info[id]; });
++    return { held: held, info: info, blocked: bl.set, blockedInfo: bl.info };
+   }
+ 
+   function renderModalSelected() {
+@@ -1214,17 +1256,26 @@
+     var dateStr = addDateEl.value;
+     var h = holdsForDate(dateStr);
+     // If the date changed and a picked cabana is now taken, drop it.
+-    var dropped = modalCabanaIds.filter(function (id) { return h.held.has(id); });
+-    if (dropped.length) modalCabanaIds = modalCabanaIds.filter(function (id) { return !h.held.has(id); });
++    // A booking's own cabana that was blocked after it was booked stays put
++    // (staff move it on purpose); anything else that's taken is dropped.
++    var ownBlocked = editingRow && dateStr === editingRow.check_in
++      ? (editingRow.booking_cabanas || []).map(function (bc) { return bc.cabana_id; }).filter(function (id) { return h.blocked.has(id); })
++      : [];
++    var dropped = modalCabanaIds.filter(function (id) { return h.held.has(id) && ownBlocked.indexOf(id) === -1; });
++    if (dropped.length) modalCabanaIds = modalCabanaIds.filter(function (id) { return dropped.indexOf(id) === -1; });
+     addMapStatus.textContent = dateStr
+       ? (dropped.length
+           ? dropped.length + " picked cabana(s) are already booked on this date and were removed — pick another."
+-          : "Showing availability for " + fmtDate(dateStr) + ". Hover a taken cabana to see who has it.")
++          : ownBlocked.length
++            ? "Heads-up: " + ownBlocked.map(cabLabel).join(", ") + " is now blocked on this date (" + ownBlocked.map(function (id) { return h.blockedInfo[id]; }).join("; ") + "). Pick another cabana for this party."
++            : "Showing availability for " + fmtDate(dateStr) + ". Hover a taken cabana to see who has it.")
+       : "Pick a preferred date to see which cabanas are free that day.";
+     window.VBRCabanaMap.render(addMapEl, {
+       cabanas: cabanasList,
+       heldSet: h.held,
+       heldInfo: h.info,
++      blockedSet: h.blocked,
++      blockedInfo: h.blockedInfo,
+       selectedIds: modalCabanaIds,
+       crop: { top: 0.33, bottom: 0.56 },
+       onSelect: function (c) {
+@@ -1538,7 +1589,15 @@
+       saveBookingBtn.textContent = "Saving…";
+ 
+       var upload = file ? uploadProof(r, file) : Promise.resolve(null);
++      var removedFirst = ("check_in" in patch || "status" in patch)
++        ? beforeCabanas.filter(function (id) { return afterCabanas.indexOf(id) === -1; }) : [];
++      var keptBefore = beforeCabanas.filter(function (id) { return removedFirst.indexOf(id) === -1; });
+       upload
++        .then(function (path) {
++          if (!removedFirst.length) return path;
++          return sb.from("booking_cabanas").delete().eq("booking_id", r.id).in("cabana_id", removedFirst)
++            .then(function (res) { if (res.error) throw res.error; return path; });
++        })
+         .then(function (path) {
+           var save = !Object.keys(patch).length ? Promise.resolve()
+             : sb.from("booking_requests").update(patch).eq("id", r.id).then(function (res) { if (res.error) throw res.error; });
+@@ -1546,7 +1605,7 @@
+           if (!path) return save;
+           return save.then(function () { return attachProof(r.id, path, document.getElementById("addPayPortion")); });
+         })
+-        .then(function () { return syncCabanas(r.id, beforeCabanas, afterCabanas); })
++        .then(function () { return syncCabanas(r.id, keptBefore, afterCabanas); })
+         .then(function () {
+           if (!notify) return null;
+           var mv = dtMail ? dtMail.value() : { message: "" };
+@@ -1617,6 +1676,8 @@
+   var plannerList = $("plannerList");
+   var plannerSource = null;   // { cabanaId, row }
+   var plannerPending = null;  // { from, to, row, other }
++  var blockMode = false;      // "Block cabanas…" panel open: map clicks pick cabanas to block
++  var blockPicked = [];       // cabana ids picked for the new block
+ 
+   function plannerHolds(dateStr) {
+     var byCabana = {};
+@@ -1633,12 +1694,22 @@
+     var dateStr = plannerDateEl.value;
+     var holds = plannerHolds(dateStr);
+     var heldSet = new Set(Object.keys(holds));
++    var blocks = blocksForDate(dateStr);
++    // Parties already sitting on a cabana that was blocked after they booked.
++    var conflicts = Object.keys(holds).filter(function (id) { return blocks.set.has(id); });
+     var info = {};
+     Object.keys(holds).forEach(function (id) {
+       var r = holds[id];
+       info[id] = (r.guest_name || "Guest") + (r.order_code ? " (" + r.order_code + ")" : "") + " · " + partySize(r) + " pax";
+     });
+-    if (plannerPending) {
++    if (blockMode) {
++      plannerConfirm.classList.remove("open");
++      plannerStatus.className = "planner-status is-pending";
++      plannerStatus.textContent = blockPicked.length
++        ? blockPicked.length + " cabana(s) picked to block. Click more on the map, or click one again to un-pick it."
++        : "Click the cabanas you want to block on the map.";
++      renderBlockPicked();
++    } else if (plannerPending) {
+       plannerStatus.className = "planner-status is-pending";
+       plannerStatus.textContent = plannerPending.other
+         ? "Swap: " + plannerPending.row.guest_name + " → " + cabLabel(plannerPending.to) + ", and " + plannerPending.other.guest_name + " → " + cabLabel(plannerPending.from) + "?"
+@@ -1649,19 +1720,46 @@
+       plannerStatus.className = "planner-status";
+       plannerStatus.textContent = plannerSource
+         ? "Picked up " + cabLabel(plannerSource.cabanaId) + " (" + plannerSource.row.guest_name + "). Click a free cabana to move it there, another booked cabana to swap, or the same one to put it back."
+-        : (heldSet.size ? heldSet.size + " cabana(s) booked on " + fmtDate(dateStr) + ". Hover to see who has each; click one to move it." : "No cabanas booked on " + fmtDate(dateStr) + ".");
++        : (heldSet.size ? heldSet.size + " cabana(s) booked on " + fmtDate(dateStr) + ". Hover to see who has each; click one to move it." : "No cabanas booked on " + fmtDate(dateStr) + ".") +
++          (blocks.set.size ? " " + blocks.set.size + " blocked (hatched) — click one to remove its block." : "");
++    }
++    if (conflicts.length && !plannerPending) {
++      var warn = document.createElement("span");
++      warn.className = "planner-warn";
++      warn.textContent = "⚠ " + conflicts.map(function (id) { return (holds[id].guest_name || "A guest") + " is on " + cabLabel(id); }).join("; ") +
++        " — blocked on this date. Pick that cabana up and move the party to a free one.";
++      plannerStatus.appendChild(warn);
+     }
+     window.VBRCabanaMap.render(plannerMapEl, {
+       cabanas: cabanasList,
+       heldSet: heldSet,
+       heldInfo: info,
++      blockedSet: blocks.set,
++      blockedInfo: blocks.info,
+       clickableHeld: true,
+-      highlightId: plannerPending ? plannerPending.to : (plannerSource ? plannerSource.cabanaId : null),
+-      selectedLabel: "Picked up / moving to",
++      clickableBlocked: true,
++      selectedIds: blockMode ? blockPicked : null,
++      highlightId: blockMode ? null : (plannerPending ? plannerPending.to : (plannerSource ? plannerSource.cabanaId : null)),
++      selectedLabel: blockMode ? "Picked to block" : "Picked up / moving to",
+       crop: { top: 0.33, bottom: 0.56 },
+       onSelect: function (c) {
+         if (plannerPending) return;
+         var holder = holds[c.id];
++        var block = blocks.byCabana[c.id];
++        if (blockMode) {
++          if (block) { plannerStatus.textContent = cabLabel(c.id) + " is already blocked on this date (" + blocks.info[c.id] + ")."; return; }
++          var k = blockPicked.indexOf(c.id);
++          if (k >= 0) blockPicked.splice(k, 1); else blockPicked.push(c.id);
++          renderPlanner();
++          return;
++        }
++        if (block) {
++          if (plannerSource) {
++            plannerStatus.textContent = cabLabel(c.id) + " is blocked on this date (" + blocks.info[c.id] + ") — pick a free cabana.";
++            return;
++          }
++          if (!holder) { removeBlock(block); return; }
++        }
+         if (!plannerSource) {
+           if (holder) plannerSource = { cabanaId: c.id, row: holder };
+         } else if (c.id === plannerSource.cabanaId) {
+@@ -1687,7 +1785,116 @@
+       });
+       plannerList.appendChild(tr);
+     });
++    renderBlockList(dateStr);
++  }
++
++  // ---------- cabana blocks: list, add, remove ----------
++  function renderBlockList(dateStr) {
++    var ul = $("plannerBlockList");
++    if (!ul) return;
++    var upcoming = cabanaBlocks.filter(function (b) { return b.end_date >= (dateStr || todayStr()); })
++      .sort(function (a, b) { return a.start_date < b.start_date ? -1 : a.start_date > b.start_date ? 1 : (cabLabel(a.cabana_id) < cabLabel(b.cabana_id) ? -1 : 1); });
++    $("plannerBlocksHint").textContent = upcoming.length ? "on or after " + fmtDate(dateStr) : "";
++    ul.innerHTML = upcoming.length ? "" : '<li class="muted">No cabanas blocked on or after ' + esc(fmtDate(dateStr)) + ".</li>";
++    upcoming.forEach(function (b) {
++      var li = document.createElement("li");
++      if (dateStr >= b.start_date && dateStr <= b.end_date) li.className = "is-today";
++      li.innerHTML = '<span><span class="block-reason r-' + esc(b.reason) + '">' + esc(BLOCK_REASONS[b.reason] || "Blocked") + "</span><b>" + esc(cabLabel(b.cabana_id)) + "</b> · " +
++        esc(blockDates(b)) + (b.note ? " · " + esc(b.note) : "") +
++        '<span class="block-meta">' + (b.created_by_email ? "by " + esc(b.created_by_email) + " · " : "") + esc(fmtDateTime(b.created_at)) + "</span></span>" +
++        '<button class="btn-sm ghost" type="button">Remove</button>';
++      li.querySelector("button").addEventListener("click", function () { removeBlock(b); });
++      ul.appendChild(li);
++    });
++  }
++
++  function removeBlock(b) {
++    if (!confirm("Remove the block on " + cabLabel(b.cabana_id) + "?\n\n" + blockText(b) + "\n\nIt becomes bookable again on all of those dates.")) return;
++    sb.from("cabana_blocks").delete().eq("id", b.id).then(function (res) {
++      if (res.error) { alert("Couldn't remove the block: " + res.error.message); return; }
++      loadCabanaBlocks().then(function () { renderPlanner(); render(); });
++    });
++  }
++
++  function renderBlockPicked() {
++    var wrap = $("blkCabPicked");
++    wrap.innerHTML = "";
++    if (!blockPicked.length) { wrap.innerHTML = '<span class="muted" style="font-size:0.8rem;">No cabana picked yet.</span>'; return; }
++    blockPicked.forEach(function (id) {
++      var chip = document.createElement("span");
++      chip.className = "cabana-mini-chip";
++      chip.textContent = cabLabel(id);
++      var rm = document.createElement("button");
++      rm.type = "button";
++      rm.className = "cabana-mini-remove";
++      rm.textContent = "×";
++      rm.addEventListener("click", function () { blockPicked = blockPicked.filter(function (x) { return x !== id; }); renderPlanner(); });
++      chip.appendChild(rm);
++      wrap.appendChild(chip);
++    });
++  }
++
++  function openBlockMode() {
++    blockMode = true;
++    blockPicked = [];
++    plannerSource = null; plannerPending = null;
++    $("blkCabFrom").value = plannerDateEl.value || todayStr();
++    $("blkCabTo").value = plannerDateEl.value || todayStr();
++    $("blkCabNote").value = "";
++    $("blkCabError").style.display = "none";
++    $("plannerBlockPanel").hidden = false;
++    renderPlanner();
++  }
++  function closeBlockMode() {
++    blockMode = false;
++    blockPicked = [];
++    $("plannerBlockPanel").hidden = true;
++    renderPlanner();
++  }
++
++  function saveBlocks() {
++    var err = $("blkCabError");
++    var fail = function (m) { err.textContent = m; err.style.display = "block"; };
++    err.style.display = "none";
++    var from = $("blkCabFrom").value, to = $("blkCabTo").value;
++    var reason = $("blkCabReason").value, note = $("blkCabNote").value.trim();
++    if (!blockPicked.length) return fail("Pick at least one cabana on the map.");
++    if (!from || !to) return fail("Set the first and last day of the block.");
++    if (to < from) return fail("The last day can't be before the first day.");
++    // Bookings already on those cabanas in that range keep them — warn first.
++    var hits = [];
++    allRows.forEach(function (r) {
++      if (!r.check_in || r.check_in < from || r.check_in > to || releasesCabanas(r.status)) return;
++      (r.booking_cabanas || []).forEach(function (bc) {
++        if (blockPicked.indexOf(bc.cabana_id) >= 0) hits.push(fmtDate(r.check_in) + " · " + cabLabel(bc.cabana_id) + " · " + (r.guest_name || "Guest") + (r.order_code ? " (" + r.order_code + ")" : ""));
++      });
++    });
++    if (hits.length && !confirm(hits.length + " existing booking(s) are on these cabanas in that range:\n\n" + hits.slice(0, 12).join("\n") + (hits.length > 12 ? "\n…and " + (hits.length - 12) + " more" : "") +
++        "\n\nThey keep their cabana until you move them (they'll be flagged ⚠ on the dashboard). Block anyway?")) return;
++    var btn = $("blkCabSave");
++    btn.disabled = true;
++    var rows = blockPicked.map(function (id) { return { cabana_id: id, start_date: from, end_date: to, reason: reason, note: note || null }; });
++    sb.from("cabana_blocks").insert(rows).then(function (res) {
++      btn.disabled = false;
++      if (res.error) {
++        return fail(/overlap|exclusion|conflict|cabana_blocks_no_overlap/i.test(res.error.message)
++          ? "One of those cabanas already has a block on some of those dates. Remove or shorten that block first (list below the map)."
++          : /relation .*cabana_blocks.* does not exist/i.test(res.error.message)
++            ? "Cabana blocks aren't set up in the database yet — run supabase-functions/booking-v20-cabana-blocks.sql first."
++            : "Couldn't save the block: " + res.error.message);
++      }
++      blockMode = false;
++      blockPicked = [];
++      $("plannerBlockPanel").hidden = true;
++      loadCabanaBlocks().then(function () { renderPlanner(); render(); });
++    });
+   }
++  $("plannerBlockBtn").addEventListener("click", function () { if (blockMode) closeBlockMode(); else openBlockMode(); });
++  $("blkCabCancel").addEventListener("click", closeBlockMode);
++  $("blkCabSave").addEventListener("click", saveBlocks);
++  $("blkCabFrom").addEventListener("change", function () {
++    if ($("blkCabFrom").value && (!$("blkCabTo").value || $("blkCabTo").value < $("blkCabFrom").value)) $("blkCabTo").value = $("blkCabFrom").value;
++  });
+ 
+   function emailMove(r, beforeIds, afterIds) {
+     if (!$("plannerNotify").checked || !EMAIL_RE.test(String(r.guest_email || "").trim())) return Promise.resolve();
+@@ -1738,8 +1945,10 @@
+   $("plannerBtn").addEventListener("click", function () {
+     if (!plannerDateEl.value) plannerDateEl.value = todayStr();
+     plannerSource = null; plannerPending = null;
++    blockMode = false; blockPicked = []; $("plannerBlockPanel").hidden = true;
+     plannerBackdrop.classList.add("open");
+     renderPlanner();
++    loadCabanaBlocks().then(renderPlanner); // pick up blocks another staff member just made
+   });
+   $("closePlannerBtn").addEventListener("click", function () { plannerBackdrop.classList.remove("open"); });
+   plannerBackdrop.addEventListener("click", function (e) { if (e.target === plannerBackdrop) plannerBackdrop.classList.remove("open"); });
+@@ -1835,6 +2044,12 @@
+       return esc((LOG_ACTION_LABELS[entry.action] || entry.action) + ": " + (ch.from_villa ? ch.from_villa + " → " : "") + (ch.villa || "a villa") +
+         (ch.check_in ? " (" + fmtDate(ch.check_in) + " → " + fmtDate(ch.check_out) + ")" : "") + (ch.reason ? " — " + ch.reason : ""));
+     }
++    if (entry.action && entry.action.indexOf("cabana_block") === 0 || entry.action === "cabana_unblocked") {
++      var bc = entry.changes || {};
++      return esc((LOG_ACTION_LABELS[entry.action] || entry.action) + ": " + (bc.cabana || "a cabana") +
++        (bc.start_date ? " (" + fmtDate(bc.start_date) + (bc.end_date && bc.end_date !== bc.start_date ? " → " + fmtDate(bc.end_date) : "") + ")" : "") +
++        (bc.reason ? " — " + bc.reason : "") + (bc.note ? ": " + bc.note : ""));
++    }
+     if (entry.action === "cabana_added" || entry.action === "cabana_removed") {
+       var cid = entry.changes && entry.changes.cabana_id;
+       var label = cid && cabanasById[cid] ? cabanasById[cid].label : "a cabana";
+diff --git a/book-stay/index.html b/book-stay/index.html
+index ab6ddde..c8c8c73 100644
+--- a/book-stay/index.html
++++ b/book-stay/index.html
+@@ -9,7 +9,7 @@
+ <link rel="preconnect" href="https://fonts.googleapis.com">
+ <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+ <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400..600;1,9..144,400..600&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+-<link rel="stylesheet" href="../assets/css/style.css?v=d3f7f41687">
++<link rel="stylesheet" href="../assets/css/style.css?v=9895af2405">
+ </head>
+ <body>
+ <header class="site-header no-hero">
+diff --git a/book/index.html b/book/index.html
+index 87731a9..c9ea815 100644
+--- a/book/index.html
++++ b/book/index.html
+@@ -9,7 +9,7 @@
+ <link rel="preconnect" href="https://fonts.googleapis.com">
+ <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+ <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400..600;1,9..144,400..600&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+-<link rel="stylesheet" href="../assets/css/style.css?v=d3f7f41687">
++<link rel="stylesheet" href="../assets/css/style.css?v=9895af2405">
+ </head>
+ <body>
+ <header class="site-header no-hero">
+@@ -351,9 +351,9 @@
+ 
+ <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+ <script src="../assets/js/booking-config.js?v=c116a3a0ae"></script>
+-<script src="../assets/js/cabana-map.js?v=8f4f80dcb3"></script>
++<script src="../assets/js/cabana-map.js?v=7ba2eabd47"></script>
+ <script src="../assets/js/pricing.js?v=89ca03abac"></script>
+-<script src="../assets/js/booking.js?v=00203cc53b"></script>
++<script src="../assets/js/booking.js?v=cfea25a105"></script>
+ 
+ <footer class="site-footer">
+   <div class="wrap">
+diff --git a/contact/index.html b/contact/index.html
+index b7ed0b1..f42435d 100644
+--- a/contact/index.html
++++ b/contact/index.html
+@@ -9,7 +9,7 @@
+ <link rel="preconnect" href="https://fonts.googleapis.com">
+ <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+ <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400..600;1,9..144,400..600&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+-<link rel="stylesheet" href="../assets/css/style.css?v=d3f7f41687">
++<link rel="stylesheet" href="../assets/css/style.css?v=9895af2405">
+ </head>
+ <body>
+ <header class="site-header no-hero">
+diff --git a/corporate/index.html b/corporate/index.html
+index 5bd67f2..795651f 100644
+--- a/corporate/index.html
++++ b/corporate/index.html
+@@ -9,7 +9,7 @@
+ <link rel="preconnect" href="https://fonts.googleapis.com">
+ <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+ <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400..600;1,9..144,400..600&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+-<link rel="stylesheet" href="../assets/css/style.css?v=d3f7f41687">
++<link rel="stylesheet" href="../assets/css/style.css?v=9895af2405">
+ </head>
+ <body>
+ <header class="site-header no-hero">
+diff --git a/day-packages/index.html b/day-packages/index.html
+index 6cb403a..c616478 100644
+--- a/day-packages/index.html
++++ b/day-packages/index.html
+@@ -9,7 +9,7 @@
+ <link rel="preconnect" href="https://fonts.googleapis.com">
+ <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+ <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400..600;1,9..144,400..600&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+-<link rel="stylesheet" href="../assets/css/style.css?v=d3f7f41687">
++<link rel="stylesheet" href="../assets/css/style.css?v=9895af2405">
+ </head>
+ <body>
+ <header class="site-header no-hero">
+@@ -443,9 +443,9 @@
+ 
+ <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+ <script src="../assets/js/booking-config.js?v=c116a3a0ae"></script>
+-<script src="../assets/js/cabana-map.js?v=8f4f80dcb3"></script>
++<script src="../assets/js/cabana-map.js?v=7ba2eabd47"></script>
+ <script src="../assets/js/pricing.js?v=89ca03abac"></script>
+-<script src="../assets/js/booking.js?v=00203cc53b"></script>
++<script src="../assets/js/booking.js?v=cfea25a105"></script>
+ 
+ <footer class="site-footer">
+   <div class="wrap">
+diff --git a/dining/index.html b/dining/index.html
+index 9a07667..305bb84 100644
+--- a/dining/index.html
++++ b/dining/index.html
+@@ -9,7 +9,7 @@
+ <link rel="preconnect" href="https://fonts.googleapis.com">
+ <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+ <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400..600;1,9..144,400..600&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+-<link rel="stylesheet" href="../assets/css/style.css?v=d3f7f41687">
++<link rel="stylesheet" href="../assets/css/style.css?v=9895af2405">
+ </head>
+ <body>
+ <header class="site-header no-hero">
+diff --git a/experiences/index.html b/experiences/index.html
+index 45888ab..bdb50cc 100644
+--- a/experiences/index.html
++++ b/experiences/index.html
+@@ -9,7 +9,7 @@
+ <link rel="preconnect" href="https://fonts.googleapis.com">
+ <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+ <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400..600;1,9..144,400..600&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+-<link rel="stylesheet" href="../assets/css/style.css?v=d3f7f41687">
++<link rel="stylesheet" href="../assets/css/style.css?v=9895af2405">
+ </head>
+ <body>
+ <header class="site-header no-hero">
+diff --git a/faq/index.html b/faq/index.html
+index 067a53b..a05f6d2 100644
+--- a/faq/index.html
++++ b/faq/index.html
+@@ -9,7 +9,7 @@
+ <link rel="preconnect" href="https://fonts.googleapis.com">
+ <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+ <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400..600;1,9..144,400..600&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+-<link rel="stylesheet" href="../assets/css/style.css?v=d3f7f41687">
++<link rel="stylesheet" href="../assets/css/style.css?v=9895af2405">
+ </head>
+ <body>
+ <header class="site-header no-hero">
+diff --git a/gallery/index.html b/gallery/index.html
+index 618cb77..d5ce57f 100644
+--- a/gallery/index.html
++++ b/gallery/index.html
+@@ -9,7 +9,7 @@
+ <link rel="preconnect" href="https://fonts.googleapis.com">
+ <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+ <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400..600;1,9..144,400..600&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+-<link rel="stylesheet" href="../assets/css/style.css?v=d3f7f41687">
++<link rel="stylesheet" href="../assets/css/style.css?v=9895af2405">
+ </head>
+ <body>
+ <header class="site-header no-hero">
+diff --git a/index.html b/index.html
+index 6bf19c7..2ebb6f5 100644
+--- a/index.html
++++ b/index.html
+@@ -9,7 +9,7 @@
+ <link rel="preconnect" href="https://fonts.googleapis.com">
+ <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+ <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400..600;1,9..144,400..600&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+-<link rel="stylesheet" href="assets/css/style.css?v=d3f7f41687">
++<link rel="stylesheet" href="assets/css/style.css?v=9895af2405">
+ </head>
+ <body>
+ <header class="site-header">
+diff --git a/overnight/bamboo-casita/index.html b/overnight/bamboo-casita/index.html
+index a26e8d1..cd76405 100644
+--- a/overnight/bamboo-casita/index.html
++++ b/overnight/bamboo-casita/index.html
+@@ -9,7 +9,7 @@
+ <link rel="preconnect" href="https://fonts.googleapis.com">
+ <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+ <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400..600;1,9..144,400..600&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+-<link rel="stylesheet" href="../../assets/css/style.css?v=d3f7f41687">
++<link rel="stylesheet" href="../../assets/css/style.css?v=9895af2405">
+ </head>
+ <body>
+ <header class="site-header no-hero">
+diff --git a/overnight/bamboo-king-casita/index.html b/overnight/bamboo-king-casita/index.html
+index 065f25a..a9b7ff7 100644
+--- a/overnight/bamboo-king-casita/index.html
++++ b/overnight/bamboo-king-casita/index.html
+@@ -9,7 +9,7 @@
+ <link rel="preconnect" href="https://fonts.googleapis.com">
+ <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+ <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400..600;1,9..144,400..600&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+-<link rel="stylesheet" href="../../assets/css/style.css?v=d3f7f41687">
++<link rel="stylesheet" href="../../assets/css/style.css?v=9895af2405">
+ </head>
+ <body>
+ <header class="site-header no-hero">
+diff --git a/overnight/deluxe-king-casita/index.html b/overnight/deluxe-king-casita/index.html
+index 1e469db..5591c33 100644
+--- a/overnight/deluxe-king-casita/index.html
++++ b/overnight/deluxe-king-casita/index.html
+@@ -9,7 +9,7 @@
+ <link rel="preconnect" href="https://fonts.googleapis.com">
+ <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+ <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400..600;1,9..144,400..600&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+-<link rel="stylesheet" href="../../assets/css/style.css?v=d3f7f41687">
++<link rel="stylesheet" href="../../assets/css/style.css?v=9895af2405">
+ </head>
+ <body>
+ <header class="site-header no-hero">
+diff --git a/overnight/double-queen-casita/index.html b/overnight/double-queen-casita/index.html
+index 557f0bd..bf9da11 100644
+--- a/overnight/double-queen-casita/index.html
++++ b/overnight/double-queen-casita/index.html
+@@ -9,7 +9,7 @@
+ <link rel="preconnect" href="https://fonts.googleapis.com">
+ <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+ <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400..600;1,9..144,400..600&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+-<link rel="stylesheet" href="../../assets/css/style.css?v=d3f7f41687">
++<link rel="stylesheet" href="../../assets/css/style.css?v=9895af2405">
+ </head>
+ <body>
+ <header class="site-header no-hero">
+diff --git a/overnight/index.html b/overnight/index.html
+index 30ebe93..23ad273 100644
+--- a/overnight/index.html
++++ b/overnight/index.html
+@@ -9,7 +9,7 @@
+ <link rel="preconnect" href="https://fonts.googleapis.com">
+ <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+ <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400..600;1,9..144,400..600&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+-<link rel="stylesheet" href="../assets/css/style.css?v=d3f7f41687">
++<link rel="stylesheet" href="../assets/css/style.css?v=9895af2405">
+ </head>
+ <body>
+ <header class="site-header no-hero">
+diff --git a/overnight/louver-window-casita/index.html b/overnight/louver-window-casita/index.html
+index 08d12e5..f0a8708 100644
+--- a/overnight/louver-window-casita/index.html
++++ b/overnight/louver-window-casita/index.html
+@@ -9,7 +9,7 @@
+ <link rel="preconnect" href="https://fonts.googleapis.com">
+ <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+ <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400..600;1,9..144,400..600&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+-<link rel="stylesheet" href="../../assets/css/style.css?v=d3f7f41687">
++<link rel="stylesheet" href="../../assets/css/style.css?v=9895af2405">
+ </head>
+ <body>
+ <header class="site-header no-hero">
+diff --git a/overnight/sunrise-casita/index.html b/overnight/sunrise-casita/index.html
+index bbe65de..c018d14 100644
+--- a/overnight/sunrise-casita/index.html
++++ b/overnight/sunrise-casita/index.html
+@@ -9,7 +9,7 @@
+ <link rel="preconnect" href="https://fonts.googleapis.com">
+ <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+ <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400..600;1,9..144,400..600&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+-<link rel="stylesheet" href="../../assets/css/style.css?v=d3f7f41687">
++<link rel="stylesheet" href="../../assets/css/style.css?v=9895af2405">
+ </head>
+ <body>
+ <header class="site-header no-hero">
+diff --git a/pages_staff.py b/pages_staff.py
+index 3693278..03042fd 100644
+--- a/pages_staff.py
++++ b/pages_staff.py
+@@ -157,6 +157,28 @@ html = """<!doctype html>
+   .planner-list table { min-width: 0; }
+   .planner-list td, .planner-list th { padding: 8px 12px; font-size: 0.8rem; }
+   .planner-list tr.is-source td { background: var(--lagoon-tint); }
++  /* ---------- cabana blocks (under repair / unavailable / blocked) ---------- */
++  .planner-block { border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; margin-bottom: 12px; background: #f6f3ee; }
++  .planner-block-head { font-size: 0.86rem; margin-bottom: 10px; }
++  .planner-block-head .muted { font-size: 0.8rem; margin-left: 6px; }
++  .planner-block-fields { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; margin-bottom: 10px; }
++  .planner-block-fields .grow { flex: 1 1 220px; }
++  .planner-block-fields input[type="text"] { border: 1px solid var(--line); background: var(--sand); font-family: var(--font-body); font-size: 0.82rem; padding: 7px 10px; border-radius: 8px; width: 100%; }
++  .planner-block-actions { display: flex; gap: 8px; margin-top: 10px; }
++  .planner-blocks { margin-top: 16px; }
++  .planner-blocks h4 { font-size: 0.86rem; margin: 0 0 8px; }
++  .planner-blocks h4 .muted { font-weight: 400; font-size: 0.78rem; margin-left: 6px; }
++  .planner-block-list { list-style: none; margin: 0; padding: 0; border: 1px solid var(--line); border-radius: 10px; max-height: 200px; overflow-y: auto; }
++  .planner-block-list li { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 12px; font-size: 0.8rem; border-bottom: 1px solid var(--line); }
++  .planner-block-list li:last-child { border-bottom: none; }
++  .planner-block-list li.is-today { background: #f1ece3; }
++  .planner-block-list li.muted { color: var(--ink-soft); justify-content: flex-start; }
++  .block-reason { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 0.7rem; font-weight: 700; background: #6b6559; color: #fff; margin-right: 6px; white-space: nowrap; }
++  .block-reason.r-under_repair { background: #9c4a3f; }
++  .block-reason.r-unavailable { background: #7d6a3f; }
++  .block-meta { display: block; color: var(--ink-soft); font-size: 0.72rem; margin-top: 2px; }
++  .cabana-mini-chip.is-blocked-conflict { background: #f6dcd6; color: #7a2e24; }
++  .planner-warn { display: block; margin-top: 6px; color: #7a2e24; font-weight: 600; }
+ 
+   .more-row td { text-align: center; padding: 18px 14px; }
+   .more-row .muted { font-size: 0.8rem; margin-left: 8px; }
+@@ -778,7 +800,7 @@ html = """<!doctype html>
+ <div class="modal-backdrop" id="plannerBackdrop">
+   <div class="modal modal-planner">
+     <h2>Cabana Map</h2>
+-    <p style="color:var(--ink-soft); font-size:0.85rem; margin:-10px 0 16px;">See every cabana for a day and move parties around &mdash; e.g. to keep a large group together. Click a booked cabana to pick it up, then click a free cabana to move it there (or another booked cabana to swap the two).</p>
++    <p style="color:var(--ink-soft); font-size:0.85rem; margin:-10px 0 16px;">See every cabana for a day and move parties around &mdash; e.g. to keep a large group together. Click a booked cabana to pick it up, then click a free cabana to move it there (or another booked cabana to swap the two). Use <b>Block cabanas</b> to take cabanas off sale (under repair, unavailable or blocked); click a blocked cabana to remove its block.</p>
+     <div class="planner-bar">
+       <div class="filter-field">
+         <label for="plannerDate">Date</label>
+@@ -787,8 +809,31 @@ html = """<!doctype html>
+       <button class="btn-sm ghost" type="button" id="plannerPrev">&larr; Prev day</button>
+       <button class="btn-sm ghost" type="button" id="plannerToday">Today</button>
+       <button class="btn-sm ghost" type="button" id="plannerNext">Next day &rarr;</button>
++      <button class="btn-sm ghost" type="button" id="plannerBlockBtn" title="Take cabanas off sale: under repair, unavailable or blocked">&#9940; Block cabanas&hellip;</button>
+       <label class="modal-check" style="margin-left:auto;"><input type="checkbox" id="plannerNotify" checked> Email guests whose cabana is moved</label>
+     </div>
++    <div class="planner-block" id="plannerBlockPanel" hidden>
++      <div class="planner-block-head"><b>Block cabanas</b><span class="muted">Click cabanas on the map to pick them. Guests can't book them on these dates; the reason is only shown to staff.</span></div>
++      <div class="planner-block-fields">
++        <div class="filter-field">
++          <label for="blkCabReason">Reason</label>
++          <select id="blkCabReason">
++            <option value="under_repair">Under repair</option>
++            <option value="unavailable">Unavailable</option>
++            <option value="blocked">Blocked</option>
++          </select>
++        </div>
++        <div class="filter-field"><label for="blkCabFrom">From</label><input type="date" id="blkCabFrom"></div>
++        <div class="filter-field"><label for="blkCabTo">To (last day)</label><input type="date" id="blkCabTo"></div>
++        <div class="filter-field grow"><label for="blkCabNote">Note (staff only, optional)</label><input type="text" id="blkCabNote" maxlength="200" placeholder="e.g. Roof leak, waiting for supplier"></div>
++      </div>
++      <div class="cabana-cell-chips" id="blkCabPicked"></div>
++      <div class="planner-block-actions">
++        <button class="btn-sm primary" type="button" id="blkCabSave">Block selected cabanas</button>
++        <button class="btn-sm ghost" type="button" id="blkCabCancel">Cancel</button>
++      </div>
++      <p class="modal-error" id="blkCabError"></p>
++    </div>
+     <div class="planner-status" id="plannerStatus"></div>
+     <div class="planner-confirm" id="plannerConfirm">
+       <button class="btn-sm primary" type="button" id="plannerConfirmBtn">Confirm move</button>
+@@ -801,6 +846,10 @@ html = """<!doctype html>
+         <tbody id="plannerList"></tbody>
+       </table>
+     </div>
++    <div class="planner-blocks">
++      <h4>Blocked cabanas <span class="muted" id="plannerBlocksHint"></span></h4>
++      <ul class="planner-block-list" id="plannerBlockList"></ul>
++    </div>
+     <div class="modal-actions">
+       <button type="button" class="btn-sm ghost" id="closePlannerBtn">Close</button>
+     </div>
+diff --git a/pay/index.html b/pay/index.html
+index 0e47e42..3a19688 100644
+--- a/pay/index.html
++++ b/pay/index.html
+@@ -9,7 +9,7 @@
+ <link rel="preconnect" href="https://fonts.googleapis.com">
+ <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+ <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400..600;1,9..144,400..600&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+-<link rel="stylesheet" href="../assets/css/style.css?v=d3f7f41687">
++<link rel="stylesheet" href="../assets/css/style.css?v=9895af2405">
+ </head>
+ <body>
+ <header class="site-header no-hero">
+diff --git a/privacy-policy.html b/privacy-policy.html
+index 53ad257..1f92262 100644
+--- a/privacy-policy.html
++++ b/privacy-policy.html
+@@ -9,7 +9,7 @@
+ <link rel="preconnect" href="https://fonts.googleapis.com">
+ <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+ <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400..600;1,9..144,400..600&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+-<link rel="stylesheet" href="assets/css/style.css?v=d3f7f41687">
++<link rel="stylesheet" href="assets/css/style.css?v=9895af2405">
+ </head>
+ <body>
+ <header class="site-header no-hero">
+diff --git a/staff/index.html b/staff/index.html
+index 264ba47..b6e869f 100644
+--- a/staff/index.html
++++ b/staff/index.html
+@@ -8,7 +8,7 @@
+ <link rel="preconnect" href="https://fonts.googleapis.com">
+ <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+ <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400..600;1,9..144,400..600&family=Manrope:wght@400;500;600;700;800&family=Poppins:wght@400;500;600&display=swap" rel="stylesheet">
+-<link rel="stylesheet" href="../assets/css/style.css?v=d3f7f41687">
++<link rel="stylesheet" href="../assets/css/style.css?v=9895af2405">
+ <link rel="stylesheet" href="../assets/css/staff-cloudbeds.css?v=944d40d475">
+ <style>
+   body { background: var(--sand); min-height: 100vh; }
+@@ -135,6 +135,28 @@
+   .planner-list table { min-width: 0; }
+   .planner-list td, .planner-list th { padding: 8px 12px; font-size: 0.8rem; }
+   .planner-list tr.is-source td { background: var(--lagoon-tint); }
++  /* ---------- cabana blocks (under repair / unavailable / blocked) ---------- */
++  .planner-block { border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; margin-bottom: 12px; background: #f6f3ee; }
++  .planner-block-head { font-size: 0.86rem; margin-bottom: 10px; }
++  .planner-block-head .muted { font-size: 0.8rem; margin-left: 6px; }
++  .planner-block-fields { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; margin-bottom: 10px; }
++  .planner-block-fields .grow { flex: 1 1 220px; }
++  .planner-block-fields input[type="text"] { border: 1px solid var(--line); background: var(--sand); font-family: var(--font-body); font-size: 0.82rem; padding: 7px 10px; border-radius: 8px; width: 100%; }
++  .planner-block-actions { display: flex; gap: 8px; margin-top: 10px; }
++  .planner-blocks { margin-top: 16px; }
++  .planner-blocks h4 { font-size: 0.86rem; margin: 0 0 8px; }
++  .planner-blocks h4 .muted { font-weight: 400; font-size: 0.78rem; margin-left: 6px; }
++  .planner-block-list { list-style: none; margin: 0; padding: 0; border: 1px solid var(--line); border-radius: 10px; max-height: 200px; overflow-y: auto; }
++  .planner-block-list li { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 12px; font-size: 0.8rem; border-bottom: 1px solid var(--line); }
++  .planner-block-list li:last-child { border-bottom: none; }
++  .planner-block-list li.is-today { background: #f1ece3; }
++  .planner-block-list li.muted { color: var(--ink-soft); justify-content: flex-start; }
++  .block-reason { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 0.7rem; font-weight: 700; background: #6b6559; color: #fff; margin-right: 6px; white-space: nowrap; }
++  .block-reason.r-under_repair { background: #9c4a3f; }
++  .block-reason.r-unavailable { background: #7d6a3f; }
++  .block-meta { display: block; color: var(--ink-soft); font-size: 0.72rem; margin-top: 2px; }
++  .cabana-mini-chip.is-blocked-conflict { background: #f6dcd6; color: #7a2e24; }
++  .planner-warn { display: block; margin-top: 6px; color: #7a2e24; font-weight: 600; }
+ 
+   .more-row td { text-align: center; padding: 18px 14px; }
+   .more-row .muted { font-size: 0.8rem; margin-left: 8px; }
+@@ -756,7 +778,7 @@
+ <div class="modal-backdrop" id="plannerBackdrop">
+   <div class="modal modal-planner">
+     <h2>Cabana Map</h2>
+-    <p style="color:var(--ink-soft); font-size:0.85rem; margin:-10px 0 16px;">See every cabana for a day and move parties around &mdash; e.g. to keep a large group together. Click a booked cabana to pick it up, then click a free cabana to move it there (or another booked cabana to swap the two).</p>
++    <p style="color:var(--ink-soft); font-size:0.85rem; margin:-10px 0 16px;">See every cabana for a day and move parties around &mdash; e.g. to keep a large group together. Click a booked cabana to pick it up, then click a free cabana to move it there (or another booked cabana to swap the two). Use <b>Block cabanas</b> to take cabanas off sale (under repair, unavailable or blocked); click a blocked cabana to remove its block.</p>
+     <div class="planner-bar">
+       <div class="filter-field">
+         <label for="plannerDate">Date</label>
+@@ -765,8 +787,31 @@
+       <button class="btn-sm ghost" type="button" id="plannerPrev">&larr; Prev day</button>
+       <button class="btn-sm ghost" type="button" id="plannerToday">Today</button>
+       <button class="btn-sm ghost" type="button" id="plannerNext">Next day &rarr;</button>
++      <button class="btn-sm ghost" type="button" id="plannerBlockBtn" title="Take cabanas off sale: under repair, unavailable or blocked">&#9940; Block cabanas&hellip;</button>
+       <label class="modal-check" style="margin-left:auto;"><input type="checkbox" id="plannerNotify" checked> Email guests whose cabana is moved</label>
+     </div>
++    <div class="planner-block" id="plannerBlockPanel" hidden>
++      <div class="planner-block-head"><b>Block cabanas</b><span class="muted">Click cabanas on the map to pick them. Guests can't book them on these dates; the reason is only shown to staff.</span></div>
++      <div class="planner-block-fields">
++        <div class="filter-field">
++          <label for="blkCabReason">Reason</label>
++          <select id="blkCabReason">
++            <option value="under_repair">Under repair</option>
++            <option value="unavailable">Unavailable</option>
++            <option value="blocked">Blocked</option>
++          </select>
++        </div>
++        <div class="filter-field"><label for="blkCabFrom">From</label><input type="date" id="blkCabFrom"></div>
++        <div class="filter-field"><label for="blkCabTo">To (last day)</label><input type="date" id="blkCabTo"></div>
++        <div class="filter-field grow"><label for="blkCabNote">Note (staff only, optional)</label><input type="text" id="blkCabNote" maxlength="200" placeholder="e.g. Roof leak, waiting for supplier"></div>
++      </div>
++      <div class="cabana-cell-chips" id="blkCabPicked"></div>
++      <div class="planner-block-actions">
++        <button class="btn-sm primary" type="button" id="blkCabSave">Block selected cabanas</button>
++        <button class="btn-sm ghost" type="button" id="blkCabCancel">Cancel</button>
++      </div>
++      <p class="modal-error" id="blkCabError"></p>
++    </div>
+     <div class="planner-status" id="plannerStatus"></div>
+     <div class="planner-confirm" id="plannerConfirm">
+       <button class="btn-sm primary" type="button" id="plannerConfirmBtn">Confirm move</button>
+@@ -779,6 +824,10 @@
+         <tbody id="plannerList"></tbody>
+       </table>
+     </div>
++    <div class="planner-blocks">
++      <h4>Blocked cabanas <span class="muted" id="plannerBlocksHint"></span></h4>
++      <ul class="planner-block-list" id="plannerBlockList"></ul>
++    </div>
+     <div class="modal-actions">
+       <button type="button" class="btn-sm ghost" id="closePlannerBtn">Close</button>
+     </div>
+@@ -909,13 +958,13 @@
+ 
+ <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+ <script src="../assets/js/booking-config.js?v=c116a3a0ae"></script>
+-<script src="../assets/js/cabana-map.js?v=8f4f80dcb3"></script>
++<script src="../assets/js/cabana-map.js?v=7ba2eabd47"></script>
+ <script src="../assets/js/pricing.js?v=89ca03abac"></script>
+-<script src="../assets/js/staff-dashboard.js?v=2dc97ce102"></script>
++<script src="../assets/js/staff-dashboard.js?v=60e360b833"></script>
+ <script src="../assets/js/staff-email.js?v=ac542441c2"></script>
+ <script src="../assets/js/staff-villas.js?v=68fc0e116c"></script>
+ <script src="../assets/js/staff-payments.js?v=f943aa5e21"></script>
+-<script src="../assets/js/staff-activity.js?v=2ed22c66bb"></script>
++<script src="../assets/js/staff-activity.js?v=2d41dd54bc"></script>
+ <script src="../assets/js/staff-cloudbeds.js?v=234be7f7b9"></script>
+ <script src="../assets/js/staff-cloudbeds-pages.js?v=fe1c9eb8fb"></script>
+ </body>
+diff --git a/supabase-functions/booking-v20-cabana-blocks.sql b/supabase-functions/booking-v20-cabana-blocks.sql
+new file mode 100644
+index 0000000..9a95e53
+--- /dev/null
++++ b/supabase-functions/booking-v20-cabana-blocks.sql
+@@ -0,0 +1,171 @@
++-- ============================================================================
++-- Booking rules v20 — staff can block Day Trip cabanas.
++--
++-- A cabana can be taken off sale for one day or a range of days, with a
++-- reason staff pick from a short list:
++--   under_repair · unavailable · blocked
++-- plus an optional note ("roof leak", "owner's guests", …).
++--
++-- What a block does:
++--   * The public booking page greys the cabana out for those dates (it reads
++--     public_cabana_holds, which now includes blocks — the reason itself is
++--     never shown to guests).
++--   * Nobody can attach a blocked cabana to a booking for a blocked date —
++--     not the website, not the staff form, not the Cabana Map — and a booking
++--     that already has cabanas can't be moved onto a date they're blocked.
++--   * Bookings that were already on a cabana before it was blocked are left
++--     alone; the dashboard warns staff so they can move those parties.
++--   * Every block and unblock is written to the activity log.
++--
++-- Run in Supabase → SQL Editor (after booking-v19). Safe to re-run.
++-- ============================================================================
++
++create extension if not exists btree_gist;
++
++-- 1. The blocks themselves. end_date is the LAST blocked day (inclusive),
++--    since a day trip is a single date, not a night.
++create table if not exists cabana_blocks (
++  id uuid primary key default gen_random_uuid(),
++  cabana_id uuid not null references cabanas(id) on delete cascade,
++  start_date date not null,
++  end_date date not null,
++  reason text not null default 'blocked',
++  note text,
++  created_at timestamptz not null default now(),
++  created_by uuid default auth.uid(),
++  created_by_email text default (auth.jwt() ->> 'email'),
++  constraint cabana_blocks_dates check (end_date >= start_date),
++  constraint cabana_blocks_reason check (reason in ('under_repair', 'unavailable', 'blocked')),
++  constraint cabana_blocks_no_overlap exclude using gist (
++    cabana_id with =,
++    daterange(start_date, end_date, '[]') with &&
++  )
++);
++create index if not exists cabana_blocks_dates on cabana_blocks(start_date, end_date);
++
++alter table cabana_blocks enable row level security;
++drop policy if exists "Staff can view cabana blocks" on cabana_blocks;
++create policy "Staff can view cabana blocks" on cabana_blocks for select to authenticated using (true);
++drop policy if exists "Staff can add cabana blocks" on cabana_blocks;
++create policy "Staff can add cabana blocks" on cabana_blocks for insert to authenticated with check (true);
++drop policy if exists "Staff can change cabana blocks" on cabana_blocks;
++create policy "Staff can change cabana blocks" on cabana_blocks for update to authenticated using (true) with check (true);
++drop policy if exists "Staff can remove cabana blocks" on cabana_blocks;
++create policy "Staff can remove cabana blocks" on cabana_blocks for delete to authenticated using (true);
++-- No anon policy: guests only ever see the PII-free public_cabana_holds view.
++
++-- 2. Human-readable reason, used in error messages and the activity log.
++create or replace function cabana_block_reason_label(p text) returns text
++language sql immutable as $$
++  select case p when 'under_repair' then 'Under repair'
++                when 'unavailable' then 'Unavailable'
++                else 'Blocked' end;
++$$;
++
++-- 3. Public availability: booked cabanas (as before) PLUS every blocked
++--    cabana-day. Same two columns, so the booking page needs no change.
++create or replace view public_cabana_holds as
++  select bc.cabana_id, br.check_in
++  from booking_cabanas bc
++  join booking_requests br on br.id = bc.booking_id
++  where br.status not in ('declined', 'expired')
++  union all
++  select b.cabana_id, d::date as check_in
++  from cabana_blocks b,
++       generate_series(b.start_date, b.end_date, interval '1 day') d;
++
++grant select on public_cabana_holds to anon, authenticated;
++
++-- 4. Guard: a blocked cabana can't be attached to a booking on a blocked
++--    date (covers the website, the staff form and the Cabana Map planner).
++create or replace function guard_cabana_not_blocked() returns trigger
++language plpgsql security definer set search_path = public as $$
++declare
++  v_date date;
++  v_status booking_status;
++  v_block cabana_blocks%rowtype;
++  v_label text;
++begin
++  select check_in, status into v_date, v_status from booking_requests where id = new.booking_id;
++  if v_date is null or v_status in ('declined', 'expired') then
++    return new;
++  end if;
++  select * into v_block from cabana_blocks
++   where cabana_id = new.cabana_id and v_date between start_date and end_date
++   limit 1;
++  if found then
++    select label into v_label from cabanas where id = new.cabana_id;
++    raise exception 'Cabana not available: % is % on %', coalesce(v_label, 'this cabana'),
++      lower(cabana_block_reason_label(v_block.reason)), to_char(v_date, 'Mon DD, YYYY')
++      using errcode = 'P0001', hint = 'cabana_blocked';
++  end if;
++  return new;
++end;
++$$;
++drop trigger if exists trg_guard_cabana_not_blocked on booking_cabanas;
++create trigger trg_guard_cabana_not_blocked
++  before insert or update of cabana_id, booking_id on booking_cabanas
++  for each row execute function guard_cabana_not_blocked();
++
++-- …and a booking that holds cabanas can't be moved onto a date when one of
++-- them is blocked (or re-opened from declined/expired while one is blocked).
++create or replace function guard_booking_date_cabana_blocks() returns trigger
++language plpgsql security definer set search_path = public as $$
++declare
++  v_label text;
++  v_reason text;
++begin
++  if new.check_in is null or new.status in ('declined', 'expired') then
++    return new;
++  end if;
++  if new.check_in is not distinct from old.check_in
++     and not (old.status in ('declined', 'expired')) then
++    return new;
++  end if;
++  select c.label, b.reason into v_label, v_reason
++    from booking_cabanas bc
++    join cabana_blocks b on b.cabana_id = bc.cabana_id and new.check_in between b.start_date and b.end_date
++    join cabanas c on c.id = bc.cabana_id
++   where bc.booking_id = new.id
++   limit 1;
++  if v_label is not null then
++    raise exception 'Cabana not available: % is % on %', v_label,
++      lower(cabana_block_reason_label(v_reason)), to_char(new.check_in, 'Mon DD, YYYY')
++      using errcode = 'P0001', hint = 'cabana_blocked';
++  end if;
++  return new;
++end;
++$$;
++drop trigger if exists trg_guard_booking_date_cabana_blocks on booking_requests;
++create trigger trg_guard_booking_date_cabana_blocks
++  before update of check_in, status on booking_requests
++  for each row execute function guard_booking_date_cabana_blocks();
++
++-- 5. Activity log (same table as every other booking change).
++create or replace function log_cabana_block_change() returns trigger
++language plpgsql security definer set search_path = public as $$
++declare v_uid uuid; v_email text; r cabana_blocks%rowtype; v_label text; v_action text;
++begin
++  begin v_uid := auth.uid(); exception when others then v_uid := null; end;
++  begin v_email := auth.jwt() ->> 'email'; exception when others then v_email := null; end;
++  r := coalesce(new, old);
++  select label into v_label from cabanas where id = r.cabana_id;
++  v_action := case tg_op when 'INSERT' then 'cabana_blocked'
++                         when 'DELETE' then 'cabana_unblocked'
++                         else 'cabana_block_changed' end;
++  insert into booking_audit_log (booking_id, order_code, guest_name, action, changed_by_id, changed_by_email, changes)
++  values (null, null, 'BLOCK: ' || cabana_block_reason_label(r.reason), v_action, v_uid, v_email,
++          jsonb_build_object('cabana_id', r.cabana_id, 'cabana', v_label,
++                             'start_date', r.start_date, 'end_date', r.end_date,
++                             'reason', cabana_block_reason_label(r.reason), 'note', r.note));
++  return coalesce(new, old);
++end;
++$$;
++drop trigger if exists trg_log_cabana_block_change on cabana_blocks;
++create trigger trg_log_cabana_block_change
++  after insert or update or delete on cabana_blocks
++  for each row execute function log_cabana_block_change();
++
++-- Handy checks:
++--   select c.label, b.start_date, b.end_date, b.reason, b.note from cabana_blocks b join cabanas c on c.id = b.cabana_id order by b.start_date;
++--   select * from public_cabana_holds where check_in = current_date;
+diff --git a/terms-and-conditions.html b/terms-and-conditions.html
+index efd57b1..898f8b4 100644
+--- a/terms-and-conditions.html
++++ b/terms-and-conditions.html
+@@ -9,7 +9,7 @@
+ <link rel="preconnect" href="https://fonts.googleapis.com">
+ <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+ <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400..600;1,9..144,400..600&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+-<link rel="stylesheet" href="assets/css/style.css?v=d3f7f41687">
++<link rel="stylesheet" href="assets/css/style.css?v=9895af2405">
+ </head>
+ <body>
+ <header class="site-header no-hero">
+-- 
+2.43.0
+
