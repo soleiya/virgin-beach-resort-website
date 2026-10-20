@@ -716,8 +716,9 @@
     var rows = sortRows(filtered);
     var inSection = allRows.filter(function (r) { return activeSection === "villas" ? isVillaRow(r) : !isVillaRow(r); }).length;
     var from = loadFrom();
-    countLine.textContent = rows.length.toLocaleString() + " of " + inSection.toLocaleString() + (activeSection === "villas" ? " villa bookings" : " day-trip bookings") +
-      " shown" + (from ? " · loaded from " + fmtDate(from) + " (change under “Bookings loaded”)" : " · all years loaded");
+    countInfo = { total: rows.length, inSection: inSection, kind: activeSection === "villas" ? " villa bookings" : " day-trip bookings",
+      tail: from ? " · loaded from " + fmtDate(from) + " (change under “Bookings loaded”)" : " · all years loaded" };
+    updateCountLine(0);
     if (!rows.length) {
       bookingsBody.innerHTML = '<tr class="empty-row"><td colspan="16">No bookings match this view.</td></tr>';
       return;
@@ -734,7 +735,15 @@
     appendRows(Math.max(ROW_BATCH, keepShown));
   }
 
-  var ROW_BATCH = 50, renderQueue = [], renderShown = 0, lastViewKey = null, moreRow = null;
+  var ROW_BATCH = 50, renderQueue = [], renderShown = 0, lastViewKey = null, moreRow = null, countInfo = null;
+  function updateCountLine(shown) {
+    var c = countInfo;
+    if (!c) return;
+    var matched = c.total < c.inSection ? " matching (" + c.inSection.toLocaleString() + c.kind + " in total)" : c.kind;
+    countLine.textContent = shown && shown < c.total
+      ? "Showing " + shown.toLocaleString() + " of " + c.total.toLocaleString() + matched + " · more load as you scroll" + c.tail
+      : c.total.toLocaleString() + " of " + c.inSection.toLocaleString() + c.kind + " shown" + c.tail;
+  }
   var moreObserver = "IntersectionObserver" in window ? new IntersectionObserver(function (entries) {
     if (entries.some(function (e) { return e.isIntersecting; })) appendRows(ROW_BATCH);
   }, { rootMargin: "800px 0px" }) : null;
@@ -752,6 +761,7 @@
     for (var i = renderShown; i < end; i++) frag.appendChild(buildBookingRow(renderQueue[i]));
     renderShown = end;
     bookingsBody.appendChild(frag);
+    updateCountLine(renderShown);
     if (renderShown < renderQueue.length) {
       moreRow = document.createElement("tr");
       moreRow.className = "more-row";
