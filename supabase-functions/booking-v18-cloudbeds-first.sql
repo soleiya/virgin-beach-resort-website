@@ -19,12 +19,17 @@
 -- 1. where each booking was made ------------------------------------------------
 alter table booking_requests add column if not exists booking_origin text;
 
+-- (quietly: no audit entries or email-function calls for this one-time label)
+alter table booking_requests disable trigger trg_booking_email_update;
+alter table booking_requests disable trigger trg_log_booking_change;
 update booking_requests set booking_origin = case
     when cb_owned then 'cloudbeds'
     when source = 'sheet_import' then 'sheet'
     when booked_by is not null or coalesce(source, 'website') <> 'website' then 'site_staff'
     else 'site_guest' end
  where booking_origin is null;
+alter table booking_requests enable trigger trg_booking_email_update;
+alter table booking_requests enable trigger trg_log_booking_change;
 
 create or replace function set_booking_origin() returns trigger
 language plpgsql as $$
