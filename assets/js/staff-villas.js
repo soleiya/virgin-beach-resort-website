@@ -104,7 +104,11 @@
     $("villaModalSub").textContent = editing ? "Changes are saved to the activity log under your name." : "Overnight stay in one or more casitas. Priced from the same rate sheet as the website.";
     saveBtn.textContent = editing ? "Save Changes" : "Save Booking";
     $("vChannel").value = r.source || "phone";
-    $("vStatus").value = r.status || "pending";
+    $("vStatus").value = editing ? (r.status || "pending") : "pending";
+    // a new booking always starts as Confirmation Pending, like creating one in
+    // Cloudbeds; payment / confirmation (here or in Cloudbeds) move it on
+    $("vStatus").disabled = !editing;
+    $("vStatusLock").hidden = !!editing;
     $("vBookedBy").value = editing ? (r.booked_by || "—") : (D.staffName() || "");
     $("vName").value = r.guest_name || "";
     $("vName").readOnly = !!editing;

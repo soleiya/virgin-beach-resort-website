@@ -1425,6 +1425,8 @@
       $("addChannel").value = r.source || "other";
       $("addType").value = r.stay_type || "day_trip";
       $("addStatus").value = r.status || "pending";
+      $("addStatus").disabled = false;
+      $("addStatusLock").hidden = true;
       $("addName").value = r.guest_name || "";
       $("addName").readOnly = true;
       $("addNameLock").hidden = false;
@@ -1452,7 +1454,11 @@
       saveBookingBtn.textContent = "Save Booking";
       staffNotesField.style.display = "none";
       paymentField.style.display = "none";
+      // A new booking always starts at the first step, like creating one in
+      // Cloudbeds; payment / confirmation move it on from there.
       $("addStatus").value = "pending";
+      $("addStatus").disabled = true;
+      $("addStatusLock").hidden = false;
       $("addName").readOnly = false;
       $("addNameLock").hidden = true;
       $("addBookedBy").value = currentStaffName || "";

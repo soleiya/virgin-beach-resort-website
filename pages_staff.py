@@ -530,7 +530,7 @@ html = """<!doctype html>
           </select>
         </div>
         <div class="modal-field" style="margin-bottom:0;">
-          <label for="addStatus">Status</label>
+          <label for="addStatus">Status <span class="modal-lock" id="addStatusLock" hidden>&middot; new bookings start here</span></label>
           <select id="addStatus">
             <option value="pending">Confirmation Pending</option>
             <option value="pending_payment">Payment Under Review</option>
@@ -675,7 +675,7 @@ html = """<!doctype html>
           </select>
         </div>
         <div class="modal-field" style="margin-bottom:0;">
-          <label for="vStatus">Status</label>
+          <label for="vStatus">Status <span class="modal-lock" id="vStatusLock" hidden>&middot; new bookings start here</span></label>
           <select id="vStatus">
             <option value="pending">Confirmation Pending</option>
             <option value="pending_payment">Payment Under Review</option>
