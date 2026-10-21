@@ -684,10 +684,18 @@ export function pickSources(list: Any[]) {
 }
 async function findSources() {
   const d = (await cb("GET", "getSources", { propertyIDs: PROPERTY() })).data;
-  const list = Array.isArray(d) ? d : Object.values(d || {}).flat();
-  const picked = pickSources(list as Any[]);
+  // the list can come nested per property: [{ propertyID, sources: [...] }]
+  const list: Any[] = [];
+  const walk = (x: Any) => {
+    if (Array.isArray(x)) return x.forEach(walk);
+    if (!x || typeof x !== "object") return;
+    if (x.sourceID !== undefined || x.sourceName !== undefined) list.push(x);
+    for (const v of Object.values(x)) if (v && typeof v === "object") walk(v);
+  };
+  walk(d);
+  const picked = pickSources(list);
   await stateSet("sources", { site_guest: picked.site_guest, site_staff: picked.site_staff });
-  return { ...picked, total: (list as Any[]).length };
+  return { ...picked, total: list.length, sample: list.slice(0, 40).map((x) => String(x.sourceName ?? x.name ?? "")) };
 }
 
 async function setup() {
