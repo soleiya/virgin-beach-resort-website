@@ -45,6 +45,7 @@
     sort: '<path d="M8 10l4-4 4 4M8 14l4 4 4-4"/>',
     check: '<circle cx="12" cy="12" r="8"/><path d="M8.5 12.5l2.5 2.5 4.5-5"/>',
     user: '<circle cx="12" cy="9" r="3.5"/><path d="M5 20c0-3.6 3.1-6 7-6s7 2.4 7 6"/>',
+    globe: '<circle cx="12" cy="12" r="8"/><path d="M4 12h16M12 4c2.5 2.6 2.5 13.4 0 16M12 4c-2.5 2.6-2.5 13.4 0 16"/>',
     refresh: '<path d="M20 11a8 8 0 0 0-14.3-4.3L4 9M4 4v5h5M4 13a8 8 0 0 0 14.3 4.3L20 15M20 20v-5h-5"/>',
   };
   function ico(n) { return '<svg class="cb-ico" viewBox="0 0 24 24" aria-hidden="true">' + I[n] + "</svg>"; }
@@ -85,7 +86,7 @@
   menu.id = "cbMenu";
   var NAV = [
     ["dashboard", "home", "Dashboard"], ["calendar", "cal", "Calendar"], ["reservations", "bed", "Reservations"], ["daytrips", "sun", "Day Trips"], null,
-    ["#plannerBtn", "map", "Cabana Map"], ["#logBtn", "log", "Activity Log"], ["#teamBtn", "team", "Team Activity"], ["#exportBtn", "dl", "Export CSV"], null,
+    ["#plannerBtn", "map", "Cabana Map"], ["#logBtn", "log", "Activity Log"], ["#teamBtn", "team", "Team Activity"], ["#webBtn", "globe", "Website Bookings"], ["#exportBtn", "dl", "Export CSV"], null,
     ["#logoutBtn", "out", "Sign out"],
   ];
   menu.innerHTML = NAV.map(function (n) {
@@ -191,8 +192,11 @@
   function pax(r) { return (r.adults || 0) + (r.children_6_12 || 0) + (r.children_0_5 || 0); }
   function statusKey(r) {
     var cbs = r.cb_info && r.cb_info.status;
-    if (isVilla(r) && cbs === "checked_in" && r.status === "confirmed") return "checked_in";
-    if (isVilla(r) && cbs === "no_show") return "no_show";
+    if (isVilla(r) && D.villaStatusKey) {
+      // Cloudbeds' statuses; colours reuse the existing classes
+      var k = D.villaStatusKey(r);
+      return k === "checked_out" ? "completed" : k === "canceled" ? "declined" : k;
+    }
     return r.status;
   }
   function statusHtml(r) {
@@ -462,7 +466,7 @@
   var calTable = $("calTable");
   var legend = document.createElement("div");
   legend.className = "cb-legend";
-  legend.innerHTML = [["confirmed", "Confirmed"], ["pending", "Confirmation Pending"], ["checked_in", "Checked In"], ["completed", "Checked Out"], ["hold", "Blocked / On hold"]]
+  legend.innerHTML = [["confirmed", "Confirmed"], ["pending", "Confirmation Pending"], ["checked_in", "In-House"], ["completed", "Checked Out"], ["hold", "Blocked / On hold"]]
     .map(function (x) { return '<span><i class="lg-' + x[0] + '"></i>' + x[1] + "</span>"; }).join("");
   var oldLegend = calBackdrop.querySelector(".cal-legend");
   if (oldLegend) oldLegend.parentNode.insertBefore(legend, oldLegend.nextSibling);

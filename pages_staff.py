@@ -95,6 +95,21 @@ html = """<!doctype html>
 
   /* ---------- activity log modal ---------- */
   .modal.modal-wide { max-width: 900px; }
+  .modal.web-modal { max-width: 1120px; }
+  .web-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-bottom: 14px; }
+  .web-stat { background: var(--sand-deep); border-radius: 10px; padding: 10px 12px; }
+  .web-stat small { display: block; font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--ink-soft); }
+  .web-stat b { font-size: 1.25rem; display: block; margin-top: 2px; }
+  .web-stat span { font-size: 0.75rem; color: var(--ink-soft); }
+  .web-filters { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 12px; margin-bottom: 12px; }
+  .web-chips { display: flex; gap: 6px; flex-wrap: wrap; }
+  table.web-table { min-width: 980px; }
+  table.web-table tbody tr { cursor: pointer; }
+  table.web-table tbody tr:hover td { background: var(--lagoon-tint, #eef6f5); }
+  .web-sub { display: block; font-size: 0.72rem; color: var(--ink-soft); margin-top: 2px; }
+  .web-cb-ok { color: #17694a; font-weight: 700; }
+  .web-cb-wait { color: #8a6d1a; font-weight: 700; }
+  .web-cb-err { color: #b3261e; font-weight: 700; }
   .log-filters { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; margin-bottom: 16px; }
   .log-scroll { max-height: 55vh; overflow-y: auto; border: 1px solid var(--line); border-radius: 10px; }
   table.log-table { width: 100%; border-collapse: collapse; min-width: 640px; }
@@ -405,6 +420,7 @@ html = """<!doctype html>
         <button class="btn-sm ghost" id="plannerBtn" data-section="daytrip">Cabana Map</button>
         <button class="btn-sm ghost" id="logBtn">Activity Log</button>
         <button class="btn-sm ghost" id="teamBtn">Team Activity</button>
+        <button class="btn-sm ghost" id="webBtn">Website Bookings</button>
         <button class="btn-sm ghost" id="exportBtn">Export CSV</button>
         <button class="btn-sm primary" id="addVillaBtn" data-section="villas">+ Villa Booking</button>
         <button class="btn-sm primary" id="addBtn" data-section="daytrip">+ Day Trip Booking</button>
@@ -678,11 +694,11 @@ html = """<!doctype html>
           <label for="vStatus">Status <span class="modal-lock" id="vStatusLock" hidden>&middot; new bookings start here</span></label>
           <select id="vStatus">
             <option value="pending">Confirmation Pending</option>
-            <option value="pending_payment">Payment Under Review</option>
+            <option value="pending_payment">Confirmation Pending &middot; payment to verify</option>
             <option value="confirmed">Confirmed</option>
             <option value="completed">Checked Out</option>
-            <option value="declined">Cancelled</option>
-            <option value="expired">Cancelled &middot; payment not received</option>
+            <option value="declined">Canceled</option>
+            <option value="expired">Canceled &middot; payment not received</option>
           </select>
         </div>
         <div class="modal-field" style="margin-bottom:0;">
@@ -901,6 +917,43 @@ html = """<!doctype html>
   </div>
 </div>
 
+<div class="modal-backdrop" id="webModalBackdrop">
+  <div class="modal modal-wide web-modal">
+    <h2>Website Bookings</h2>
+    <p style="color:var(--ink-soft); font-size:0.85rem; margin:-10px 0 16px;">Every booking made on the new website &mdash; by guests on the booking pages or by staff in this dashboard &mdash; newest first. Villas show whether they reached Cloudbeds.</p>
+    <div class="web-stats" id="webStats"></div>
+    <div class="web-filters">
+      <div class="web-chips" id="webWho">
+        <button type="button" class="pill active" data-who="">All</button>
+        <button type="button" class="pill" data-who="site_guest">Guests</button>
+        <button type="button" class="pill" data-who="site_staff">Staff</button>
+      </div>
+      <div class="web-chips" id="webKind">
+        <button type="button" class="pill active" data-kind="">Villas &amp; day trips</button>
+        <button type="button" class="pill" data-kind="villa">Villas</button>
+        <button type="button" class="pill" data-kind="daytrip">Day trips</button>
+      </div>
+      <div class="filter-field">
+        <label for="webDays">Made in the last</label>
+        <select id="webDays"><option value="1">24 hours</option><option value="7">7 days</option><option value="30" selected>30 days</option><option value="90">90 days</option><option value="365">12 months</option></select>
+      </div>
+      <button class="btn-sm ghost" type="button" id="webRefresh">Refresh</button>
+    </div>
+    <div class="log-scroll">
+      <table class="log-table web-table">
+        <thead>
+          <tr><th>Made</th><th>Booking</th><th>Made by</th><th>Stay / trip</th><th class="num">Total</th><th>Status</th><th>Payment</th><th>Cloudbeds</th></tr>
+        </thead>
+        <tbody id="webBody"><tr><td colspan="8" style="padding:24px;text-align:center;color:var(--ink-soft);">Loading&hellip;</td></tr></tbody>
+      </table>
+    </div>
+    <p class="field-hint" style="margin-top:12px;">Click a booking to open it. Showing up to 500 bookings.</p>
+    <div class="modal-actions">
+      <button type="button" class="btn-sm ghost" id="webClose">Close</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-backdrop" id="logModalBackdrop">
   <div class="modal modal-wide">
     <h2>Activity Log</h2>
@@ -1002,6 +1055,7 @@ html = """<!doctype html>
 <script src="../assets/js/staff-villas.js?v=__V_VILLAS__"></script>
 <script src="../assets/js/staff-payments.js?v=__V_PAYMENTS__"></script>
 <script src="../assets/js/staff-activity.js?v=__V_ACT__"></script>
+<script src="../assets/js/staff-website.js?v=__V_WEB__"></script>
 <script src="../assets/js/staff-cloudbeds.js?v=__V_CBJS__"></script>
 <script src="../assets/js/staff-cloudbeds-pages.js?v=__V_CBPAGES__"></script>
 </body>
@@ -1016,6 +1070,7 @@ html = (html.replace("__V_CSS__", v("assets/css/style.css"))
             .replace("__V_VILLAS__", v("assets/js/staff-villas.js"))
             .replace("__V_PAYMENTS__", v("assets/js/staff-payments.js"))
             .replace("__V_ACT__", v("assets/js/staff-activity.js"))
+            .replace("__V_WEB__", v("assets/js/staff-website.js"))
             .replace("__V_MAIL__", v("assets/js/staff-email.js"))
             .replace("__V_CBCSS__", v("assets/css/staff-cloudbeds.css"))
             .replace("__V_CBJS__", v("assets/js/staff-cloudbeds.js"))
