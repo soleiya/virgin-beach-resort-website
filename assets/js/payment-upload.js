@@ -254,6 +254,7 @@
     var kind = chosenKind();
     var m = money(), p = m.p;
     var paying = kind === "deposit" ? Number(p.deposit) : kind === "balance" ? m.remaining : Math.max(0, m.total - m.claimed);
+    var inCloudbeds = !!(needs && needs.in_cloudbeds && needs.stay_type === "overnight");
     submitBtn.disabled = true;
     submitBtn.textContent = "Uploading…";
     var safeCode = orderCode.replace(/[^A-Za-z0-9-]/g, "");
@@ -299,9 +300,12 @@
         }
         showResult(
           "<h3>Thank you!</h3><p>We've received your " + andList(did) + " for booking <strong>" + esc(orderCode.toUpperCase()) + "</strong>" +
-            (payFile ? " (" + peso(paying) + ")" : "") + "." +
+            (payFile ? (paying > 0 ? " (" + peso(paying) + ")" : " &mdash; added to your payment of " + peso(m.verifying || m.claimed) + " that we're already checking") : "") + "." +
             (payFile
-              ? " We've emailed you an acknowledgement, and our reservations team will " + (kind === "balance" ? "email you once it's verified" : "send your confirmation once the payment is verified") +
+              ? (inCloudbeds
+                  // villa stays are handled in our reservations system, which emails the confirmation
+                  ? " Our reservations team will check it and email your confirmation once the payment is verified"
+                  : " We've emailed you an acknowledgement, and our reservations team will " + (kind === "balance" ? "email you once it's verified" : "send your confirmation once the payment is verified")) +
                 " (office hours 9:00 AM–4:00 PM, Monday–Friday)."
               : " Our reservations team will check " + (did.length > 1 || /s$/.test(did[0] || "") ? "them" : "it") + " — please remember to upload your payment screenshot too, if you haven't yet.") +
             "</p>" + after,

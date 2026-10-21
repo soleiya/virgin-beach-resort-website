@@ -262,6 +262,8 @@ async function pull() {
   }
   // verified website payments not on the Cloudbeds folio yet
   const pay = await postPayments(deadline).catch((e) => { errors.push("payments: " + (e as Error).message); return null; });
+  const docs = await syncDocs(deadline).catch((e) => { errors.push("documents: " + (e as Error).message); return null; });
+  if (docs?.errors?.length) errors.push(...docs.errors);
   if (pay?.errors?.length) errors.push(...pay.errors);
   // only move the window forward when everything in it was handled
   const value = { at: complete && totals.failed === 0 ? started.toISOString() : (st?.at || from.toISOString()), ran_at: new Date().toISOString(), ...totals, complete, blocks };
@@ -411,6 +413,8 @@ async function push(bookingId: string): Promise<Any> {
   await rpc("cb_push_result", { p_booking_id: bookingId, p_reservation_id: reservationId, p_error: notes.length ? notes.join(" · ") : null });
   await syncOne(reservationId).catch(() => null);
   await postPayments().catch(() => null); // e.g. a proof verified before it reached Cloudbeds
+  await postDetails(bookingId).catch((e) => notes.push(`details note: ${(e as Error).message}`));
+  await syncDocs().catch(() => null); // IDs / pet cards uploaded at booking
   return { booking_id: bookingId, reservation_id: reservationId, notes };
 }
 
@@ -555,12 +559,12 @@ async function refolio(bookingId: string, withDiscounts: boolean, suffix = ""): 
 }
 
 // ---------------------------------------------------------------- proof → Cloudbeds Documents
-async function postProofDocument(reservationId: string, path: string, label: string): Promise<void> {
+async function postProofDocument(reservationId: string, path: string, label: string, bucket = "payment-proofs"): Promise<void> {
   const key = env("CLOUDBEDS_API_KEY");
-  const obj = await fetch(`${SB_URL()}/storage/v1/object/payment-proofs/${path.split("/").map(encodeURIComponent).join("/")}`, {
+  const obj = await fetch(`${SB_URL()}/storage/v1/object/${bucket}/${path.split("/").map(encodeURIComponent).join("/")}`, {
     headers: { apikey: SR(), Authorization: `Bearer ${SR()}` },
   });
-  if (!obj.ok) throw new Error(`proof file: HTTP ${obj.status}`);
+  if (!obj.ok) throw new Error(`${bucket} file: HTTP ${obj.status}`);
   const blob = await obj.blob();
   const ext = (path.split(".").pop() || "jpg").toLowerCase();
   const fd = new FormData();
@@ -572,6 +576,82 @@ async function postProofDocument(reservationId: string, path: string, label: str
   let json: Any = null;
   try { json = JSON.parse(text); } catch { /* not JSON */ }
   if (!res.ok || json?.success === false) throw new Error(`postReservationDocument: ${json?.message || "HTTP " + res.status}`);
+}
+
+// ---------------------------------------------------------------- IDs / pet cards → Documents
+// Senior / PWD IDs and pet vaccination cards uploaded on the website (at
+// booking or later) → the Cloudbeds reservation's Documents, plus a note.
+async function syncDocs(deadline = Date.now() + 50_000): Promise<Any> {
+  const list: Any[] = (await rpc("cb_pending_docs")) || [];
+  let sent = 0;
+  const errors: string[] = [];
+  for (const b of list) {
+    const done: string[] = [];
+    for (const [i, d] of ((b.docs || []) as Any[]).entries()) {
+      if (Date.now() > deadline) break;
+      try {
+        await postProofDocument(String(b.reservation_id), String(d.path), `${d.label}-${b.order_code}-${i + 1}`, String(d.bucket));
+        await rpc("cb_doc_result", { p_booking_id: b.booking_id, p_path: d.path, p_error: null });
+        done.push(d.bucket === "senior-ids" ? "Senior/PWD ID" : "pet vaccination card");
+        sent++;
+      } catch (e) {
+        const msg = String((e as Error).message || e);
+        await rpc("cb_doc_result", { p_booking_id: b.booking_id, p_path: d.path, p_error: msg });
+        errors.push(`${b.order_code} ${d.label}: ${msg}`);
+      }
+    }
+    if (done.length) {
+      const n = (k: string) => done.filter((x) => x === k).length;
+      const what = [n("Senior/PWD ID") ? `${n("Senior/PWD ID")} Senior/PWD ID photo(s)` : "", n("pet vaccination card") ? `${n("pet vaccination card")} pet vaccination card(s)` : ""].filter(Boolean).join(" and ");
+      await cb("POST", "postReservationNote", {
+        reservationID: String(b.reservation_id),
+        reservationNote: `Uploaded on the website: ${what} — see Documents. Please check them (and again at check-in).`,
+      }).catch(() => null);
+    }
+  }
+  return { waiting: list.length, sent, errors };
+}
+
+// ---------------------------------------------------------------- details → a note
+// Everything the guest / staff entered on the website that Cloudbeds has no
+// field for, as one reservation note.
+const AGE: Record<string, string> = { adult: "adult", senior: "senior / PWD", child: "child 6–12", child_6_12: "child 6–12", kid: "child 0–5", child_0_5: "child 0–5", infant: "child 0–5" };
+export function detailsNote(b: Any, addOnNames: Record<string, string> = {}): string {
+  const out: string[] = [`Website booking details · ${b.order_code} · made ${b.booking_origin === "site_staff" ? "by staff" + (b.booked_by ? " (" + b.booked_by + ")" : "") : "by the guest on the booking page"}`];
+  out.push(`Guest: ${b.guest_name || "—"} · ${b.guest_phone || "no phone"} · ${b.guest_email || "no email"}${b.country ? " · " + b.country : ""}`);
+  const party = [`${Number(b.adults) || 0} adult(s)`];
+  if (Number(b.senior_count) > 0) party.push(`${b.senior_count} of them Senior/PWD`);
+  if (Number(b.children_6_12) > 0) party.push(`${b.children_6_12} child(ren) 6–12`);
+  if (Number(b.children_0_5) > 0) party.push(`${b.children_0_5} child(ren) 0–5`);
+  out.push(`Party: ${party.join(", ")}${b.primary_is_senior ? " (main guest is Senior/PWD)" : ""}`);
+  const comp: Any[] = Array.isArray(b.companions) ? b.companions : [];
+  if (comp.length) out.push(`Other guests: ${comp.map((c) => `${c.name || "?"}${c.age_group ? " (" + (AGE[c.age_group] || c.age_group) + ")" : ""}`).join("; ")}`);
+  else if (b.guest_names) out.push(`Other guests: ${b.guest_names}`);
+  if (Number(b.pet_count) > 0) out.push(`Pets: ${b.pet_count}${b.pet_policy_agreed_at ? " · Pet Policy agreed online" : " · Pet Policy not yet agreed"}`);
+  if (Number(b.extra_beds) > 0) out.push(`Extra floor mattress(es): ${b.extra_beds}`);
+  const ao: Any[] = Array.isArray(b.add_ons) ? b.add_ons : [];
+  if (ao.length) out.push(`Add-ons: ${ao.map((a) => `${addOnNames[a.slug] || a.slug} × ${a.qty}`).join(", ")}`);
+  if (b.notes) out.push(`Guest requests: ${String(b.notes).slice(0, 1500)}`);
+  if (b.occasion) out.push(`Occasion: ${b.occasion}`);
+  if (b.how_heard) out.push(`Heard about us: ${b.how_heard}`);
+  if (Number(b.discount_amount) > 0) out.push(`Staff discount: ${peso(b.discount_amount)}${b.discount_reason ? " — " + b.discount_reason : ""}`);
+  if (b.marketing_opt_in) out.push("OK to receive promos by email");
+  return out.join("\n");
+}
+async function postDetails(bookingId: string): Promise<Any> {
+  const h = { apikey: SR(), Authorization: `Bearer ${SR()}` };
+  const b = (await (await fetch(`${SB_URL()}/rest/v1/booking_requests?id=eq.${encodeURIComponent(bookingId)}&select=*`, { headers: h })).json())?.[0];
+  if (!b?.cb_reservation_id || b.cb_owned) return { skipped: "not a website booking in Cloudbeds" };
+  const slugs = (Array.isArray(b.add_ons) ? b.add_ons : []).map((a: Any) => a.slug).filter(Boolean);
+  const names: Record<string, string> = {};
+  if (slugs.length) {
+    const rows: Any[] = await (await fetch(`${SB_URL()}/rest/v1/add_ons?slug=in.(${slugs.map(encodeURIComponent).join(",")})&select=slug,name`, { headers: h })).json();
+    for (const r of rows || []) names[r.slug] = r.name;
+  }
+  const note = detailsNote(b, names);
+  await cb("POST", "postReservationNote", { reservationID: String(b.cb_reservation_id), reservationNote: note });
+  await rpc("cb_details_posted", { p_booking_id: bookingId }).catch(() => null);
+  return { reservation_id: b.cb_reservation_id, note };
 }
 
 // Payment method on the website → one of the property's Cloudbeds payment
@@ -810,6 +890,8 @@ export async function handle(req: Request): Promise<Response> {
       case "push": return json(await push(String(body.booking_id)));
       case "status": return json(await pushStatus(String(body.booking_id)));
       case "payments": return json(await postPayments());
+      case "docs": return json(await syncDocs());
+      case "details": return json(await postDetails(String(body.booking_id)));
       case "folio_preview": {
         // dry run: exactly what a push / refolio would post for this booking (nothing is sent)
         const h = { apikey: SR(), Authorization: `Bearer ${SR()}` };
