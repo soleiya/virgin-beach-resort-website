@@ -7,8 +7,9 @@
 <meta name="robots" content="noindex, nofollow">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400..600;1,9..144,400..600&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="../assets/css/style.css?v=d3f7f41687">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400..600;1,9..144,400..600&family=Manrope:wght@400;500;600;700;800&family=Poppins:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../assets/css/style.css?v=9895af2405">
+<link rel="stylesheet" href="../assets/css/staff-cloudbeds.css?v=944d40d475">
 <style>
   body { background: var(--sand); min-height: 100vh; }
   .dash-wrap { max-width: 1280px; margin: 0 auto; padding: 28px 20px 80px; }
@@ -138,7 +139,31 @@
   .planner-list table { min-width: 0; }
   .planner-list td, .planner-list th { padding: 8px 12px; font-size: 0.8rem; }
   .planner-list tr.is-source td { background: var(--lagoon-tint); }
+  /* ---------- cabana blocks (under repair / unavailable / blocked) ---------- */
+  .planner-block { border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; margin-bottom: 12px; background: #f6f3ee; }
+  .planner-block-head { font-size: 0.86rem; margin-bottom: 10px; }
+  .planner-block-head .muted { font-size: 0.8rem; margin-left: 6px; }
+  .planner-block-fields { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; margin-bottom: 10px; }
+  .planner-block-fields .grow { flex: 1 1 220px; }
+  .planner-block-fields input[type="text"] { border: 1px solid var(--line); background: var(--sand); font-family: var(--font-body); font-size: 0.82rem; padding: 7px 10px; border-radius: 8px; width: 100%; }
+  .planner-block-actions { display: flex; gap: 8px; margin-top: 10px; }
+  .planner-blocks { margin-top: 16px; }
+  .planner-blocks h4 { font-size: 0.86rem; margin: 0 0 8px; }
+  .planner-blocks h4 .muted { font-weight: 400; font-size: 0.78rem; margin-left: 6px; }
+  .planner-block-list { list-style: none; margin: 0; padding: 0; border: 1px solid var(--line); border-radius: 10px; max-height: 200px; overflow-y: auto; }
+  .planner-block-list li { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 12px; font-size: 0.8rem; border-bottom: 1px solid var(--line); }
+  .planner-block-list li:last-child { border-bottom: none; }
+  .planner-block-list li.is-today { background: #f1ece3; }
+  .planner-block-list li.muted { color: var(--ink-soft); justify-content: flex-start; }
+  .block-reason { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 0.7rem; font-weight: 700; background: #6b6559; color: #fff; margin-right: 6px; white-space: nowrap; }
+  .block-reason.r-under_repair { background: #9c4a3f; }
+  .block-reason.r-unavailable { background: #7d6a3f; }
+  .block-meta { display: block; color: var(--ink-soft); font-size: 0.72rem; margin-top: 2px; }
+  .cabana-mini-chip.is-blocked-conflict { background: #f6dcd6; color: #7a2e24; }
+  .planner-warn { display: block; margin-top: 6px; color: #7a2e24; font-weight: 600; }
 
+  .more-row td { text-align: center; padding: 18px 14px; }
+  .more-row .muted { font-size: 0.8rem; margin-left: 8px; }
   .empty-row td { text-align: center; padding: 48px 20px; color: var(--ink-soft); }
   .order-code { font-family: var(--font-body); font-weight: 700; font-size: 0.78rem; color: var(--ink-soft); white-space: nowrap; }
   .cabana-select { border: 1px solid var(--line); background: var(--sand); font-family: var(--font-body); font-size: 0.8rem; padding: 5px 8px; border-radius: 6px; min-width: 150px; }
@@ -485,12 +510,12 @@
         <div class="modal-field" style="margin-bottom:0;">
           <label for="addStatus">Status</label>
           <select id="addStatus">
-            <option value="pending">Pending</option>
-            <option value="pending_payment">Pending Payment</option>
+            <option value="pending">Confirmation Pending</option>
+            <option value="pending_payment">Payment Under Review</option>
             <option value="confirmed">Confirmed</option>
-            <option value="declined">Declined</option>
+            <option value="declined">Cancelled</option>
             <option value="completed">Completed</option>
-            <option value="expired">Expired (unpaid)</option>
+            <option value="expired">Cancelled · payment not received</option>
           </select>
         </div>
       </div>
@@ -584,7 +609,8 @@
         <label for="addPayFile">Payment Proof</label>
         <div id="addPayExisting" class="modal-pay-existing"></div>
         <input id="addPayFile" type="file" accept="image/*,application/pdf">
-        <p class="modal-hint">Uploading a proof marks a Pending booking as Confirmed when you save.</p>
+        <select id="addPayPortion" style="margin-top:8px;"><option value="full">This proof is for the full payment</option><option value="deposit">This proof is for the 50% down payment</option><option value="balance">This proof is for the remaining balance</option></select>
+        <p class="modal-hint">Saving records the payment as verified (it appears under Payments and, for villas, on the Cloudbeds folio) and confirms a pending booking.</p>
       </div>
       <div class="modal-field" id="addStaffNotesField">
         <label for="addStaffNotes">Staff Notes</label>
@@ -630,11 +656,11 @@
           <label for="vStatus">Status</label>
           <select id="vStatus">
             <option value="pending">Confirmation Pending</option>
-            <option value="pending_payment">Confirmation Pending &middot; proof received</option>
+            <option value="pending_payment">Payment Under Review</option>
             <option value="confirmed">Confirmed</option>
             <option value="completed">Checked Out</option>
             <option value="declined">Cancelled</option>
-            <option value="expired">Cancelled &middot; unpaid</option>
+            <option value="expired">Cancelled &middot; payment not received</option>
           </select>
         </div>
         <div class="modal-field" style="margin-bottom:0;">
@@ -702,7 +728,8 @@
         <label for="vPayFile">Payment Proof</label>
         <div id="vPayExisting" class="modal-pay-existing"></div>
         <input id="vPayFile" type="file" accept="image/*,application/pdf">
-        <p class="modal-hint">Uploading a proof marks a Pending booking as Confirmed when you save (the guest gets the confirmation email).</p>
+        <select id="vPayPortion" style="margin-top:8px;"><option value="full">This proof is for the full payment</option><option value="deposit">This proof is for the 50% down payment</option><option value="balance">This proof is for the remaining balance</option></select>
+        <p class="modal-hint">Saving records the payment as verified (Payments, and the Cloudbeds folio once live) and confirms a pending booking — the guest gets the confirmation email.</p>
       </div>
       </div><aside class="bk-mail" id="vMail"></aside></div>
       <label class="modal-check" id="vNotifyWrap"><input type="checkbox" id="vNotify"> <span id="vNotifyText">Email the guest</span></label>
@@ -766,7 +793,7 @@
 <div class="modal-backdrop" id="plannerBackdrop">
   <div class="modal modal-planner">
     <h2>Cabana Map</h2>
-    <p style="color:var(--ink-soft); font-size:0.85rem; margin:-10px 0 16px;">See every cabana for a day and move parties around &mdash; e.g. to keep a large group together. Click a booked cabana to pick it up, then click a free cabana to move it there (or another booked cabana to swap the two).</p>
+    <p style="color:var(--ink-soft); font-size:0.85rem; margin:-10px 0 16px;">See every cabana for a day and move parties around &mdash; e.g. to keep a large group together. Click a booked cabana to pick it up, then click a free cabana to move it there (or another booked cabana to swap the two). Use <b>Block cabanas</b> to take cabanas off sale (under repair, unavailable or blocked); click a blocked cabana to remove its block.</p>
     <div class="planner-bar">
       <div class="filter-field">
         <label for="plannerDate">Date</label>
@@ -775,7 +802,30 @@
       <button class="btn-sm ghost" type="button" id="plannerPrev">&larr; Prev day</button>
       <button class="btn-sm ghost" type="button" id="plannerToday">Today</button>
       <button class="btn-sm ghost" type="button" id="plannerNext">Next day &rarr;</button>
+      <button class="btn-sm ghost" type="button" id="plannerBlockBtn" title="Take cabanas off sale: under repair, unavailable or blocked">&#9940; Block cabanas&hellip;</button>
       <label class="modal-check" style="margin-left:auto;"><input type="checkbox" id="plannerNotify" checked> Email guests whose cabana is moved</label>
+    </div>
+    <div class="planner-block" id="plannerBlockPanel" hidden>
+      <div class="planner-block-head"><b>Block cabanas</b><span class="muted">Click cabanas on the map to pick them. Guests can't book them on these dates; the reason is only shown to staff.</span></div>
+      <div class="planner-block-fields">
+        <div class="filter-field">
+          <label for="blkCabReason">Reason</label>
+          <select id="blkCabReason">
+            <option value="under_repair">Under repair</option>
+            <option value="unavailable">Unavailable</option>
+            <option value="blocked">Blocked</option>
+          </select>
+        </div>
+        <div class="filter-field"><label for="blkCabFrom">From</label><input type="date" id="blkCabFrom"></div>
+        <div class="filter-field"><label for="blkCabTo">To (last day)</label><input type="date" id="blkCabTo"></div>
+        <div class="filter-field grow"><label for="blkCabNote">Note (staff only, optional)</label><input type="text" id="blkCabNote" maxlength="200" placeholder="e.g. Roof leak, waiting for supplier"></div>
+      </div>
+      <div class="cabana-cell-chips" id="blkCabPicked"></div>
+      <div class="planner-block-actions">
+        <button class="btn-sm primary" type="button" id="blkCabSave">Block selected cabanas</button>
+        <button class="btn-sm ghost" type="button" id="blkCabCancel">Cancel</button>
+      </div>
+      <p class="modal-error" id="blkCabError"></p>
     </div>
     <div class="planner-status" id="plannerStatus"></div>
     <div class="planner-confirm" id="plannerConfirm">
@@ -788,6 +838,10 @@
         <thead><tr><th>Guest</th><th>Booking ID</th><th>Party</th><th>Cabana(s)</th><th>Status</th></tr></thead>
         <tbody id="plannerList"></tbody>
       </table>
+    </div>
+    <div class="planner-blocks">
+      <h4>Blocked cabanas <span class="muted" id="plannerBlocksHint"></span></h4>
+      <ul class="planner-block-list" id="plannerBlockList"></ul>
     </div>
     <div class="modal-actions">
       <button type="button" class="btn-sm ghost" id="closePlannerBtn">Close</button>
@@ -919,12 +973,14 @@
 
 <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
 <script src="../assets/js/booking-config.js?v=c116a3a0ae"></script>
-<script src="../assets/js/cabana-map.js?v=8f4f80dcb3"></script>
+<script src="../assets/js/cabana-map.js?v=7ba2eabd47"></script>
 <script src="../assets/js/pricing.js?v=89ca03abac"></script>
-<script src="../assets/js/staff-dashboard.js?v=2a39750c47"></script>
+<script src="../assets/js/staff-dashboard.js?v=3f47dc13de"></script>
 <script src="../assets/js/staff-email.js?v=ac542441c2"></script>
-<script src="../assets/js/staff-villas.js?v=6115308fb6"></script>
+<script src="../assets/js/staff-villas.js?v=c67a996c59"></script>
 <script src="../assets/js/staff-payments.js?v=f943aa5e21"></script>
-<script src="../assets/js/staff-activity.js?v=2ed22c66bb"></script>
+<script src="../assets/js/staff-activity.js?v=2d41dd54bc"></script>
+<script src="../assets/js/staff-cloudbeds.js?v=234be7f7b9"></script>
+<script src="../assets/js/staff-cloudbeds-pages.js?v=fe1c9eb8fb"></script>
 </body>
 </html>

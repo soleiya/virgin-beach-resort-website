@@ -64,33 +64,32 @@
   }
   function keeping() { return keepSaved && editing && openSig !== null && priceSig() === openSig; }
 
-  // Cloudbeds is the master for villas: "dates" = a website booking already in
-  // Cloudbeds (dates/casitas change there); "all" = a stay made in Cloudbeds.
+  // Cloudbeds is the master for villas: once a stay is in Cloudbeds — made
+  // there, or booked here and sent there — it's changed in Cloudbeds ("all").
+  // Payments are still recorded here (Payments), and reach the Cloudbeds folio.
   var cbLock = "none";
   function applyCbLock(r) {
     Array.prototype.forEach.call(form.querySelectorAll("[data-cblocked]"), function (el) { el.disabled = false; el.removeAttribute("data-cblocked"); });
-    cbLock = !editing ? "none" : r.cb_owned ? "all" : r.cb_reservation_id ? "dates" : "none";
+    cbLock = !editing ? "none" : (r.cb_owned || r.cb_reservation_id) ? "all" : "none";
     var lockEl = function (el) { if (el && !el.disabled) { el.disabled = true; el.setAttribute("data-cblocked", "1"); } };
-    // v18: a website booking that's in Cloudbeds is worked in Cloudbeds too —
-    // only status (sent to Cloudbeds), staff notes and payments stay editable here.
-    if (cbLock === "all" || cbLock === "dates") {
-      var keep = cbLock === "dates" ? { vStatus: 1, vPayFile: 1 } : {};
+    if (cbLock === "dates") { lockEl($("vIn")); lockEl($("vOut")); }
+    if (cbLock === "all") {
       Array.prototype.forEach.call(form.querySelectorAll("input, select, textarea, button"), function (el) {
-        if (keep[el.id] || el.id === "vStaffNotes" || el.id === "vCancel" || el.id === "vSave" || el.id === "vLogBtn" || el.closest(".mail-panel") || el.closest("#vPayField")) return;
+        if (el.id === "vStaffNotes" || el.id === "vCancel" || el.id === "vSave" || el.id === "vLogBtn" || el.closest(".mail-panel")) return;
         lockEl(el);
       });
-      if (cbLock === "all") lockEl($("vNotify"));
+      lockEl($("vNotify"));
     }
     var url = D.cbUrl ? D.cbUrl(r) : null;
     var link = url ? ' <a class="cb-link" data-cb="' + esc(r.cb_reservation_id) + '" href="' + url + '" target="_blank" rel="noopener">Open in Cloudbeds ↗</a> <small>(copies #' + esc(r.cb_reservation_id) + " for its search box)</small>" : "";
     var banner = $("vCbBanner");
     if (banner) {
       banner.hidden = cbLock === "none";
-      banner.innerHTML = cbLock === "all"
+      banner.innerHTML = r.cb_owned
         ? "<b>Booked in Cloudbeds.</b> Change dates, casitas, guests, price or status in Cloudbeds — this page updates within a few minutes. Here you can add staff notes." + link
-        : "<b>Made on the website, now Cloudbeds reservation #" + esc(r.cb_reservation_id || "") + ".</b> Work it in Cloudbeds like any other booking (dates, casitas, guests, extras) — this page follows within a few minutes. Confirming / cancelling here is sent to Cloudbeds, which emails the guest. Payments verified here are posted to the Cloudbeds folio." + link;
+        : "<b>Booked on the website · now in Cloudbeds (#" + esc(r.cb_reservation_id || "") + ").</b> Cloudbeds is the master from here: change dates, casitas, guests, status or cancel in Cloudbeds — this page follows within a few minutes. Record payments with <b>Payments</b>; verified payments are added to the Cloudbeds folio. The guest got the quotation from the website — Cloudbeds sends the emails from here." + link;
     }
-    saveBtn.textContent = cbLock === "all" ? "Save Staff Notes" : cbLock === "dates" ? "Save" : saveBtn.textContent;
+    saveBtn.textContent = cbLock === "all" ? "Save Staff Notes" : saveBtn.textContent;
   }
 
   function showErr(m) { errEl.textContent = m; errEl.style.display = "block"; saveBtn.disabled = false; }
@@ -451,27 +450,6 @@
       });
       return;
     }
-    if (cbLock === "dates") {
-      // website booking that's in Cloudbeds: only status, staff notes and a payment proof
-      saveBtn.disabled = true;
-      var pf = $("vPayFile").files && $("vPayFile").files[0];
-      var st = $("vStatus").value;
-      var job = pf ? D.uploadProof({ id: editing.id }, pf) : Promise.resolve(null);
-      job.then(function (path) {
-        var patch = { staff_notes: $("vStaffNotes").value, status: st };
-        if (path) {
-          patch.payment_screenshot_path = path; patch.payment_uploaded_at = new Date().toISOString();
-          if (["pending", "pending_payment"].indexOf(st) !== -1) patch.status = "confirmed";
-        }
-        return sb.from("booking_requests").update(patch).eq("id", editing.id);
-      }).then(function (u) {
-        saveBtn.disabled = false;
-        if (u && u.error) return showErr("Couldn't save: " + u.error.message);
-        close();
-        D.reload();
-      }, function (err) { showErr("Couldn't save: " + (err && err.message || err)); });
-      return;
-    }
     var a = $("vIn").value, b = $("vOut").value;
     if (!$("vName").value.trim()) return showErr("Primary guest name is required.");
     if (!a || !b || b <= a) return showErr("Set a check-out date after the check-in date.");
@@ -505,10 +483,9 @@
         var saved = Array.isArray(res.data) ? res.data[0] : res.data;
         var jobs = Promise.resolve();
         if (file) {
+          // A proof uploaded by staff is a verified payment (Payments, Cloudbeds folio, confirmation).
           jobs = jobs.then(function () { return D.uploadProof({ id: saved.id }, file); }).then(function (path) {
-            var patch = { payment_screenshot_path: path, payment_uploaded_at: new Date().toISOString() };
-            if (["pending", "pending_payment"].indexOf(payload.status) !== -1) patch.status = "confirmed";
-            return sb.from("booking_requests").update(patch).eq("id", saved.id).then(function (u) { if (u.error) throw u.error; });
+            return D.attachProof(saved.id, path, $("vPayPortion"));
           });
         }
         if (!r && notify) {
@@ -607,6 +584,8 @@
         occupied += span;
         var r = h.booking_id ? rowsById[h.booking_id] : null;
         var cls = (h.booking_id ? "st-" + (r ? r.status : "pending") : "st-block") + (h.provisional ? " provisional" : "");
+        if (r && r.cb_info && r.cb_info.status) cls += " cbs-" + r.cb_info.status;
+        if (!h.booking_id && h.cb_block_id) cls += " cb-hold";
         if (h.check_in < d) cls += " cont-l";
         if (h.check_out > addDays(start, n)) cls += " cont-r";
         var title = h.booking_id
@@ -614,7 +593,7 @@
           : "Blocked: " + (h.block_reason || "");
         var label = h.booking_id ? (r ? r.guest_name : "Booking") + (h.provisional ? " (unassigned)" : "") : (h.cb_block_id ? "" : "Blocked — ") + (h.block_reason || "");
         var sub = h.booking_id && r ? r.order_code + " · " + ((r.adults || 0) + (r.children_6_12 || 0) + (r.children_0_5 || 0)) + " pax" : fmtDate(h.check_in) + "→" + fmtDate(h.check_out);
-        html += '<td colspan="' + span + '"><div class="cal-bk ' + cls + '" data-hold="' + h.id + '" title="' + esc(title) + '">' + esc(label) + "<small>" + esc(sub) + "</small></div></td>";
+        html += '<td colspan="' + span + '"><div class="cal-bk ' + cls + '" data-hold="' + h.id + '" data-booking="' + (h.booking_id || "") + '" title="'  + esc(title) + '">' + esc(label) + "<small>" + esc(sub) + "</small></div></td>";
         i += span;
       }
       html += "</tr>";
@@ -692,5 +671,6 @@
     });
   });
 
-  window.VBRVillas = { init: init, labelsFor: labelsFor, openBooking: openBooking };
+  window.VBRVillas = { init: init, labelsFor: labelsFor, openBooking: openBooking, villas: function () { return villas; },
+    villasFor: function (r) { return (r.booking_villas || []).map(function (bv) { return villasById[bv.villa_id]; }).filter(Boolean).sort(function (a, b) { return a.sort - b.sort; }); } };
 })();

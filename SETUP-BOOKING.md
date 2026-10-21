@@ -664,3 +664,14 @@ Blocked cabanas show hatched (⛔) on the staff map, with the reason in the tool
 - Bookings already on the cabana before it was blocked keep it. Staff are warned when blocking, and those bookings show **⚠** next to the cabana on the dashboard and in the Cabana Map, so the party can be moved.
 - Two blocks on the same cabana can't overlap; shorten or remove the old one first.
 - Every block and unblock is in the activity log ("Cabana blocked" / "Cabana block removed").
+
+## 16. Cloudbeds first — merged version (v21)
+
+Two versions of "send website villa bookings to Cloudbeds" were built in parallel (sections 12–14, and `booking-v18-cloudbeds-first.sql`). **Run** `supabase-functions/booking-v21-cloudbeds-merge.sql` (after v18-cloudbeds-ota, v19, v20 and v18-cloudbeds-first), then redeploy **both** Edge Functions. It keeps sections 12–14 except:
+
+- **Emails:** for a website villa booking that is in Cloudbeds, the website sends **only the quotation**. Cloudbeds' own emails take over: confirming / cancelling on the website is sent to Cloudbeds with its status email switched on. Staff alerts (proof uploaded, balance overdue) still come from the website. Not sent to these guests any more: proof received, payment under review / rejected, balance reminders, paid in full, change notices — use Cloudbeds' templates and schedules instead. Day trips keep every website email. (Section 13's table applies to day trips and to villa bookings made while test mode was on.)
+- **Sources:** each booking gets the Cloudbeds source for where it was made — **New Website – Guest** or **New Website – Staff** (setup finds them by name; `CLOUDBEDS_SOURCE_ID` is only a fallback).
+- **Made on:** every booking is labelled Website · Guest, Website · Staff, Cloudbeds or Day Trip sheet (dashboard badge, "Made on" filter, CSV column).
+- **Proofs:** a guest's proof is attached to the Cloudbeds reservation (Documents + a note "not counted yet") as soon as it's uploaded, so Cloudbeds staff can check it. Verified payments are posted to the folio (method matched to the property's Cloudbeds payment methods, e.g. Bank Transfer / Cash).
+- **Payments made in Cloudbeds** count on the website: uploads they cover are marked verified "by Cloudbeds".
+- **Discounts:** the first adjustment checks which way Cloudbeds applies the sign and remembers it (`cb_sync_state.adj_sign`).
