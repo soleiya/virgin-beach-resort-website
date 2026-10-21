@@ -900,7 +900,7 @@
       if (r.total_amount != null && r.stay_type === "overnight") {
         tdTotal.title = "Room: " + peso(r.room_total) + " · Meals: " + peso(r.meal_total) + (Number(r.extra_bed_total) ? " · Extra beds: " + peso(r.extra_bed_total) : "") +
           (Number(r.pet_total) ? " · Pets: " + peso(r.pet_total) : "") + (Number(r.add_on_total) ? " · Add-ons: " + peso(r.add_on_total) : "") +
-          (Number(r.online_discount) ? " · Convenience Discount: −" + peso(r.online_discount) : "") + (Number(r.discount_amount) ? " · Discount: −" + peso(r.discount_amount) : "");
+          (Number(r.online_discount) ? " · Convenience Discount: −" + peso(r.online_discount) : "") + (Number(r.code_discount) ? " · Code " + esc(r.discount_code || "") + ": −" + peso(r.code_discount) : "") + (Number(r.discount_amount) ? " · Discount: −" + peso(r.discount_amount) : "");
       } else if (r.total_amount != null) {
         tdTotal.title = "People: " + peso(r.subtotal_people) + (r.senior_discount ? " (incl. " + peso(r.senior_discount) + " senior discount)" : "") + " · Cabana(s): " + peso(r.cabana_total);
       }
@@ -2181,7 +2181,7 @@
     if (!r) return;
     if (isVillaRow(r) && window.VBRVillas) window.VBRVillas.openBooking(r); else openModal(r);
   });
-  var KIND_SECTIONS = { room: "Casita", meal: "Full-board meals", senior_room: "Discounts", extra_bed: "Extras", pet: "Extras", add_on: "Add-ons", online_discount: "Discounts", discount: "Discounts" };
+  var KIND_SECTIONS = { room: "Casita", meal: "Full-board meals", senior_room: "Discounts", extra_bed: "Extras", pet: "Extras", add_on: "Add-ons", online_discount: "Discounts", code_discount: "Discounts", discount: "Discounts" };
   // Overnight quote lines → "desc · 2 × ₱15,525" rows, grouped.
   function villaRows(lines) {
     var out = [], last = null;
@@ -2189,7 +2189,7 @@
       var sec = KIND_SECTIONS[l.kind] || "Other";
       if (sec !== last) { out.push('<div class="bill-sec">' + esc(sec) + "</div>"); last = sec; }
       var amt = Number(l.amount), qty = Number(l.qty) || 0, rate = Number(l.rate) || 0;
-      var math = qty && rate && l.kind !== "senior_room" && l.kind !== "online_discount" ? '<span class="bd-qty">' + qty + " × " + esc(peso(Math.abs(rate))) + "</span>" : "";
+      var math = qty && rate && l.kind !== "senior_room" && l.kind !== "online_discount" && l.kind !== "code_discount" ? '<span class="bd-qty">' + qty + " × " + esc(peso(Math.abs(rate))) + "</span>" : "";
       out.push(billRow(esc(l.desc) + math, amt === 0 ? "Free" : (amt < 0 ? "−" + peso(-amt) : peso(amt)), amt < 0 ? "discount" : ""));
     });
     return out;

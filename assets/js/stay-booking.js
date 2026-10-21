@@ -309,11 +309,12 @@
     sb.rpc("quote_overnight", {
       p_check_in: checkInEl.value, p_check_out: checkOutEl.value, p_villa_ids: picked.map(function (v) { return v.id; }),
       p_adults: p.adults, p_seniors: p.seniors, p_kids612: p.kids612, p_kids05: p.kids05, p_pets: pets(),
-      p_add_ons: addOnPayload(), p_online_bank: true,
+      p_add_ons: addOnPayload(), p_online_bank: false, p_code: appliedCode || null,
     }).then(function (res) {
       if (seq !== quoteSeq) return;
       if (res.error) throw res.error;
       lastQuote = res.data;
+      showCode(res.data);
       renderBill(res.data);
     }).catch(function () {
       if (seq !== quoteSeq) return;
@@ -321,11 +322,32 @@
     });
   }
 
+  // ---------------------------------------------------------------- discount code
+  var appliedCode = "";
+  var codeEl = $("discountCode"), codeMsg = $("codeMsg");
+  function applyCode() {
+    appliedCode = (codeEl.value || "").trim().toUpperCase();
+    codeEl.value = appliedCode;
+    if (!appliedCode) { codeMsg.hidden = true; }
+    fetchQuote();
+  }
+  if (codeEl) {
+    $("applyCode").addEventListener("click", applyCode);
+    codeEl.addEventListener("keydown", function (e) { if (e.key === "Enter") { e.preventDefault(); applyCode(); } });
+    codeEl.addEventListener("input", function () { if (!codeEl.value.trim() && appliedCode) applyCode(); });
+  }
+  function showCode(q) {
+    if (!codeMsg || !appliedCode) { if (codeMsg) codeMsg.hidden = true; return; }
+    codeMsg.hidden = false;
+    if (q.code_error) { codeMsg.className = "code-msg is-bad"; codeMsg.textContent = q.code_error; }
+    else { codeMsg.className = "code-msg is-ok"; codeMsg.textContent = "Code " + q.discount_code + " applied — you save " + peso(q.code_discount) + "."; }
+  }
+
   function renderBill(q) {
     var rows = (q.lines || []).map(function (l) {
       var qty = Number(l.qty) || 0;
       var label = esc(l.desc);
-      if (l.kind !== "senior_room" && l.kind !== "online_discount") label += ' <span class="muted">' + (Number(l.rate) ? "× " + qty + " @ " + peso(l.rate) : "× " + qty) + "</span>";
+      if (l.kind !== "senior_room" && l.kind !== "online_discount" && l.kind !== "code_discount") label += ' <span class="muted">' + (Number(l.rate) ? "× " + qty + " @ " + peso(l.rate) : "× " + qty) + "</span>";
       var amt = Number(l.amount) === 0 ? "Free" : peso(l.amount);
       return '<div class="bill-row' + (Number(l.amount) < 0 ? " is-discount" : "") + '"><span>' + label + "</span><span>" + amt + "</span></div>";
     }).join("");
@@ -439,6 +461,9 @@
       if (!(petVaxFilesEl.files && petVaxFilesEl.files.length)) return ["Please attach your pet's vaccination card.", petVaxFilesEl];
       if (!petAgreeEl.checked) return ["Please read and agree to the Pet Policy.", petAgreeEl];
     }
+    var typed = codeEl ? codeEl.value.trim().toUpperCase() : "";
+    if (typed && typed !== appliedCode) return ["Press Apply to use your discount code (or clear it).", codeEl];
+    if (appliedCode && lastQuote && lastQuote.code_error) return [lastQuote.code_error + " Please check the code or clear it.", codeEl];
     if (!$("agreeTerms").checked) return ["Please confirm the meal package and Reservations Agreement.", $("agreeTerms")];
     return null;
   }
@@ -479,6 +504,7 @@
       pet_count: pets(),
       pet_policy_agreed: pets() > 0 && petAgreeEl.checked,
       add_ons: addOnPayload(),
+      discount_code: lastQuote && lastQuote.discount_code ? lastQuote.discount_code : null,
       how_heard: $("hearAbout").value || null,
       occasion: $("occasion").value || null,
       notes: $("notes").value.trim() || null,
@@ -519,7 +545,7 @@
       "<p>Your Booking ID is <strong>" + esc(row && row.order_code || "—") + "</strong>" + (row && row.total != null ? " · Total <strong>" + peso(row.total) + "</strong>" : "") + ".</p>" +
       "<p>We're holding " + esc(picked.map(function (v) { return v.room_type_name + " (" + v.unit_label + ")"; }).join(", ")) +
       " for " + fmtDay(payload.check_in) + " → " + fmtDay(payload.check_out) + ". Your quotation, bank details and next steps are on their way to <strong>" + esc(payload.guest_email) +
-      "</strong>. Transfer 50% or 100% by bank or e-wallet within 24 hours and upload your proof to secure it — your 5% Convenience Discount is already included.</p>" +
+      "</strong>. Transfer 50% or 100% by bank or e-wallet within 24 hours and upload your proof to secure it" + (payload.discount_code ? " — your discount code " + esc(payload.discount_code) + " is already applied" : "") + ".</p>" +
       "<p>Can't find the email? Check Spam or Promotions, or call us at +63 917 792 0712.</p>" +
       '<p><a class="btn btn-ghost" href="../pay/index.html?order=' + encodeURIComponent(row && row.order_code || "") + "&email=" + encodeURIComponent(payload.guest_email) + '">Upload payment proof</a></p>';
     window.scrollTo({ top: st.getBoundingClientRect().top + window.scrollY - 120, behavior: "smooth" });

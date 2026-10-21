@@ -57,14 +57,6 @@ body = f"""
         <button type="submit" class="btn btn-primary qb-go">Book a day trip</button>
       </div>
       <p class="qb-error" id="qbError" hidden></p>
-      <div class="qb-discount">
-        <span class="qb-badge">5% off villa stays</span>
-        <span class="qb-dtext">Convenience Discount when you</span>
-        <ul>
-          <li>book here, on our official website</li>
-          <li>pay by bank or e-wallet transfer</li>
-        </ul>
-      </div>
       <a class="qb-paylink" href="pay/index.html"><span>Already booked?</span> <b>Upload your payment &rarr;</b></a>
     </form>
   </div>

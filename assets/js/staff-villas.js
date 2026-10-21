@@ -60,7 +60,7 @@
   function priceSig() {
     var c = counts();
     return [$("vIn").value, $("vOut").value, picked.slice().sort().join(","), c.adults, c.seniors, c.k612, c.k05, $("vPets").value,
-      JSON.stringify(addOnPayload()), $("vOnline").checked, $("vDiscType").value, $("vDiscValue").value].join("|");
+      JSON.stringify(addOnPayload()), codeVal(), $("vDiscType").value, $("vDiscValue").value].join("|");
   }
   function keeping() { return keepSaved && editing && openSig !== null && priceSig() === openSig; }
 
@@ -129,7 +129,9 @@
     picked = editing ? (r.booking_villas || []).map(function (bv) { return bv.villa_id; }) : (preset.villa_id ? [preset.villa_id] : []);
     addonQty = {};
     (Array.isArray(r.add_ons) ? r.add_ons : []).forEach(function (a) { addonQty[a.slug] = a.qty; });
-    $("vOnline").checked = editing ? Number(r.online_discount) > 0 : false;
+    // the 5% Convenience Discount is gone for new bookings; an old booking keeps it
+    keepOnline = !!editing && Number(r.online_discount) > 0;
+    $("vCode").value = editing ? (r.discount_code || "") : "";
     renderAddOns();
     guests = Array.isArray(r.companions) ? r.companions.map(function (c) { return { name: c.name || "", age_group: c.age_group || "adult" }; }) : [];
     // Older / imported bookings may have head-counts but no names: fill blank rows.
@@ -281,7 +283,9 @@
   $("vPrimarySenior").addEventListener("change", function () { renderGuests(); requestQuote(); });
   $("vName").addEventListener("input", function () { var f = $("vGuests").querySelector("input[readonly]"); if (f) f.value = $("vName").value || "Primary guest"; });
   ["vPets", "vDiscValue", "vDiscReason"].forEach(function (id) { $(id).addEventListener("input", requestQuote); });
-  ["vDiscType", "vOverCap", "vOnline"].forEach(function (id) { $(id).addEventListener("change", requestQuote); });
+  ["vDiscType", "vOverCap"].forEach(function (id) { $(id).addEventListener("change", requestQuote); });
+  $("vCode").addEventListener("change", requestQuote);
+  $("vCode").addEventListener("input", function () { clearTimeout(codeTimer); codeTimer = setTimeout(requestQuote, 600); });
   $("vEmail").addEventListener("input", updateNotify);
   $("vStatus").addEventListener("change", updateNotify);
 
@@ -297,6 +301,13 @@
   }
 
   // ---------------- price ----------------
+  var keepOnline = false, codeTimer = null;
+  function codeVal() { return ($("vCode").value || "").trim().toUpperCase(); }
+  // an existing booking's own code is checked against the day it was booked
+  function codeOn() {
+    return editing && editing.discount_code && codeVal() === editing.discount_code
+      ? new Date(editing.created_at).toLocaleDateString("en-CA", { timeZone: "Asia/Manila" }) : null;
+  }
   function requestQuote() { clearTimeout(quoteTimer); quoteTimer = setTimeout(fetchQuote, 200); }
   function fetchQuote() {
     var a = $("vIn").value, b = $("vOut").value, c = counts();
@@ -310,11 +321,15 @@
       return;
     }
     var seq = ++quoteSeq;
-    sb.rpc("quote_overnight", { p_check_in: a, p_check_out: b, p_villa_ids: picked, p_adults: c.adults, p_seniors: c.seniors, p_kids612: c.k612, p_kids05: c.k05, p_pets: parseInt($("vPets").value || "0", 10) || 0, p_add_ons: addOnPayload(), p_online_bank: $("vOnline").checked })
+    sb.rpc("quote_overnight", { p_check_in: a, p_check_out: b, p_villa_ids: picked, p_adults: c.adults, p_seniors: c.seniors, p_kids612: c.k612, p_kids05: c.k05, p_pets: parseInt($("vPets").value || "0", 10) || 0, p_add_ons: addOnPayload(), p_online_bank: keepOnline, p_code: codeVal() || null, p_code_on: codeOn() })
       .then(function (res) {
         if (seq !== quoteSeq) return;
         if (res.error) { bill.innerHTML = '<p class="bill-note" style="color:#9b2c2c;">' + esc(res.error.message) + "</p>"; return; }
         lastQuote = res.data;
+        var cm = $("vCodeMsg");
+        cm.hidden = !codeVal();
+        cm.style.color = res.data.code_error ? "#9b2c2c" : "var(--lagoon-deep)";
+        cm.textContent = res.data.code_error ? res.data.code_error : codeVal() ? "Code " + res.data.discount_code + " applied — " + peso(res.data.code_discount) + " off." : "";
         renderBill(res.data);
       });
   }
@@ -430,7 +445,7 @@
           discount_type: $("vDiscType").value || null, discount_value: $("vDiscValue").value || null, discount_amount: disc, discount_reason: $("vDiscReason").value || null,
           total_amount: keeping() ? editing.total_amount : (base != null ? base - disc : null),
         });
-        var qp = pl.check_in && pl.check_out && picked.length ? { p_check_in: pl.check_in, p_check_out: pl.check_out, p_villa_ids: picked, p_adults: c.adults, p_seniors: c.seniors, p_kids612: c.k612, p_kids05: c.k05, p_pets: pl.pet_count, p_add_ons: pl.add_ons, p_online_bank: $("vOnline").checked } : null;
+        var qp = pl.check_in && pl.check_out && picked.length ? { p_check_in: pl.check_in, p_check_out: pl.check_out, p_villa_ids: picked, p_adults: c.adults, p_seniors: c.seniors, p_kids612: c.k612, p_kids05: c.k05, p_pets: pl.pet_count, p_add_ons: pl.add_ons, p_online_bank: keepOnline, p_code: codeVal() || null, p_code_on: codeOn() } : null;
         if (!editing) return { draft: draft, unit_ids: picked.slice(), quote_params: qp };
         return { booking_id: editing.id, draft: draft, unit_ids: picked.slice(), quote_params: qp, changes: changeList(editing, pl, c, picked, draft.total_amount) };
       },
@@ -473,7 +488,7 @@
       notes: $("vNotes").value, staff_notes: $("vStaffNotes").value,
       keep_total: keeping(), total_amount: keeping() ? editing.total_amount : null,
       allow_over_capacity: $("vOverCap").checked,
-      add_ons: addOnPayload(), online_bank: $("vOnline").checked,
+      add_ons: addOnPayload(), discount_code: codeVal() || null,
     };
     var file = $("vPayFile").files && $("vPayFile").files[0];
     var r = editing;

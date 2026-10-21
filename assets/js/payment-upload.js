@@ -304,7 +304,7 @@
             (payFile
               ? (inCloudbeds
                   // villa stays are handled in our reservations system, which emails the confirmation
-                  ? " Our reservations team will check it and email your confirmation once the payment is verified"
+                  ? " We've emailed you an acknowledgement, and you'll receive your booking confirmation by email once our reservations team has verified the payment"
                   : " We've emailed you an acknowledgement, and our reservations team will " + (kind === "balance" ? "email you once it's verified" : "send your confirmation once the payment is verified")) +
                 " (office hours 9:00 AM–4:00 PM, Monday–Friday)."
               : " Our reservations team will check " + (did.length > 1 || /s$/.test(did[0] || "") ? "them" : "it") + " — please remember to upload your payment screenshot too, if you haven't yet.") +

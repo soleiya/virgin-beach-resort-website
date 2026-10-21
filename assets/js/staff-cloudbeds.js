@@ -45,6 +45,7 @@
     sort: '<path d="M8 10l4-4 4 4M8 14l4 4 4-4"/>',
     check: '<circle cx="12" cy="12" r="8"/><path d="M8.5 12.5l2.5 2.5 4.5-5"/>',
     user: '<circle cx="12" cy="9" r="3.5"/><path d="M5 20c0-3.6 3.1-6 7-6s7 2.4 7 6"/>',
+    tag: '<path d="M3 12V4h8l10 10-8 8L3 12z"/><circle cx="7.5" cy="7.5" r="1.5"/>',
     globe: '<circle cx="12" cy="12" r="8"/><path d="M4 12h16M12 4c2.5 2.6 2.5 13.4 0 16M12 4c-2.5 2.6-2.5 13.4 0 16"/>',
     refresh: '<path d="M20 11a8 8 0 0 0-14.3-4.3L4 9M4 4v5h5M4 13a8 8 0 0 0 14.3 4.3L20 15M20 20v-5h-5"/>',
   };
@@ -86,7 +87,7 @@
   menu.id = "cbMenu";
   var NAV = [
     ["dashboard", "home", "Dashboard"], ["calendar", "cal", "Calendar"], ["reservations", "bed", "Reservations"], ["daytrips", "sun", "Day Trips"], null,
-    ["#plannerBtn", "map", "Cabana Map"], ["#logBtn", "log", "Activity Log"], ["#teamBtn", "team", "Team Activity"], ["#webBtn", "globe", "Website Bookings"], ["#exportBtn", "dl", "Export CSV"], null,
+    ["#plannerBtn", "map", "Cabana Map"], ["#logBtn", "log", "Activity Log"], ["#teamBtn", "team", "Team Activity"], ["#webBtn", "globe", "Website Bookings"], ["#codesBtn", "tag", "Discount Codes"], ["#exportBtn", "dl", "Export CSV"], null,
     ["#logoutBtn", "out", "Sign out"],
   ];
   menu.innerHTML = NAV.map(function (n) {

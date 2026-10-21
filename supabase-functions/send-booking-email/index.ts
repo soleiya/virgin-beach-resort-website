@@ -838,9 +838,14 @@ ${p(`Thank you! We've received ${last ? `the proof of ${what}` : what} for <stro
 ${statusBox([
     ["Booking ID", esc(r.order_code || "—")],
     [isOvernight(r) ? "Stay" : "Date", esc(isOvernight(r) ? stayRange(r) : fmtDate(r.check_in, "short"))],
-    ["Status", esc(statusLabel({ ...r, status: "pending_payment" }))],
+    ["Status", esc(inCloudbeds(r) ? "Confirmation Pending · payment being verified" : statusLabel({ ...r, status: "pending_payment" }))],
   ])}
-${p(isBalance
+${inCloudbeds(r)
+    // villa stays in Cloudbeds: the confirmation comes from our reservations system, not this thread
+    ? p(isBalance
+      ? "Our team is now verifying it against our bank records. Once it's confirmed, it will show on your booking as paid &mdash; and you're all set for your arrival."
+      : "Our team is now verifying it against our bank records. As soon as it's confirmed, you'll receive your <strong>booking confirmation</strong> by email from our reservations system &mdash; no need to do anything else in the meantime. If you don't see it, kindly check your Spam or Junk folder.")
+    : p(isBalance
     ? "Our team is now verifying it against our bank records. Once it's confirmed, we'll email you in this same thread &mdash; and you're all set for your arrival."
     : "Our team is now verifying it against our bank records. As soon as it's confirmed, we'll send your <strong>booking confirmation</strong> in this same email thread &mdash; no need to do anything else in the meantime. If you don't see it, kindly check your Spam or Junk folder.")}
 ${balanceAfter > 0.5 && ps?.balance_due ? p(`The remaining balance of <strong>${esc(peso(balanceAfter))}</strong> is due by <strong>${esc(fmtDate(ps.balance_due))}</strong>${isOvernight(r) && Number(r.online_discount) > 0 ? ` &mdash; please pay it by bank or e-wallet transfer too, to keep your 5% Convenience Discount` : ""}. You'll upload that proof the same way.`) : ""}
@@ -1551,8 +1556,9 @@ function autoEmail(r: Any, c: ReturnType<typeof cfg>) {
 }
 
 // v21: a website villa booking that's now a Cloudbeds reservation follows
-// Cloudbeds' own emails (Confirmed, Cancelled, its schedules). The website only
-// sent the quotation; staff alerts still come from here.
+// Cloudbeds' own emails (Confirmed, Cancelled, its schedules). The website
+// sends only the quotation and the "payment proof received" acknowledgement;
+// staff alerts still come from here.
 export const inCloudbeds = (r: Any) => !!r?.cb_reservation_id && !r?.cb_owned;
 const CB_SKIP = { skipped: "in Cloudbeds — Cloudbeds emails the guest" };
 
@@ -1570,7 +1576,9 @@ async function onProof(r: Any) {
   const stamp = String(r.payment_uploaded_at || Date.now());
   const staff = await send({ booking: r, kind: `proof_staff:${stamp}`, to: [...c.staffEmails, ...c.proofCc], subject: s.subject, html: s.html, thread: "staff", attachments: att });
   let guest = null;
-  if (r.guest_email && !inCloudbeds(r)) {
+  // the "we received your payment proof" acknowledgement goes to every guest,
+  // including villas in Cloudbeds (Cloudbeds has no such email)
+  if (r.guest_email) {
     const g = guestProofEmail(r, c, ps);
     guest = await send({ booking: r, kind: `proof_guest:${stamp}`, to: r.guest_email, subject: g.subject, html: g.html, thread: "guest" });
   }

@@ -820,3 +820,12 @@ form.inquiry .field-hint { font-size: 0.8rem; color: var(--ink-soft); margin-top
 .qb-paylink:hover b { text-decoration: underline; }
 .steps-4 .step-link { display: inline-block; margin-top: 10px; font-size: 0.88rem; font-weight: 700; color: var(--lagoon-deep); text-decoration: none; }
 .steps-4 .step-link:hover { text-decoration: underline; }
+
+/* discount code (book-stay quotation step) */
+.code-row { margin: 0 0 16px; }
+.code-row label { display: block; font-weight: 600; margin-bottom: 6px; }
+.code-input { display: flex; gap: 8px; max-width: 420px; }
+.code-input input { flex: 1; text-transform: uppercase; letter-spacing: .04em; }
+.code-msg { margin: 6px 0 0; font-size: .88rem; font-weight: 600; }
+.code-msg.is-ok { color: var(--lagoon-deep); }
+.code-msg.is-bad { color: #b3261e; }

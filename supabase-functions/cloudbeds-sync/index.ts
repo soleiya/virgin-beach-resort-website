@@ -634,6 +634,7 @@ export function detailsNote(b: Any, addOnNames: Record<string, string> = {}): st
   if (b.notes) out.push(`Guest requests: ${String(b.notes).slice(0, 1500)}`);
   if (b.occasion) out.push(`Occasion: ${b.occasion}`);
   if (b.how_heard) out.push(`Heard about us: ${b.how_heard}`);
+  if (b.discount_code) out.push(`Discount code: ${b.discount_code}${Number(b.code_discount) > 0 ? " (−" + peso(b.code_discount) + ")" : ""}`);
   if (Number(b.discount_amount) > 0) out.push(`Staff discount: ${peso(b.discount_amount)}${b.discount_reason ? " — " + b.discount_reason : ""}`);
   if (b.marketing_opt_in) out.push("OK to receive promos by email");
   return out.join("\n");

@@ -54,11 +54,6 @@ body = f"""
 
 <section>
   <div class="wrap" style="max-width:820px;">
-    <div class="book-direct-note">
-      <span class="bdn-badge">5% off</span>
-      <div><strong>5% Convenience Discount</strong> on your whole stay &mdash; casita, meals and any add-ons &mdash; when you:
-        <ul class="bdn-list"><li>book here, on our official website</li><li>pay by bank or e-wallet transfer</li></ul></div>
-    </div>
     <div id="stayFormWrap">
       <form class="inquiry" id="stayForm" novalidate>
 
@@ -165,13 +160,18 @@ body = f"""
         </div>
 
         <div class="stay-step">
-          <div class="stay-step-head"><span class="stay-step-num">6</span><div><h2>Your quotation</h2><p>All prices include 12% VAT and service charge. Your 5% Convenience Discount is already taken off.</p></div></div>
+          <div class="stay-step-head"><span class="stay-step-num">6</span><div><h2>Your quotation</h2><p>All prices include 12% VAT and service charge.</p></div></div>
+          <div class="code-row">
+            <label for="discountCode">Discount code <span class="muted">(optional)</span></label>
+            <div class="code-input"><input id="discountCode" type="text" autocomplete="off" autocapitalize="characters" spellcheck="false" maxlength="30" placeholder="Enter code"><button type="button" class="btn btn-ghost" id="applyCode">Apply</button></div>
+            <p class="code-msg" id="codeMsg" hidden></p>
+          </div>
           <div id="billSummary" class="bill-summary"><div class="bill-lines"><div class="bill-row"><span>Choose dates, casita(s) and guests to see your total</span><span>&mdash;</span></div></div></div>
           <label class="inline-check"><input type="checkbox" id="agreeTerms"> I understand the full-board meal package is required for every guest, and I agree to the <a class="text-link" href="../assets/docs/VBR-Reservations-Agreement.pdf" target="_blank" rel="noopener">Reservations Agreement</a> (cancellation: free 15+ days before arrival; 50% within 14 days; 100% within 7 days or no-show).</label>
           <label class="inline-check" style="font-size:0.85rem !important; color:var(--ink-soft) !important;"><input type="checkbox" id="marketingOptIn" checked> Send me occasional promos and updates from Virgin Beach Resort.</label>
           <div class="form-error-box" id="formError" hidden></div>
           <button class="btn btn-primary" type="submit" id="submitBtn">Request Booking</button>
-          <p class="field-hint">Your casita is held while you pay: you'll get the quotation and bank details by email right away. Transfer <strong>50% or 100% within 24 hours</strong> and upload your proof to secure it; the balance is due 15 days before arrival (bookings within 14 days of arrival are paid in full). Prefer a card or e-wallet payment link? We can send one &mdash; the Convenience Discount applies to bank or e-wallet transfers.</p>
+          <p class="field-hint">Your casita is held while you pay: you'll get the quotation and bank details by email right away. Transfer <strong>50% or 100% within 24 hours</strong> and upload your proof to secure it; the balance is due 15 days before arrival (bookings within 14 days of arrival are paid in full). Prefer a card or e-wallet payment link? We can send one.</p>
         </div>
       </form>
     </div>

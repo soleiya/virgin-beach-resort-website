@@ -107,6 +107,11 @@ html = """<!doctype html>
   table.web-table tbody tr { cursor: pointer; }
   table.web-table tbody tr:hover td { background: var(--lagoon-tint, #eef6f5); }
   .web-sub { display: block; font-size: 0.72rem; color: var(--ink-soft); margin-top: 2px; }
+  .codes-form { background: var(--sand-deep); border-radius: 12px; padding: 14px 16px 6px; }
+  .codes-actions { margin-bottom: 10px; }
+  .code-st { display: inline-block; padding: 2px 9px; border-radius: 999px; font-size: 0.72rem; font-weight: 700; }
+  .code-st.on { background: #e3f4ec; color: #17694a; } .code-st.later { background: #e6eefb; color: #2350a0; }
+  .code-st.expired, .code-st.off { background: #eef1f4; color: #4a5563; }
   .web-cb-ok { color: #17694a; font-weight: 700; }
   .web-cb-wait { color: #8a6d1a; font-weight: 700; }
   .web-cb-err { color: #b3261e; font-weight: 700; }
@@ -421,6 +426,7 @@ html = """<!doctype html>
         <button class="btn-sm ghost" id="logBtn">Activity Log</button>
         <button class="btn-sm ghost" id="teamBtn">Team Activity</button>
         <button class="btn-sm ghost" id="webBtn">Website Bookings</button>
+        <button class="btn-sm ghost" id="codesBtn">Discount Codes</button>
         <button class="btn-sm ghost" id="exportBtn">Export CSV</button>
         <button class="btn-sm primary" id="addVillaBtn" data-section="villas">+ Villa Booking</button>
         <button class="btn-sm primary" id="addBtn" data-section="daytrip">+ Day Trip Booking</button>
@@ -748,7 +754,11 @@ html = """<!doctype html>
       <div class="villa-pick" id="vAddons"><span class="muted">Loading…</span></div>
 
       <h3 class="modal-subhead">Amount</h3>
-      <label class="modal-check"><input type="checkbox" id="vOnline"> 5% Convenience Discount (booked on the official website + paid by bank or e-wallet transfer)</label>
+      <div class="modal-field v-code">
+        <label for="vCode">Discount code <span class="muted">(optional)</span></label>
+        <input id="vCode" type="text" autocomplete="off" spellcheck="false" maxlength="30" placeholder="e.g. EXCLUSIVE" style="text-transform:uppercase;">
+        <p class="field-hint" id="vCodeMsg" hidden></p>
+      </div>
       <div id="vBill" class="bill-summary modal-bill"></div>
       <div class="modal-row three" style="margin:12px 0 0;">
         <div class="modal-field" style="margin-bottom:0;">
@@ -954,6 +964,39 @@ html = """<!doctype html>
   </div>
 </div>
 
+<div class="modal-backdrop" id="codesModalBackdrop">
+  <div class="modal modal-wide web-modal">
+    <h2>Discount Codes</h2>
+    <p style="color:var(--ink-soft); font-size:0.85rem; margin:-10px 0 16px;">Codes guests can enter when booking a villa on the website (staff can enter them in the villa booking form too). A code is checked against the day the booking is made; bookings keep their discount even after a code expires or is switched off.</p>
+    <form class="codes-form" id="codesForm" autocomplete="off">
+      <div class="modal-row three">
+        <div class="modal-field"><label for="cdCode">Code</label><input id="cdCode" type="text" maxlength="30" required placeholder="e.g. SUMMER25" style="text-transform:uppercase;"></div>
+        <div class="modal-field"><label for="cdApplies">Takes the % off</label>
+          <select id="cdApplies"><option value="rooms">Casita nightly rates only</option><option value="add_ons">Add-ons only</option><option value="all">The whole stay</option></select></div>
+        <div class="modal-field"><label for="cdPercent">Percent off</label><input id="cdPercent" type="number" min="1" max="100" step="0.01" required placeholder="50"></div>
+      </div>
+      <div class="modal-row three">
+        <div class="modal-field"><label for="cdMin">Casita charges must be over (₱)</label><input id="cdMin" type="number" min="0" step="1" placeholder="0 = no minimum"></div>
+        <div class="modal-field"><label for="cdStart">Valid from <span class="muted">(blank = now)</span></label><input id="cdStart" type="date"></div>
+        <div class="modal-field"><label for="cdEnd">Expires after <span class="muted">(blank = never)</span></label><input id="cdEnd" type="date"></div>
+      </div>
+      <div class="modal-row">
+        <div class="modal-field" style="flex:2;"><label for="cdLabel">Description <span class="muted">(staff only)</span></label><input id="cdLabel" type="text" maxlength="200" placeholder="e.g. 50% off all casita rates — partners"></div>
+        <div class="modal-field"><label class="modal-check" style="margin-top:26px;"><input type="checkbox" id="cdActive" checked> Active</label></div>
+      </div>
+      <p class="form-error-box" id="cdError" style="display:none;"></p>
+      <div class="codes-actions"><button type="submit" class="btn-sm primary" id="cdSave">Add code</button> <button type="button" class="btn-sm ghost" id="cdNew" hidden>New code</button></div>
+    </form>
+    <div class="log-scroll" style="margin-top:14px;">
+      <table class="log-table web-table codes-table">
+        <thead><tr><th>Code</th><th>Discount</th><th>Minimum</th><th>Valid</th><th>Status</th><th class="num">Used</th><th class="num">Discount given</th><th></th></tr></thead>
+        <tbody id="codesBody"><tr><td colspan="8" style="padding:24px;text-align:center;color:var(--ink-soft);">Loading&hellip;</td></tr></tbody>
+      </table>
+    </div>
+    <div class="modal-actions"><button type="button" class="btn-sm ghost" id="codesClose">Close</button></div>
+  </div>
+</div>
+
 <div class="modal-backdrop" id="logModalBackdrop">
   <div class="modal modal-wide">
     <h2>Activity Log</h2>
@@ -1056,6 +1099,7 @@ html = """<!doctype html>
 <script src="../assets/js/staff-payments.js?v=__V_PAYMENTS__"></script>
 <script src="../assets/js/staff-activity.js?v=__V_ACT__"></script>
 <script src="../assets/js/staff-website.js?v=__V_WEB__"></script>
+<script src="../assets/js/staff-codes.js?v=__V_CODES__"></script>
 <script src="../assets/js/staff-cloudbeds.js?v=__V_CBJS__"></script>
 <script src="../assets/js/staff-cloudbeds-pages.js?v=__V_CBPAGES__"></script>
 </body>
@@ -1071,6 +1115,7 @@ html = (html.replace("__V_CSS__", v("assets/css/style.css"))
             .replace("__V_PAYMENTS__", v("assets/js/staff-payments.js"))
             .replace("__V_ACT__", v("assets/js/staff-activity.js"))
             .replace("__V_WEB__", v("assets/js/staff-website.js"))
+            .replace("__V_CODES__", v("assets/js/staff-codes.js"))
             .replace("__V_MAIL__", v("assets/js/staff-email.js"))
             .replace("__V_CBCSS__", v("assets/css/staff-cloudbeds.css"))
             .replace("__V_CBJS__", v("assets/js/staff-cloudbeds.js"))
