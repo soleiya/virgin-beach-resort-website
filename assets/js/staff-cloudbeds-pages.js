@@ -24,8 +24,11 @@
   function initials(n) { return String(n || "?").replace(/[^A-Za-zÀ-ž ]/g, " ").trim().split(/\s+/).slice(0, 2).map(function (w) { return w[0]; }).join("").toUpperCase() || "?"; }
   function statusKey(r) {
     var c = r.cb_info && r.cb_info.status;
-    if (isVilla(r) && c === "checked_in" && r.status === "confirmed") return "checked_in";
-    if (isVilla(r) && c === "no_show") return "no_show";
+    if (isVilla(r) && D.villaStatusKey) {
+      // Cloudbeds' statuses; colours reuse the existing classes
+      var k = D.villaStatusKey(r);
+      return k === "checked_out" ? "completed" : k === "canceled" ? "declined" : k;
+    }
     return r.status;
   }
   function statusHtml(r) { return '<span class="cb-st cb-st-' + statusKey(r) + '"><i></i>' + esc(D.statusLabel ? D.statusLabel(r) : r.status) + "</span>"; }

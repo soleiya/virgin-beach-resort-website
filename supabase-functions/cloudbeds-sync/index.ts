@@ -419,49 +419,71 @@ async function push(bookingId: string): Promise<Any> {
 // villa rates). Everything else the website priced is posted as its own folio
 // line, and discounts as adjustments; then the totals are compared.
 const r2 = (n: number) => Math.round(n * 100) / 100;
-// Each line: `app` is the product's fixed id in Cloudbeds (postCustomItem's
-// appItemID — Cloudbeds keeps the first name it was sent for that id), `ref`
-// the one-off transaction id (a repeat is ignored, so retries can't double up).
-// Amounts are the website's VAT-inclusive totals; `vat` = split out 12% VAT.
-type FolioLine = { app: string; ref: string; name: string; price: number; qty: number; note?: string; vat: boolean };
-export function folioLines(b: Any): FolioLine[] {
-  const lines: FolioLine[] = [];
-  const code = String(b.order_code || b.id);
-  const nights = Number(b.nights) || 0;
-  const guests = (Number(b.adults) || 0) + (Number(b.children_6_12) || 0);
-  // Senior / PWD meals are VAT-exempt: with seniors in the party the meal line goes on without a VAT split
-  if (Number(b.meal_total) > 0) lines.push({ app: "vbr-full-board-meals", ref: `${code}-meals`, name: "Full-board meal package", price: r2(Number(b.meal_total)), qty: 1,
-    note: `${code} · ${guests} guest(s) × ${nights} night(s)`, vat: !(Number(b.senior_count) > 0) });
-  if (Number(b.extra_bed_total) > 0) lines.push({ app: "vbr-extra-mattress", ref: `${code}-beds`, name: "Extra floor mattress", price: r2(Number(b.extra_bed_total)), qty: 1,
-    note: `${code} · ${b.extra_beds || ""} mattress(es) × ${nights} night(s)`, vat: true });
-  if (Number(b.pet_total) > 0) lines.push({ app: "vbr-pet-fee", ref: `${code}-pets`, name: "Pet fee", price: r2(Number(b.pet_total)), qty: 1,
-    note: `${code} · ${b.pet_count || ""} pet(s) × ${nights} night(s)`, vat: true });
-  for (const a of (b.addon_lines || []) as Any[]) {
-    const qty = Number(a.qty) || 0, each = Number(a.price) || 0;
-    if (each > 0 && qty > 0) lines.push({ app: `vbr-addon-${a.slug}`, ref: `${code}-addon-${a.slug}`, name: String(a.name), price: r2(each * qty), qty: 1,
-      note: `${code} · ${qty} × ${peso(each)}`, vat: true });
-  }
-  return lines;
+// ---------------------------------------------------------------- folio = the quotation
+// The Cloudbeds folio mirrors the website quotation line for line:
+//   * room nights — Cloudbeds charges them from its own rates (same as ours);
+//   * every other quotation line (meals per age group, extra mattresses, pets,
+//     each add-on) → one Cloudbeds custom item with the quotation's wording,
+//     unit price and quantity. Nothing has to exist in Cloudbeds first: the
+//     item id is made from the line's wording, so a new or renamed add-on just
+//     shows up under its new name;
+//   * every discount line (Convenience 5%, Senior/PWD, staff discount) → one
+//     adjustment with the same wording, taking that amount off.
+// Prices are VAT-inclusive on the website; Cloudbeds gets the net price + the
+// 12% VAT, like its room charges (VAT-exempt lines, e.g. Senior/PWD meals,
+// without VAT).
+type FolioLine = { app: string; ref: string; name: string; unit: number; qty: number; amount: number; vat: boolean; category: string; note: string };
+type FolioDiscount = { name: string; amount: number };
+
+// short stable id from text (FNV-1a)
+export function shortHash(t: string): string {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < t.length; i++) { h ^= t.charCodeAt(i); h = Math.imul(h, 0x01000193) >>> 0; }
+  return h.toString(36);
 }
-// One postCustomItem body for a line (net price + 12% VAT, as Cloudbeds wants for VAT-inclusive properties)
+const CATEGORY: Record<string, string> = { meal: "Meals", add_on: "Add-ons & activities", extra_bed: "Extra mattress", pet: "Pet fee" };
+
+export function folioPlan(b: Any, quote: Any): { items: FolioLine[]; discounts: FolioDiscount[] } {
+  const code = String(b.order_code || b.id);
+  const items: FolioLine[] = [], discounts: FolioDiscount[] = [];
+  const lines: Any[] = Array.isArray(quote?.lines) ? quote.lines : [];
+  for (const l of lines) {
+    const amount = r2(Number(l.amount) || 0), qty = Number(l.qty) || 1;
+    const name = String(l.desc || l.kind).trim();
+    if (l.kind === "room") continue;
+    if (amount < 0 || /discount/i.test(String(l.kind))) {
+      if (amount) discounts.push({ name, amount: r2(Math.abs(amount)) });
+      continue;
+    }
+    if (!amount) continue; // e.g. kids 0–5 eat free
+    items.push({
+      app: `vbr-${l.kind}-${l.slug || shortHash(name)}${l.slug ? "-" + shortHash(name) : ""}`,
+      ref: `${code}-${l.kind}-${shortHash(name)}`,
+      name, qty, unit: r2(amount / qty), amount, vat: !l.vat_exempt,
+      category: CATEGORY[l.kind] || "Extras", note: `Website ${code}`,
+    });
+  }
+  if (Number(b.discount_amount) > 0) discounts.push({ name: "Discount" + (b.discount_reason ? ` — ${b.discount_reason}` : ""), amount: r2(Number(b.discount_amount)) });
+  return { items, discounts };
+}
+
+// One postCustomItem body for a line: net unit price + the line's 12% VAT
 export function customItemParams(reservationId: string, l: FolioLine, refSuffix = "") {
-  const net = l.vat ? r2(l.price / 1.12) : l.price;
+  const netUnit = l.vat ? r2(l.unit / 1.12) : l.unit;
   return {
     reservationID: reservationId,
-    referenceID: l.ref + refSuffix,
+    referenceID: l.ref + refSuffix, // a repeat is ignored by Cloudbeds — retries can't double up
     items: [{
-      appItemID: l.app, itemName: l.name, itemQuantity: l.qty, itemPrice: net, itemNote: l.note || "",
-      ...(l.vat ? { itemTaxes: [{ taxName: "12% VAT", taxValue: r2(l.price - net) }] } : {}),
+      appItemID: l.app, itemName: l.name, itemQuantity: l.qty, itemPrice: netUnit, itemCategoryName: l.category, itemNote: l.note,
+      ...(l.vat ? { itemTaxes: [{ taxName: "12% VAT", taxValue: r2(l.amount - netUnit * l.qty) }] } : {}),
     }],
   };
 }
-export function folioDiscounts(b: Any): Array<{ name: string; amount: number }> {
-  const d: Array<{ name: string; amount: number }> = [];
-  if (Number(b.senior_discount) > 0) d.push({ name: "Senior Citizen / PWD discount", amount: r2(Number(b.senior_discount)) });
-  if (Number(b.online_discount) > 0) d.push({ name: "Convenience Discount (booked on the website)", amount: r2(Number(b.online_discount)) });
-  if (Number(b.discount_amount) > 0) d.push({ name: "Discount" + (b.discount_reason ? ` — ${b.discount_reason}` : ""), amount: r2(Number(b.discount_amount)) });
-  return d;
+
+async function quoteFor(b: Any): Promise<Any> {
+  return b.quote || await rpc("quote_booking_overnight", { p_booking_id: b.id });
 }
+
 async function cbTotal(reservationId: string): Promise<number | null> {
   const d = (await cb("GET", "getReservation", { reservationID: reservationId })).data || {};
   const t = d.total ?? d.grandTotal ?? d.balanceDetailed?.grandTotal;
@@ -483,14 +505,15 @@ async function postDiscount(reservationId: string, reduce: number, notes: string
 
 async function postFolio(reservationId: string, b: Any): Promise<{ state: string; notes: string[] }> {
   const notes: string[] = [];
-  for (const l of folioLines(b)) {
+  const plan = folioPlan(b, await quoteFor(b));
+  for (const l of plan.items) {
     try {
       await cb("POST", "postCustomItem", customItemParams(reservationId, l));
     } catch (e) {
       notes.push(`${l.name}: ${(e as Error).message}`);
     }
   }
-  for (const d of folioDiscounts(b)) {
+  for (const d of plan.discounts) {
     try {
       await postDiscount(reservationId, d.amount, `${d.name} · ${b.order_code}`, notes);
     } catch (e) {
@@ -513,21 +536,15 @@ async function refolio(bookingId: string, withDiscounts: boolean, suffix = ""): 
   const h = { apikey: SR(), Authorization: `Bearer ${SR()}` };
   const b = (await (await fetch(`${SB_URL()}/rest/v1/booking_requests?id=eq.${encodeURIComponent(bookingId)}&select=*`, { headers: h })).json())?.[0];
   if (!b?.cb_reservation_id || b.cb_owned) return { skipped: "not a website booking in Cloudbeds" };
-  const want: Any[] = Array.isArray(b.add_ons) ? b.add_ons : [];
-  const slugs = want.map((x) => x.slug).filter(Boolean);
-  const cat: Any[] = slugs.length
-    ? await (await fetch(`${SB_URL()}/rest/v1/add_ons?slug=in.(${slugs.map(encodeURIComponent).join(",")})&select=slug,name,price`, { headers: h })).json()
-    : [];
-  b.addon_lines = want.map((x) => ({ ...(cat.find((c) => c.slug === x.slug) || {}), qty: Number(x.qty) || 0 })).filter((x) => x.name);
-  b.nights = Math.round((Date.parse(b.check_out) - Date.parse(b.check_in)) / 86_400_000);
   const res = String(b.cb_reservation_id);
   const notes: string[] = [], posted: string[] = [];
-  for (const l of folioLines(b)) {
+  const plan = folioPlan(b, await quoteFor(b));
+  for (const l of plan.items) {
     try { const r = await cb("POST", "postCustomItem", customItemParams(res, l, suffix)); posted.push(l.name + (r?.data?.notice ? " (already there)" : "")); }
     catch (e) { notes.push(`${l.name}: ${(e as Error).message}`); }
   }
   if (withDiscounts) {
-    for (const d of folioDiscounts(b)) {
+    for (const d of plan.discounts) {
       try { await postDiscount(res, d.amount, `${d.name} · ${b.order_code}`); posted.push(d.name); }
       catch (e) { notes.push(`${d.name}: ${(e as Error).message}`); }
     }
@@ -793,6 +810,14 @@ export async function handle(req: Request): Promise<Response> {
       case "push": return json(await push(String(body.booking_id)));
       case "status": return json(await pushStatus(String(body.booking_id)));
       case "payments": return json(await postPayments());
+      case "folio_preview": {
+        // dry run: exactly what a push / refolio would post for this booking (nothing is sent)
+        const h = { apikey: SR(), Authorization: `Bearer ${SR()}` };
+        const b = (await (await fetch(`${SB_URL()}/rest/v1/booking_requests?id=eq.${encodeURIComponent(String(body.booking_id))}&select=*`, { headers: h })).json())?.[0];
+        if (!b) return json({ error: "booking not found" }, 404);
+        const plan = folioPlan(b, await quoteFor(b));
+        return json({ items: plan.items.map((l) => customItemParams(String(b.cb_reservation_id || "RES"), l).items[0]), discounts: plan.discounts, website_total: b.total_amount });
+      }
       case "refolio": return json(await refolio(String(body.booking_id), body.discounts === true, String(body.suffix || "")));
       case "sync_one": return json(await syncOne(String(body.reservation_id)));
       case "setup": return json(await setup());

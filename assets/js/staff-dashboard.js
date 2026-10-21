@@ -59,18 +59,25 @@
     pending: "Confirmation Pending", pending_payment: "Payment Under Review", confirmed: "Confirmed",
     declined: "Cancelled", completed: "Completed", expired: "Cancelled · payment not received",
   };
-  // Villas use Cloudbeds' status names so both systems read the same.
-  var VILLA_STATUS = {
-    pending: "Confirmation Pending", pending_payment: "Payment Under Review", confirmed: "Confirmed",
-    completed: "Checked Out", declined: "Cancelled", expired: "Cancelled · payment not received",
-  };
-  function statusLabel(r) {
-    if (r && r.stay_type === "overnight") {
-      var cbs = r.cb_info && r.cb_info.status;
-      if (cbs === "checked_in" && r.status === "confirmed") return "Checked In";
-      if (cbs === "no_show" && r.status === "declined") return "No-Show";
-      return VILLA_STATUS[r.status] || r.status;
+  // Villas show exactly Cloudbeds' six statuses, in Cloudbeds' words. A
+  // payment waiting to be checked is still "Confirmation Pending" (as in
+  // Cloudbeds) — the Payment column shows it.
+  var VILLA_ORDER = ["pending", "confirmed", "checked_in", "checked_out", "canceled", "no_show"];
+  var VILLA_LABELS = { pending: "Confirmation Pending", confirmed: "Confirmed", checked_in: "In-House",
+    checked_out: "Checked Out", canceled: "Canceled", no_show: "No-Show" };
+  function villaStatusKey(r) {
+    var cbs = r.cb_info && r.cb_info.status;
+    switch (r.status) {
+      case "pending": case "pending_payment": return "pending";
+      case "confirmed": return cbs === "checked_in" ? "checked_in" : "confirmed";
+      case "completed": return "checked_out";
+      case "declined": return cbs === "no_show" ? "no_show" : "canceled";
+      case "expired": return "canceled";
+      default: return r.status;
     }
+  }
+  function statusLabel(r) {
+    if (r && r.stay_type === "overnight") return VILLA_LABELS[villaStatusKey(r)] || r.status;
     return STATUS_LABELS[r.status] || r.status;
   }
   // Bookings that no longer hold their cabana(s).
@@ -146,8 +153,8 @@
   // links open the Reservations list and copy the reservation number to paste
   // into Cloudbeds' search box.
   var CB_RES_URL = "https://hotels.cloudbeds.com/connect/208402#/reservations";
-  var CB_STATUS = { not_confirmed: "Confirmation Pending", confirmed: "Confirmed", checked_in: "Checked in", checked_out: "Checked out",
-    canceled: "Cancelled", no_show: "No-show", deleted: "Deleted", in_progress: "In progress" };
+  var CB_STATUS = { not_confirmed: "Confirmation Pending", confirmed: "Confirmed", checked_in: "In-House", checked_out: "Checked Out",
+    canceled: "Canceled", no_show: "No-Show", deleted: "Deleted", in_progress: "In progress" };
   // Where the booking was made (booking-v18): the website's guest booking page,
   // the staff dashboard, Cloudbeds (incl. OTAs) or the 2026 Day Trip sheet.
   var ORIGIN_LABELS = { site_guest: "Website · Guest", site_staff: "Website · Staff", cloudbeds: "Cloudbeds", sheet: "Day Trip sheet" };
@@ -468,7 +475,7 @@
         if (dTo && d > dateOnly(dTo)) return false;
       }
 
-      if (fStatus && r.status !== fStatus) return false;
+      if (fStatus && (isVillaRow(r) ? villaStatusKey(r) : r.status) !== fStatus) return false;
       if (fType && r.stay_type !== fType) return false;
       if (fBookedBy && r.booked_by !== fBookedBy) return false;
       if (fSource && (r.source || "website") !== fSource) return false;
@@ -746,12 +753,12 @@
     if (cv) cv.textContent = nV.toLocaleString();
     if (cd) cd.textContent = nD.toLocaleString();
     searchBox.placeholder = activeSection === "villas" ? "Search guest, Cloudbeds #, villa, notes…" : "Search guest, contact, notes…";
-    Array.prototype.forEach.call(filterStatus.options, function (o) {
-      if (!o.value) return;
-      o.textContent = activeSection === "villas"
-        ? (VILLA_STATUS[o.value] || o.value)
-        : (STATUS_LABELS[o.value] || o.value);
-    });
+    // status filter: Cloudbeds' six for villas, ours for day trips
+    var keepSt = filterStatus.value, order = activeSection === "villas" ? VILLA_ORDER : STATUS_ORDER;
+    filterStatus.innerHTML = '<option value="">All statuses</option>' + order.map(function (k) {
+      return '<option value="' + k + '">' + esc(activeSection === "villas" ? VILLA_LABELS[k] : STATUS_LABELS[k]) + "</option>";
+    }).join("");
+    filterStatus.value = order.indexOf(keepSt) !== -1 ? keepSt : "";
   }
   document.getElementById("sectionTabs").addEventListener("click", function (e) {
     var t = e.target.closest(".sec-tab");
@@ -2308,7 +2315,7 @@
     proofLinks: proofLinks, openSignedUrl: openSignedUrl, uploadProof: uploadProof, attachProof: attachProof,
     cbUrl: cbUrl, loadCbStatus: loadCbStatus,
     STATUS_LABELS: STATUS_LABELS, SOURCE_LABELS: SOURCE_LABELS,
-    TYPE_LABELS: TYPE_LABELS, statusLabel: statusLabel, openModal: openModal,
+    TYPE_LABELS: TYPE_LABELS, statusLabel: statusLabel, villaStatusKey: villaStatusKey, openModal: openModal,
     openBreakdown: openBreakdown, listRows: function () { return renderQueue; },
     section: function () { return activeSection; }, sort: function () { return { field: sortField, dir: sortDir }; }, cabanaLabel: function (id) { return cabanasById[id] ? cabanasById[id].label : ""; },
   };
