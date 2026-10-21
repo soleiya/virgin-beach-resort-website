@@ -353,6 +353,9 @@ export function reservationParams(b: Any, sources: Any = {}) {
 
 const peso = (n: unknown) => n === null || n === undefined ? "—" : "₱" + Number(n).toLocaleString("en-PH", { maximumFractionDigits: 2 });
 
+// "B.Casita 4 - 11" / "B.Casita 4" → "b.casita 4" (same rule as cb_norm in SQL)
+const cbNormName = (x: unknown) => String(x || "").trim().replace(/\s*-\s*\d+$/, "").replace(/\s+/g, " ").toLowerCase();
+
 async function push(bookingId: string): Promise<Any> {
   const b = await rpc("cb_claim_push", { p_booking_id: bookingId });
   if (!b) return { skipped: "not waiting to be pushed" };
@@ -362,9 +365,13 @@ async function push(bookingId: string): Promise<Any> {
     const created = await cb("POST", "postReservation", reservationParams(b, (await state("sources")) || {}));
     reservationId = String(created.reservationID);
     // put each room on the exact casita booked on the website
-    let open: Any[] = Array.isArray(created.unassigned) ? created.unassigned : [];
-    if (!open.length) open = (await cb("GET", "getReservation", { reservationID: reservationId })).data?.unassigned || [];
+    // (Cloudbeds often assigns the room itself — then there's nothing to do)
+    const fresh = (await cb("GET", "getReservation", { reservationID: reservationId })).data || {};
+    const placed: Any[] = Array.isArray(fresh.assigned) ? fresh.assigned : [];
+    let open: Any[] = Array.isArray(fresh.unassigned) ? fresh.unassigned : (Array.isArray(created.unassigned) ? created.unassigned : []);
     for (const v of b.villas as Any[]) {
+      const already = placed.findIndex((a: Any) => String(a.roomID) === String(v.cb_room_id) || cbNormName(a.roomName) === cbNormName(v.unit_label));
+      if (already >= 0) { placed.splice(already, 1); continue; }
       const i = open.findIndex((u: Any) => String(u.roomTypeID) === String(v.cb_room_type_id));
       const slot = i >= 0 ? open.splice(i, 1)[0] : null;
       try {
@@ -412,18 +419,41 @@ async function push(bookingId: string): Promise<Any> {
 // villa rates). Everything else the website priced is posted as its own folio
 // line, and discounts as adjustments; then the totals are compared.
 const r2 = (n: number) => Math.round(n * 100) / 100;
-export function folioLines(b: Any): Array<{ ref: string; name: string; price: number; qty: number; note?: string }> {
-  const lines: Array<{ ref: string; name: string; price: number; qty: number; note?: string }> = [];
+// Each line: `app` is the product's fixed id in Cloudbeds (postCustomItem's
+// appItemID — Cloudbeds keeps the first name it was sent for that id), `ref`
+// the one-off transaction id (a repeat is ignored, so retries can't double up).
+// Amounts are the website's VAT-inclusive totals; `vat` = split out 12% VAT.
+type FolioLine = { app: string; ref: string; name: string; price: number; qty: number; note?: string; vat: boolean };
+export function folioLines(b: Any): FolioLine[] {
+  const lines: FolioLine[] = [];
   const code = String(b.order_code || b.id);
   const nights = Number(b.nights) || 0;
   const guests = (Number(b.adults) || 0) + (Number(b.children_6_12) || 0);
-  if (Number(b.meal_total) > 0) lines.push({ ref: `${code}-meals`, name: "Full-board meal package", price: r2(Number(b.meal_total)), qty: 1, note: `${guests} guest(s) × ${nights} night(s)` });
-  if (Number(b.extra_bed_total) > 0) lines.push({ ref: `${code}-beds`, name: "Extra floor mattress", price: r2(Number(b.extra_bed_total)), qty: 1, note: `${b.extra_beds || ""} mattress(es) × ${nights} night(s)` });
-  if (Number(b.pet_total) > 0) lines.push({ ref: `${code}-pets`, name: "Pet fee", price: r2(Number(b.pet_total)), qty: 1, note: `${b.pet_count || ""} pet(s) × ${nights} night(s)` });
+  // Senior / PWD meals are VAT-exempt: with seniors in the party the meal line goes on without a VAT split
+  if (Number(b.meal_total) > 0) lines.push({ app: "vbr-full-board-meals", ref: `${code}-meals`, name: "Full-board meal package", price: r2(Number(b.meal_total)), qty: 1,
+    note: `${code} · ${guests} guest(s) × ${nights} night(s)`, vat: !(Number(b.senior_count) > 0) });
+  if (Number(b.extra_bed_total) > 0) lines.push({ app: "vbr-extra-mattress", ref: `${code}-beds`, name: "Extra floor mattress", price: r2(Number(b.extra_bed_total)), qty: 1,
+    note: `${code} · ${b.extra_beds || ""} mattress(es) × ${nights} night(s)`, vat: true });
+  if (Number(b.pet_total) > 0) lines.push({ app: "vbr-pet-fee", ref: `${code}-pets`, name: "Pet fee", price: r2(Number(b.pet_total)), qty: 1,
+    note: `${code} · ${b.pet_count || ""} pet(s) × ${nights} night(s)`, vat: true });
   for (const a of (b.addon_lines || []) as Any[]) {
-    if (Number(a.price) > 0 && Number(a.qty) > 0) lines.push({ ref: `${code}-addon-${a.slug}`, name: String(a.name), price: r2(Number(a.price)), qty: Number(a.qty) });
+    const qty = Number(a.qty) || 0, each = Number(a.price) || 0;
+    if (each > 0 && qty > 0) lines.push({ app: `vbr-addon-${a.slug}`, ref: `${code}-addon-${a.slug}`, name: String(a.name), price: r2(each * qty), qty: 1,
+      note: `${code} · ${qty} × ${peso(each)}`, vat: true });
   }
   return lines;
+}
+// One postCustomItem body for a line (net price + 12% VAT, as Cloudbeds wants for VAT-inclusive properties)
+export function customItemParams(reservationId: string, l: FolioLine, refSuffix = "") {
+  const net = l.vat ? r2(l.price / 1.12) : l.price;
+  return {
+    reservationID: reservationId,
+    referenceID: l.ref + refSuffix,
+    items: [{
+      appItemID: l.app, itemName: l.name, itemQuantity: l.qty, itemPrice: net, itemNote: l.note || "",
+      ...(l.vat ? { itemTaxes: [{ taxName: "12% VAT", taxValue: r2(l.price - net) }] } : {}),
+    }],
+  };
 }
 export function folioDiscounts(b: Any): Array<{ name: string; amount: number }> {
   const d: Array<{ name: string; amount: number }> = [];
@@ -437,9 +467,6 @@ async function cbTotal(reservationId: string): Promise<number | null> {
   const t = d.total ?? d.grandTotal ?? d.balanceDetailed?.grandTotal;
   return t === undefined || t === null ? null : Number(t);
 }
-// Cloudbeds' sign convention for adjustments isn't documented: the first
-// discount is checked against the reservation total (and fixed if it went the
-// wrong way), and the result is remembered for every later one.
 const cache: Record<string, Any> = {};
 async function state(key: string): Promise<Any> {
   const res = await fetch(`${SB_URL()}/rest/v1/cb_sync_state?key=eq.${key}&select=value`, {
@@ -447,38 +474,18 @@ async function state(key: string): Promise<Any> {
   });
   return (await res.json())?.[0]?.value ?? null;
 }
-async function postDiscount(reservationId: string, reduce: number, notes: string, notesOut: string[]) {
+// A discount: in Cloudbeds a POSITIVE adjustment reduces the charge (posting 5
+// takes 5 off; -5 adds 5) — confirmed on the live folio of VBR-26977.
+async function postDiscount(reservationId: string, reduce: number, notes: string, _notesOut: string[] = []) {
   if (!(Math.abs(reduce) >= 0.01)) return;
-  let sign: number | null = cache.adjSign ?? (await state("adj_sign"));
-  const known = sign === 1 || sign === -1;
-  if (!known) sign = -1;
-  const before = known ? null : await cbTotal(reservationId).catch(() => null);
-  const amt = r2(sign! * reduce);
-  const r = await cb("POST", "postAdjustment", { reservationID: reservationId, type: "rate", amount: amt, notes });
-  if (known) return;
-  const after = before === null ? null : await cbTotal(reservationId).catch(() => null);
-  if (before === null || after === null || Math.abs(after - before) < 0.01) { notesOut.push("couldn't check the discount direction"); return; }
-  const learned = before - after > 0 ? sign! : -sign!;
-  cache.adjSign = learned;
-  await stateSet("adj_sign", learned);
-  if (learned !== sign) {
-    // went the wrong way: undo it, then post it the right way round
-    const id = r?.adjustmentID ?? r?.data?.adjustmentID;
-    if (id) await cb("DELETE", "deleteAdjustment", { reservationID: reservationId, adjustmentID: id }).catch(() => null);
-    else await cb("POST", "postAdjustment", { reservationID: reservationId, type: "rate", amount: -amt, notes: "Correction: " + notes });
-    await cb("POST", "postAdjustment", { reservationID: reservationId, type: "rate", amount: -amt, notes });
-  }
+  await cb("POST", "postAdjustment", { reservationID: reservationId, type: "rate", amount: r2(reduce), notes });
 }
 
 async function postFolio(reservationId: string, b: Any): Promise<{ state: string; notes: string[] }> {
   const notes: string[] = [];
   for (const l of folioLines(b)) {
     try {
-      await cb("POST", "postCustomItem", {
-        reservationID: reservationId,
-        referenceID: l.ref, // Cloudbeds ignores a repeat of the same reference
-        items: [{ itemID: l.ref, itemName: l.name, itemQuantity: l.qty, itemPrice: l.price, itemNote: l.note || "", itemPaid: "false" }],
-      });
+      await cb("POST", "postCustomItem", customItemParams(reservationId, l));
     } catch (e) {
       notes.push(`${l.name}: ${(e as Error).message}`);
     }
@@ -497,6 +504,37 @@ async function postFolio(reservationId: string, b: Any): Promise<{ state: string
     notes.push(`Cloudbeds total ${peso(total)} vs website ${peso(site)} (difference ${peso(r2(site - total))}) — check the folio`);
   }
   return { state: notes.length ? "partial" : "done", notes };
+}
+
+// Re-post a pushed booking's folio lines (repeats are ignored by referenceID)
+// and, with discounts=true, its discounts — for a push whose folio came out
+// incomplete. { booking_id, discounts?, suffix? }
+async function refolio(bookingId: string, withDiscounts: boolean, suffix = ""): Promise<Any> {
+  const h = { apikey: SR(), Authorization: `Bearer ${SR()}` };
+  const b = (await (await fetch(`${SB_URL()}/rest/v1/booking_requests?id=eq.${encodeURIComponent(bookingId)}&select=*`, { headers: h })).json())?.[0];
+  if (!b?.cb_reservation_id || b.cb_owned) return { skipped: "not a website booking in Cloudbeds" };
+  const want: Any[] = Array.isArray(b.add_ons) ? b.add_ons : [];
+  const slugs = want.map((x) => x.slug).filter(Boolean);
+  const cat: Any[] = slugs.length
+    ? await (await fetch(`${SB_URL()}/rest/v1/add_ons?slug=in.(${slugs.map(encodeURIComponent).join(",")})&select=slug,name,price`, { headers: h })).json()
+    : [];
+  b.addon_lines = want.map((x) => ({ ...(cat.find((c) => c.slug === x.slug) || {}), qty: Number(x.qty) || 0 })).filter((x) => x.name);
+  b.nights = Math.round((Date.parse(b.check_out) - Date.parse(b.check_in)) / 86_400_000);
+  const res = String(b.cb_reservation_id);
+  const notes: string[] = [], posted: string[] = [];
+  for (const l of folioLines(b)) {
+    try { const r = await cb("POST", "postCustomItem", customItemParams(res, l, suffix)); posted.push(l.name + (r?.data?.notice ? " (already there)" : "")); }
+    catch (e) { notes.push(`${l.name}: ${(e as Error).message}`); }
+  }
+  if (withDiscounts) {
+    for (const d of folioDiscounts(b)) {
+      try { await postDiscount(res, d.amount, `${d.name} · ${b.order_code}`); posted.push(d.name); }
+      catch (e) { notes.push(`${d.name}: ${(e as Error).message}`); }
+    }
+  }
+  await rpc("cb_folio_result", { p_booking_id: bookingId, p_state: notes.length ? "partial" : "done", p_note: notes.join(" · ") || null }).catch(() => null);
+  await syncOne(res).catch(() => null);
+  return { reservation_id: res, posted, notes, website_total: b.total_amount, cloudbeds_total: await cbTotal(res).catch(() => null) };
 }
 
 // ---------------------------------------------------------------- proof → Cloudbeds Documents
@@ -755,6 +793,7 @@ export async function handle(req: Request): Promise<Response> {
       case "push": return json(await push(String(body.booking_id)));
       case "status": return json(await pushStatus(String(body.booking_id)));
       case "payments": return json(await postPayments());
+      case "refolio": return json(await refolio(String(body.booking_id), body.discounts === true, String(body.suffix || "")));
       case "sync_one": return json(await syncOne(String(body.reservation_id)));
       case "setup": return json(await setup());
       case "webhooks": return json(await webhooks(body.dedupe === true));
