@@ -97,6 +97,9 @@ const MAILBOX = "reservations@virginbeachresort.com";
 const FROM = `Virgin Beach Resort Reservations <${MAILBOX}>`;
 const EVENTS_EMAIL = "events@virginbeachresort.com";
 const MSGID_DOMAIN = "virginbeachresort.com";
+// The public website address shown to guests (signature, "book again").
+// Working links (upload page, staff dashboard) still use SITE_URL.
+const PUBLIC_SITE = "https://virginbeachresort.com/";
 
 // Payment window in hours. MUST match booking_deadlines() in SQL (24 h) — the
 // database is what actually expires the booking; this is only the wording.
@@ -594,7 +597,7 @@ function signature(c: ReturnType<typeof cfg>) {
 <p style="margin:0 0 4px;"><strong>Reservations:</strong> +63 917 792 0712 (Globe) · +63 929 430 9109 (Smart)</p>
 <p style="margin:0 0 4px;"><strong>Corporate:</strong> +63 929 270 9724</p>
 <p style="margin:0 0 4px;"><strong>Front Office (walk-ins):</strong> +63 969 623 4728 · Km 23 Laiya, San Juan, Batangas</p>
-<p style="margin:0;"><strong>Website:</strong> <a href="${esc(c.site)}" style="color:${C.deep};">${esc(c.site.replace(/^https?:\/\//, ""))}</a></p>
+<p style="margin:0;"><strong>Website:</strong> <a href="${PUBLIC_SITE}" style="color:${C.deep};">virginbeachresort.com</a></p>
 </div>`;
 }
 
@@ -927,7 +930,7 @@ ${statusBox([
   ])}
 ${paid > 0.5 ? p(`We have a payment of <strong>${esc(peso(paid))}</strong> on record for this booking. Our reservations team will contact you in this same email thread about it, in line with the cancellation policy in your Reservations Agreement.`) : ""}
 ${p("If this is unexpected, or you'd like to rebook for another date, simply reply to this email and we'll be happy to help. You can also make a new booking any time on our website.")}
-${button(c.site, "Book again on our website")}
+${button(PUBLIC_SITE, "Book again on our website")}
 ${signature(c)}`;
   return {
     subject: "Re: " + guestSubject(r, c),
@@ -946,7 +949,7 @@ ${statusBox([
     ["Status", esc(statusLabel(r))],
   ])}
 ${p("<strong>Still planning to visit?</strong> You're welcome to book again on our website &mdash; we'll hold your new booking while you pay.")}
-${button(c.site, "Book again on our website")}
+${button(PUBLIC_SITE, "Book again on our website")}
 ${p(`<strong>Already paid?</strong> Please reply to this email with your proof of payment (screenshot or transaction slip) attached, and our team will check it and get back to you as soon as possible.`, "margin-top:14px;")}
 ${signature(c)}`;
   return {
@@ -1519,9 +1522,31 @@ async function proofAttachment(path: string | null, bucket = "payment-proofs", n
 
 // ---------- handlers ---------------------------------------------------------
 
-async function onInsert(r: Any) {
+// A new website villa booking takes Cloudbeds' confirmation number as its
+// Booking ID (VBR-<number>, booking-v25) once it reaches Cloudbeds, which
+// happens at the same moment as this email. Wait for it (up to ~24 s, inside
+// the trigger's 30 s) so the quotation already carries the one final number;
+// if Cloudbeds is slow it goes out with the temporary code, which keeps working.
+async function waitForCloudbeds(r: Any): Promise<Any> {
+  if (!isOvernight(r) || !r.cb_ref_code || r.cb_reservation_id || !r.id) return r;
+  try {
+    const st = await db(`cb_sync_state?key=eq.push_enabled&select=value`);
+    const on = st.ok ? (await st.json())?.[0]?.value === true : false;
+    if (!on) return r;
+    for (let i = 0; i < 8; i++) {
+      await new Promise((res) => setTimeout(res, 3000));
+      const fresh = await loadBooking(String(r.id));
+      if (!fresh) break;
+      if (fresh.cb_reservation_id || fresh.cb_push_state === "error") return { ...r, ...fresh };
+    }
+  } catch { /* send with the temporary code */ }
+  return r;
+}
+
+async function onInsert(r0: Any) {
   const c = cfg();
-  if (!autoEmail(r, c)) return { skipped: "source " + r.source };
+  if (!autoEmail(r0, c)) return { skipped: "source " + r0.source };
+  const r = await waitForCloudbeds(r0);
   const cabanas = await loadUnits(r);
   const q = await quoteFor(r, cabanas);
   const mode = staffSentMode(r);

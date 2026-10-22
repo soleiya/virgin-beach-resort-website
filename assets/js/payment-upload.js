@@ -235,7 +235,9 @@
     }
     if (!needs) { lookup(true); return; }
 
-    var orderCode = orderEl.value.trim();
+    // the booking's current Booking ID (a villa booking's number changes to
+    // VBR-<Cloudbeds no.> once it reaches Cloudbeds; the old one still finds it)
+    var orderCode = needs.order_code || orderEl.value.trim();
     var email = emailEl.value.trim();
     var payFile = fileInput.files && fileInput.files[0];
     var sFiles = !seniorWrap.hidden && seniorFiles.files ? Array.prototype.slice.call(seniorFiles.files) : [];

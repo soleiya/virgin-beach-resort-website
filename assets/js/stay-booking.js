@@ -520,7 +520,7 @@
     }).then(function (res) {
       if (res.error) throw res.error;
       var row = Array.isArray(res.data) ? res.data[0] : res.data;
-      showSuccess(payload, row, picked);
+      return finalRef(row).then(function (r) { showSuccess(payload, r, picked); });
     }).catch(function (err) {
       submitBtn.disabled = false;
       submitBtn.textContent = "Request Booking";
@@ -534,6 +534,26 @@
         : 'Something went wrong sending your request. Please try again, or email <a class="text-link" href="mailto:reservations@virginbeachresort.com">reservations@virginbeachresort.com</a>.');
     });
   });
+
+  // A villa booking takes its Cloudbeds confirmation number as its Booking ID
+  // (VBR-<number>) a few seconds after it's made — wait for it (up to ~25 s)
+  // so the guest only ever sees the one number.
+  function finalRef(row) {
+    if (!row || !row.id) return Promise.resolve(row);
+    submitBtn.textContent = "Securing your casita…";
+    var tries = 0;
+    return new Promise(function (resolve) {
+      (function poll() {
+        sb.rpc("booking_ref", { p_booking_id: row.id }).then(function (res) {
+          var d = res && !res.error ? res.data : null;
+          if (d && (d.final || d.failed)) return resolve(Object.assign({}, row, { order_code: d.order_code || row.order_code }));
+          if (res && res.error) return resolve(row); // not set up yet → show what we have
+          if (++tries >= 12) return resolve(Object.assign({}, row, d && d.order_code ? { order_code: d.order_code } : {}));
+          setTimeout(poll, 2000);
+        }, function () { resolve(row); });
+      })();
+    });
+  }
 
   function showSuccess(payload, row, picked) {
     $("stayFormWrap").hidden = true;

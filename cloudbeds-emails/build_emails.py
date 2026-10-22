@@ -135,7 +135,19 @@ CANCEL_POLICY = (h2("Cancellation &amp; rebooking") +
                      ("7 days or less before arrival / no-show", "100% of booking value forfeited")]) +
                  small("One-time rescheduling within one (1) month of the original dates is possible for medical emergencies or a death in the immediate family (with documents); 20% is forfeited for other rebookings made 14+ days before arrival. Promotional bookings are non-refundable. Inclement weather: free rebooking at Signal No. 2 in San Juan, Batangas."))
 
-STAY_BOX = status_box([("Confirmation no.", "[conf number]"), ("Arrival", "[start date]"), ("Departure", "[end date]")])
+# One booking number everywhere: website villa bookings take Cloudbeds'
+# confirmation no. as their Booking ID, written VBR-<number> (booking-v25).
+# vbr() prefixes every [conf number] shown to the guest (not the one inside the
+# payment-link URL) and calls it "Booking ID", like the website's emails.
+CONF = "[conf number]"
+
+
+def vbr(s):
+    s = re.sub(r"(?<![=\w-])\[conf number\]", "VBR-[conf number]", s)
+    return s.replace(">Confirmation no.<", ">Booking ID<")
+
+
+STAY_BOX = status_box([("Confirmation no.", CONF), ("Arrival", "[start date]"), ("Departure", "[end date]")])
 ROOM_ROWS = kv([("Casita", "[room type]"), ("Nights", "[nights]"), ("Guest", "[full name]")])
 
 TEMPLATES = {}
@@ -147,10 +159,10 @@ TEMPLATES["655214"] = dict(
     body=shell("Your reservation is confirmed — here's everything you need before your stay.", f"""
 {h1("You're all set, [first name]!")}
 {p("Your reservation at Virgin Beach Resort is <strong>confirmed</strong>. We can't wait to welcome you to Laiya.")}
-{status_box([("Confirmation no.", "[conf number]"), ("Arrival", "[start date]"), ("Departure", "[end date]")], "ok")}
+{status_box([("Confirmation no.", CONF), ("Arrival", "[start date]"), ("Departure", "[end date]")], "ok")}
 {ROOM_ROWS}
 {h2("Before you arrive")}
-{ul(["Reply to this email with the <strong>full names and ages</strong> of everyone in your party, plus any <strong>food restrictions or allergies</strong>, so our kitchen can prepare.",
+{ul(["If you haven't already, reply to this email with the <strong>full names and ages</strong> of everyone in your party, plus any <strong>food restrictions or allergies</strong>, so our kitchen can prepare.",
      "Paid 50%? Your <strong>balance is due 15 days before arrival</strong> — transfer it the same way and reply with the screenshot.",
      "Celebrating something? Tell us — we love making it special."])}
 {h2("Good to know before your stay")}
@@ -166,7 +178,7 @@ TEMPLATES["655215"] = dict(
     body=shell("Your reservation is held — complete your payment within 24 hours to confirm it.", f"""
 {h1("Thank you, [first name] — we've received your reservation")}
 {p("Your casita is <strong>held, but not confirmed yet</strong>. To secure it, please pay <strong>50% or 100% within 24 hours</strong> — unpaid reservations are released automatically.")}
-{status_box([("Confirmation no.", "[conf number]"), ("Arrival", "[start date]"), ("Departure", "[end date]")], "warn")}
+{status_box([("Confirmation no.", CONF), ("Arrival", "[start date]"), ("Departure", "[end date]")], "warn")}
 {ROOM_ROWS}
 {h2("How to pay")}
 {p("<strong>Option 1 — Card or e-wallet</strong>, through our secure payment page:")}
@@ -187,8 +199,9 @@ TEMPLATES["655216"] = dict(
     body=shell("Your reservation has been cancelled — details inside.", f"""
 {h1("Your reservation has been cancelled")}
 {p("Hi [first name], this is to let you know that your reservation for <strong>[start date] – [end date]</strong> has been cancelled.")}
-{status_box([("Cancellation no.", "[canc number]"), ("Confirmation no.", "[conf number]"), ("Dates", "[start date] – [end date]")])}
-{p("<strong>Didn't ask for this?</strong> Please reply to this email or call +63 917 792 0712 right away and we'll look into it.")}
+{status_box([("Cancellation no.", "[canc number]"), ("Confirmation no.", CONF), ("Dates", "[start date] – [end date]")])}
+{p("If the payment deadline passed before we received your payment, the casita was released automatically &mdash; you're welcome to book again, or reply to this email if you already paid.")}
+{p("<strong>Didn't expect this?</strong> Please reply to this email or call +63 917 792 0712 right away and we'll look into it.")}
 {p("Any refund follows the cancellation policy below and is processed to your original payment method; our team will email you the details.")}
 [table]
 {CANCEL_POLICY}
@@ -203,7 +216,7 @@ TEMPLATES["655217"] = dict(
     body=shell("Your invoice from Virgin Beach Resort.", f"""
 {h1("Your invoice, [first name]")}
 {p("Here's the invoice for your reservation at Virgin Beach Resort.")}
-{status_box([("Invoice no.", "[invoice number]"), ("Due", "[invoice datedue]"), ("Confirmation no.", "[conf number]")])}
+{status_box([("Invoice no.", "[invoice number]"), ("Due", "[invoice datedue]"), ("Confirmation no.", CONF)])}
 {p("<strong>To pay</strong>, use our secure payment page or transfer to one of our accounts, then reply with the screenshot:")}
 {button(PAY_LINK, "Pay online")}
 <div style="height:10px;"></div>
@@ -238,7 +251,7 @@ TEMPLATES["672223"] = dict(
     body=shell("Your secure payment link — valid for 24 hours.", f"""
 {h1("Almost there, [first name]")}
 {p("We've received your reservation, but your payment didn't go through. Your casita is held for <strong>24 hours</strong> — complete your payment through our secure page to confirm it.")}
-{status_box([("Confirmation no.", "[conf number]"), ("Arrival", "[start date]"), ("Departure", "[end date]")], "warn")}
+{status_box([("Confirmation no.", CONF), ("Arrival", "[start date]"), ("Departure", "[end date]")], "warn")}
 {ROOM_ROWS}
 {button(PAY_LINK, "Complete my payment")}
 {small("The link is valid for 24 hours; after that the reservation is released automatically. Prefer a bank transfer? Reply to this email and we'll send our account details.")}
@@ -253,10 +266,10 @@ TEMPLATES["720038"] = dict(
     body=shell("Your payment went through and your stay is confirmed.", f"""
 {h1("You're all set, [first name]!")}
 {p("Your room payment has gone through and your reservation is <strong>confirmed</strong>.")}
-{status_box([("Confirmation no.", "[conf number]"), ("Arrival", "[start date]"), ("Departure", "[end date]")], "ok")}
+{status_box([("Confirmation no.", CONF), ("Arrival", "[start date]"), ("Departure", "[end date]")], "ok")}
 {ROOM_ROWS}
 {h2("Before you arrive")}
-{ul(["Reply with the <strong>full names and ages</strong> of everyone in your party, plus any <strong>food restrictions or allergies</strong>.",
+{ul(["If you haven't already, reply with the <strong>full names and ages</strong> of everyone in your party, plus any <strong>food restrictions or allergies</strong>.",
      "<strong>Full-board meals</strong> are on top of the room rate and settled at check-in: Adult (13+) ₱2,695 · Child (6–12) ₱1,347.50 · Child (0–5) free, per night."])}
 {h2("Good to know before your stay")}
 {GOOD_TO_KNOW}
@@ -325,7 +338,8 @@ def main():
     out = {}
     for tid, t in TEMPLATES.items():
         body = re.sub(r"\n\s*\n", "\n", t["body"]).strip()
-        out[tid] = {"name": t["name"], "subject": t["subject"], "body": body, "type": t.get("type"), "from_email": t.get("from_email")}
+        body = vbr(body)
+        out[tid] = {"name": t["name"], "subject": vbr(t["subject"]), "body": body, "type": t.get("type"), "from_email": t.get("from_email")}
         with open(os.path.join(HERE, re.sub(r"[^a-z0-9]+", "-", t["name"].lower()).strip("-") + ".html"), "w", encoding="utf-8") as f:
             f.write(body)
     with open(os.path.join(HERE, "templates.json"), "w", encoding="utf-8") as f:

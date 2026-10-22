@@ -400,7 +400,7 @@ async function push(bookingId: string): Promise<Any> {
     if (folio.state !== "done") notes.push(...folio.notes);
     await cb("POST", "postReservationNote", {
       reservationID: reservationId,
-      reservationNote: `Booked on the new website ${b.booking_origin === "site_staff" ? "by staff" + (b.booked_by ? " (" + b.booked_by + ")" : "") : "by the guest"} · Booking ID ${b.order_code} · ` +
+      reservationNote: `Booked on the new website ${b.booking_origin === "site_staff" ? "by staff" + (b.booked_by ? " (" + b.booked_by + ")" : "") : "by the guest"} · Booking ID ${b.cb_ref_code ? "VBR-" + reservationId + " (temporary website code " + b.order_code + ")" : b.order_code} · ` +
         `quoted total ${peso(b.total_amount)} incl. full-board meals (meals, extras and discounts are on this folio). The guest got the quotation from the website; ` +
         `Cloudbeds' emails take it from here. Payment proofs uploaded on the website appear under Documents; payments verified on the website are posted here. ` +
         `Change dates, casitas, guests or status here in Cloudbeds — the website follows.`,
