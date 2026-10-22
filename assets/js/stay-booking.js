@@ -343,6 +343,16 @@
     else { codeMsg.className = "code-msg is-ok"; codeMsg.textContent = "Code " + q.discount_code + " applied — you save " + peso(q.code_discount) + "."; }
   }
 
+  // Bookings 15+ days out can pay 50% now (balance 15 days before arrival);
+  // closer than that they're paid in full — same rule as the quotation email.
+  function payTerms() {
+    var ci = checkInEl && checkInEl.value;
+    if (!ci) return "Pay 50% or 100% within 24 hours to secure it.";
+    var days = Math.round((Date.parse(ci + "T00:00:00Z") - Date.parse(todayManila() + "T00:00:00Z")) / 86400000);
+    return days <= 14 ? "Arrival is within 14 days, so it's payable in full within 24 hours to secure it."
+                      : "Pay 50% or 100% within 24 hours to secure it.";
+  }
+
   function renderBill(q) {
     var rows = (q.lines || []).map(function (l) {
       var qty = Number(l.qty) || 0;
@@ -357,7 +367,7 @@
       '<div class="bill-lines">' + rows + "</div>" +
       (q.error ? '<p class="bill-warning">' + esc(q.error) + "</p>" : "") +
       '<div class="bill-total"><span>Total</span><span>' + peso(q.total) + "</span></div>" +
-      '<p class="bill-sub">' + esc(nightsTxt) + " · " + q.guests + " guest" + (q.guests === 1 ? "" : "s") + " · full-board meals included. Payable in full to confirm.</p>";
+      '<p class="bill-sub">' + esc(nightsTxt) + " · " + q.guests + " guest" + (q.guests === 1 ? "" : "s") + " · full-board meals included. " + payTerms() + "</p>";
   }
 
   // ---------------------------------------------------------------- add-ons
