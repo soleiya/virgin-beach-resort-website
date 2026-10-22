@@ -626,7 +626,10 @@ export function detailsNote(b: Any, addOnNames: Record<string, string> = {}): st
   out.push(`Party: ${party.join(", ")}${b.primary_is_senior ? " (main guest is Senior/PWD)" : ""}`);
   const comp: Any[] = Array.isArray(b.companions) ? b.companions : [];
   if (comp.length) out.push(`Other guests: ${comp.map((c) => `${c.name || "?"}${c.age_group ? " (" + (AGE[c.age_group] || c.age_group) + ")" : ""}`).join("; ")}`);
-  else if (b.guest_names) out.push(`Other guests: ${b.guest_names}`);
+  else if (b.guest_names) {
+    const others = String(b.guest_names).split(/\s*,\s*/).filter((n, i) => n && !(i === 0 && n === String(b.guest_name || "").trim()));
+    if (others.length) out.push(`Other guests: ${others.join(", ")}`);
+  }
   if (Number(b.pet_count) > 0) out.push(`Pets: ${b.pet_count}${b.pet_policy_agreed_at ? " · Pet Policy agreed online" : " · Pet Policy not yet agreed"}`);
   if (Number(b.extra_beds) > 0) out.push(`Extra floor mattress(es): ${b.extra_beds}`);
   const ao: Any[] = Array.isArray(b.add_ons) ? b.add_ons : [];
