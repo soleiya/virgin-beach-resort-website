@@ -525,8 +525,14 @@ async function postFolio(reservationId: string, b: Any): Promise<{ state: string
     }
   }
   // Compare totals; a difference is reported to staff (never auto-corrected).
-  const total = await cbTotal(reservationId).catch(() => null);
+  // Cloudbeds reports the total a few seconds late after new folio lines, so
+  // re-read a few times before calling it a difference.
   const site = Number(b.total_amount);
+  let total = await cbTotal(reservationId).catch(() => null);
+  for (let i = 0; i < 4 && total !== null && Number.isFinite(site) && Math.abs(total - site) > 1; i++) {
+    await sleep(3000);
+    total = await cbTotal(reservationId).catch(() => total);
+  }
   if (total !== null && Number.isFinite(site) && Math.abs(total - site) > 1) {
     notes.push(`Cloudbeds total ${peso(total)} vs website ${peso(site)} (difference ${peso(r2(site - total))}) — check the folio`);
   }
