@@ -7,7 +7,7 @@ body = f"""
   <div class="wrap page-hero-content">
     <span class="eyebrow">Book Direct</span>
     <h1>Book Your Day Trip</h1>
-    <p class="lede">Pick your date, party size and cabana on the beach map &mdash; your quotation arrives by email right away.</p>
+    <p class="lede">Pick your date, party size and how many cabanas you need &mdash; your quotation arrives by email right away.</p>
   </div>
 </section>
 

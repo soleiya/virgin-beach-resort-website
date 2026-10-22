@@ -196,14 +196,46 @@
   var cabanasById = {};
   var cabanasList = [];
 
+  // v29: day-trip cabanas are booked by count (dining / lounge); the numbers
+  // (booking_cabanas) are assigned by staff whenever they're ready.
+  var cabanaStock = { dining: 43, lounge: 6 };
   function loadCabanaOptions() {
-    if (!window.VBRCabanaMap) return Promise.resolve([]);
-    return window.VBRCabanaMap.loadCabanas(sb).then(function (cabanas) {
+    sb.from("booking_settings").select("dining_cabanas_per_day, lounge_cabanas_per_day").eq("id", 1).maybeSingle().then(function (res) {
+      if (!res.error && res.data) cabanaStock = { dining: res.data.dining_cabanas_per_day, lounge: res.data.lounge_cabanas_per_day };
+    }, function () {});
+    var q = window.VBRCabanaMap ? window.VBRCabanaMap.loadCabanas(sb)
+      : sb.from("cabanas").select("*").order("section").order("row_index").order("col_index").then(function (res) { if (res.error) throw res.error; return res.data || []; });
+    return q.then(function (cabanas) {
       cabanasById = {};
       cabanasList = cabanas;
       cabanas.forEach(function (c) { cabanasById[c.id] = c; });
       return cabanas;
+    }, function () { return []; });
+  }
+  function cabKind(c) { return String((c && c.cabana_type) || "").indexOf("lounge") === 0 ? "lounge" : "dining"; }
+  function cabShort(c) { return c ? c.section + "-" + c.number : "?"; }
+  // how many dining / lounge cabanas a day trip has
+  function countsOf(r) {
+    var a = { dining: 0, lounge: 0 };
+    (r.booking_cabanas || []).forEach(function (bc) { var c = cabanasById[bc.cabana_id]; if (c) a[cabKind(c)]++; });
+    return {
+      dining: Math.max(Number(r.dining_cabanas) || 0, Number(r.legacy_dining_cabanas) || 0, a.dining),
+      lounge: Math.max(Number(r.lounge_cabanas) || 0, Number(r.legacy_lounge_cabanas) || 0, a.lounge),
+    };
+  }
+  // cabanas still free on a day: stock − blocked − booked (counts)
+  function cabanasFreeOn(dateStr, excludeId) {
+    var used = { dining: 0, lounge: 0 }, blocked = { dining: 0, lounge: 0 };
+    if (!dateStr) return null;
+    allRows.forEach(function (r) {
+      if (r.check_in !== dateStr || isVillaRow(r) || releasesCabanas(r.status) || (excludeId && r.id === excludeId)) return;
+      var n = countsOf(r); used.dining += n.dining; used.lounge += n.lounge;
     });
+    blocksForDate(dateStr).set.forEach(function (id) { var c = cabanasById[id]; if (c) blocked[cabKind(c)]++; });
+    return {
+      dining: cabanaStock.dining - blocked.dining - used.dining, lounge: cabanaStock.lounge - blocked.lounge - used.lounge,
+      used: used, blocked: blocked, stock: cabanaStock,
+    };
   }
 
   // ---------- cabana blocks (booking-v20-cabana-blocks.sql) ----------
@@ -638,20 +670,20 @@
       return;
     }
     var assignedIds = (r.booking_cabanas || []).map(function (bc) { return bc.cabana_id; });
-    // Imported 2026-sheet rows never had a literal cabana number recorded —
-    // only how many dining/lounge cabanas were used.
-    if (!assignedIds.length && (r.legacy_dining_cabanas || r.legacy_lounge_cabanas)) {
-      var legacyNote = document.createElement("div");
-      legacyNote.className = "muted";
-      legacyNote.style.fontSize = "0.82rem";
-      var bits = [];
-      if (r.legacy_dining_cabanas) bits.push(r.legacy_dining_cabanas + " dining");
-      if (r.legacy_lounge_cabanas) bits.push(r.legacy_lounge_cabanas + " lounge");
-      legacyNote.textContent = bits.join(", ") + " (from 2026 sheet)";
-      td.appendChild(legacyNote);
+    var n = countsOf(r);
+    if (!n.dining && !n.lounge) { td.innerHTML = '<span class="muted">—</span>'; return; }
+    var countLine = document.createElement("div");
+    countLine.style.fontSize = "0.82rem";
+    countLine.style.fontWeight = "600";
+    countLine.textContent = [n.dining ? n.dining + " dining" : "", n.lounge ? n.lounge + " lounge" : ""].filter(Boolean).join(" · ");
+    td.appendChild(countLine);
+    if (!assignedIds.length) {
+      var na = document.createElement("div");
+      na.className = "muted"; na.style.fontSize = "0.76rem";
+      na.textContent = releasesCabanas(r.status) ? "" : "no. not assigned yet";
+      td.appendChild(na);
       return;
     }
-    if (!assignedIds.length) { td.innerHTML = '<span class="muted">—</span>'; return; }
     var chipWrap = document.createElement("div");
     chipWrap.className = "cabana-cell-chips";
     var rowBlocks = releasesCabanas(r.status) ? null : blocksForDate(r.check_in);
@@ -660,11 +692,12 @@
       var chip = document.createElement("span");
       chip.className = "cabana-mini-chip";
       chip.style.paddingRight = "10px";
-      chip.textContent = c ? c.label.replace(/^Section /, "") : "Unknown cabana";
+      chip.textContent = c ? cabShort(c) + (cabKind(c) === "lounge" ? " L" : "") : "Unknown cabana";
+      chip.title = c ? c.label : "";
       if (rowBlocks && rowBlocks.set.has(id)) {
         chip.classList.add("is-blocked-conflict");
         chip.textContent = "⚠ " + chip.textContent;
-        chip.title = "This cabana is blocked on this date — " + rowBlocks.info[id] + ". Move the party in the Cabana Map.";
+        chip.title = "This cabana is blocked on this date — " + rowBlocks.info[id] + ". Assign another one.";
       }
       chipWrap.appendChild(chip);
     });
@@ -1104,6 +1137,8 @@
     ["children_6_12", "Kids (6–12)", String],
     ["children_0_5", "Kids (0–5)", String],
     ["pet_count", "Pets", String],
+    ["dining_cabanas", "Dining cabanas", String],
+    ["lounge_cabanas", "Lounge cabanas", String],
     ["discount_amount", "Discount", function (v) { return Number(v) > 0 ? peso(v) : "None"; }],
     ["total_amount", "Total", function (v) { return v === null || v === undefined || v === "" ? "" : peso(v); }],
     ["guest_name", "Name", String],
@@ -1159,8 +1194,10 @@
         ". Unpaid bookings expire automatically after 24 hours.";
       return;
     }
-    notifyHint.hidden = true;
     var ok = EMAIL_RE.test(email);
+    // v28: a day-trip guest is always emailed when their cabana changes.
+    notifyHint.hidden = !ok;
+    notifyHint.textContent = "If you change the cabana, the guest is always emailed the new number (even if this is unticked).";
     notifyEl.disabled = !ok;
     if (!ok) notifyEl.checked = false;
     notifyWrap.classList.toggle("is-disabled", !ok);
@@ -1243,67 +1280,82 @@
     renderModalBill();
     addSelectedEl.innerHTML = "";
     if (!modalCabanaIds.length) {
-      addSelectedEl.innerHTML = '<span class="muted">No cabana picked yet — tap one on the map (optional).</span>';
+      addSelectedEl.innerHTML = '<span class="muted">No cabana numbers assigned yet (optional).</span>';
       return;
     }
     var label = document.createElement("strong");
-    label.textContent = "Selected (" + modalCabanaIds.length + "):";
+    label.textContent = "Assigned (" + modalCabanaIds.length + "): ";
     addSelectedEl.appendChild(label);
-    modalCabanaIds.forEach(function (id) {
-      var c = cabanasById[id];
-      var chip = document.createElement("span");
-      chip.className = "cabana-mini-chip";
-      chip.textContent = c ? c.label.replace(/^Section /, "") : "Unknown cabana";
-      var rm = document.createElement("button");
-      rm.type = "button";
-      rm.className = "cabana-mini-remove";
-      rm.textContent = "×";
-      rm.addEventListener("click", function () {
-        modalCabanaIds = modalCabanaIds.filter(function (x) { return x !== id; });
-        renderModalMap();
-      });
-      chip.appendChild(rm);
-      addSelectedEl.appendChild(chip);
-    });
+    addSelectedEl.appendChild(document.createTextNode(cabanaListText(modalCabanaIds)));
   }
 
+  // v29: cabana numbers are picked from a list (no map); the counts above
+  // are what's booked and priced.
+  function assignedCount(kind) {
+    return modalCabanaIds.filter(function (id) { return cabanasById[id] && cabKind(cabanasById[id]) === kind; }).length;
+  }
   function renderModalMap() {
-    if (!window.VBRCabanaMap || !cabanasList.length) {
-      addMapStatus.textContent = "The cabana map couldn't load — cabanas can still be added from the table afterwards.";
-      addMapEl.innerHTML = "";
-      renderModalSelected();
-      return;
-    }
     var dateStr = addDateEl.value;
     var h = holdsForDate(dateStr);
-    // If the date changed and a picked cabana is now taken, drop it.
-    // A booking's own cabana that was blocked after it was booked stays put
-    // (staff move it on purpose); anything else that's taken is dropped.
+    // If the date changed and a picked cabana is now taken, drop it. A
+    // booking's own cabana that was blocked after it was booked stays put.
     var ownBlocked = editingRow && dateStr === editingRow.check_in
       ? (editingRow.booking_cabanas || []).map(function (bc) { return bc.cabana_id; }).filter(function (id) { return h.blocked.has(id); })
       : [];
     var dropped = modalCabanaIds.filter(function (id) { return h.held.has(id) && ownBlocked.indexOf(id) === -1; });
     if (dropped.length) modalCabanaIds = modalCabanaIds.filter(function (id) { return dropped.indexOf(id) === -1; });
-    addMapStatus.textContent = dateStr
-      ? (dropped.length
-          ? dropped.length + " picked cabana(s) are already booked on this date and were removed — pick another."
-          : ownBlocked.length
-            ? "Heads-up: " + ownBlocked.map(cabLabel).join(", ") + " is now blocked on this date (" + ownBlocked.map(function (id) { return h.blockedInfo[id]; }).join("; ") + "). Pick another cabana for this party."
-            : "Showing availability for " + fmtDate(dateStr) + ". Hover a taken cabana to see who has it.")
-      : "Pick a preferred date to see which cabanas are free that day.";
-    window.VBRCabanaMap.render(addMapEl, {
-      cabanas: cabanasList,
-      heldSet: h.held,
-      heldInfo: h.info,
-      blockedSet: h.blocked,
-      blockedInfo: h.blockedInfo,
-      selectedIds: modalCabanaIds,
-      crop: { top: 0.33, bottom: 0.56 },
-      onSelect: function (c) {
-        var i = modalCabanaIds.indexOf(c.id);
-        if (i >= 0) modalCabanaIds.splice(i, 1); else modalCabanaIds.push(c.id);
-        renderModalMap();
-      },
+    var free = cabanasFreeOn(dateStr, editingRow && editingRow.id);
+    var leftEl = $("addCabanaLeft");
+    if (leftEl) {
+      leftEl.textContent = free
+        ? "Dining " + Math.max(free.dining, 0) + " of " + free.stock.dining + " · Lounge " + Math.max(free.lounge, 0) + " of " + free.stock.lounge
+        : "Pick a date";
+      var over = free && (intVal("addDining") > free.dining || intVal("addLounge") > free.lounge);
+      leftEl.style.color = over ? "#9b2c2c" : "";
+      if (over) leftEl.textContent += " — over capacity";
+    }
+    addMapStatus.textContent = !dateStr ? "Pick a date to see which cabanas are free that day."
+      : dropped.length ? dropped.length + " assigned cabana(s) are taken on this date and were removed — pick another."
+      : ownBlocked.length ? "Heads-up: " + ownBlocked.map(cabLabel).join(", ") + " is now blocked on this date. Assign another cabana."
+      : "Tap to assign · crossed out = taken by another group, striped = blocked. Hover for who has it.";
+    addMapEl.innerHTML = "";
+    if (!cabanasList.length) { addMapEl.innerHTML = '<span class="muted">Cabana list couldn\'t load.</span>'; renderModalSelected(); return; }
+    var groups = {};
+    cabanasList.forEach(function (c) {
+      var key = c.section + "|" + cabKind(c);
+      (groups[key] = groups[key] || []).push(c);
+    });
+    Object.keys(groups).sort().forEach(function (key) {
+      var parts = key.split("|");
+      var box = document.createElement("div");
+      box.className = "cab-assign-group";
+      box.innerHTML = "<h4>Section " + esc(parts[0]) + " · " + (parts[1] === "lounge" ? "Lounge" : "Dining") + "</h4>";
+      var wrap = document.createElement("div");
+      wrap.className = "cab-assign-chips";
+      groups[key].slice().sort(function (a, b) { return a.number - b.number; }).forEach(function (c) {
+        var on = modalCabanaIds.indexOf(c.id) >= 0;
+        var taken = dateStr && h.held.has(c.id) && !on;
+        var blocked = dateStr && h.blocked && h.blocked.has(c.id);
+        var btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "cab-chip" + (cabKind(c) === "lounge" ? " lounge" : "") + (on ? " is-on" : "") + (blocked && !on ? " is-blocked" : taken ? " is-taken" : "");
+        btn.textContent = String(c.number);
+        btn.title = c.label + (taken || blocked ? " — " + (h.info[c.id] || "not available") : "");
+        btn.disabled = !on && (taken || blocked);
+        btn.addEventListener("click", function () {
+          var i = modalCabanaIds.indexOf(c.id);
+          if (i >= 0) modalCabanaIds.splice(i, 1);
+          else {
+            modalCabanaIds.push(c.id);
+            var k = cabKind(c), field = k === "lounge" ? "addLounge" : "addDining";
+            if (assignedCount(k) > intVal(field)) $(field).value = assignedCount(k); // more assigned than booked: count up
+          }
+          renderModalMap();
+        });
+        wrap.appendChild(btn);
+      });
+      box.appendChild(wrap);
+      addMapEl.appendChild(box);
     });
     renderModalSelected();
   }
@@ -1317,7 +1369,7 @@
 
   function priceSig() {
     return [$("addType").value, intVal("addAdults"), intVal("addKids"), intVal("addKids05"), intVal("addSeniors"), intVal("addPets"),
-      modalCabanaIds.slice().sort().join(","), discTypeEl.value, discValueEl.value, $("addTotal").value].join("|");
+      intVal("addDining"), intVal("addLounge"), discTypeEl.value, discValueEl.value, $("addTotal").value].join("|");
   }
 
   // Everything the booking will be saved with: the rate-sheet bill, the
@@ -1329,7 +1381,7 @@
     var bill = P.compute({
       type: type, adults: intVal("addAdults"), kids612: intVal("addKids"), kids05: intVal("addKids05"),
       seniors: intVal("addSeniors"), pets: intVal("addPets"),
-      cabanas: modalCabanaIds.map(function (id) { return cabanasById[id]; }).filter(Boolean),
+      dining: intVal("addDining"), lounge: intVal("addLounge"),
     });
     var out = { bill: bill, rated: bill.rated, discountType: null, discountValue: null, discount: 0, total: null, kept: false, error: null };
     if (bill.rated) {
@@ -1374,7 +1426,7 @@
       if (b.kids612) L.push(billRow(b.kids612 + " child" + (b.kids612 === 1 ? "" : "ren") + " (6–12) × " + peso(b.rate.child612), peso(b.kids612 * b.rate.child612)));
       if (b.kids05) L.push(billRow(b.kids05 + " child" + (b.kids05 === 1 ? "" : "ren") + " (0–5)", "Free"));
       if (b.pets) L.push(billRow(b.pets + " pet" + (b.pets === 1 ? "" : "s") + " × " + peso(b.rate.pet), peso(b.petCost)));
-      b.cabanas.forEach(function (c) { L.push(billRow(esc(c.label), peso(b.cabanaPrice(c)))); });
+      (b.cabanaLines || []).forEach(function (l) { L.push(billRow(l.qty + " × " + l.label + (l.qty === 1 ? "" : "s") + " × " + peso(l.rate), peso(l.amount))); });
     }
     return L;
   }
@@ -1398,8 +1450,8 @@
       L.push(billRow("Discount" + (pr.discountType === "percent" ? " (" + pr.discountValue + "%)" : "") +
         (discReasonEl.value.trim() ? " — " + esc(discReasonEl.value.trim()) : ""), "−" + peso(pr.discount), "discount"));
     }
-    var warn = b.cabanas.length && b.totalCapacity < b.totalGuests
-      ? '<p class="bill-warning">The cabana' + (b.cabanas.length === 1 ? "" : "s") + " picked seat up to " + b.totalCapacity + ", and the party is " + b.totalGuests + ".</p>" : "";
+    var warn = b.cabanaCount && b.totalCapacity < b.totalGuests
+      ? '<p class="bill-warning">' + (b.cabanaCount === 1 ? "That cabana seats" : "Those cabanas seat") + " up to " + b.totalCapacity + ", and the party is " + b.totalGuests + ".</p>" : "";
     var note = pr.kept
       ? '<p class="bill-note">' + (pr.total == null ? "No saved total" : "Saved total kept: " + peso(pr.total)) + " (rate sheet gives " + peso(pr.calculated) + ")." +
         ' <button type="button" class="btn-sm ghost" id="useCalcTotal">Use rate sheet total</button></p>'
@@ -1414,6 +1466,7 @@
   ["addAdults", "addKids", "addKids05", "addSeniors", "addPets", "addTotal", "addDiscountValue", "addDiscountReason"].forEach(function (id) {
     $(id).addEventListener("input", renderModalBill);
   });
+  ["addDining", "addLounge"].forEach(function (id) { $(id).addEventListener("input", renderModalMap); });
   ["addType", "addDiscountType"].forEach(function (id) { $(id).addEventListener("change", renderModalBill); });
 
   function openModal(row) {
@@ -1453,6 +1506,9 @@
       $("addNotes").value = r.notes || "";
       $("addStaffNotes").value = r.staff_notes || "";
       modalCabanaIds = (r.booking_cabanas || []).map(function (bc) { return bc.cabana_id; });
+      var n0 = countsOf(r);
+      $("addDining").value = n0.dining;
+      $("addLounge").value = n0.lounge;
       openPriceSig = priceSig();
     } else {
       openPriceSig = null;
@@ -1512,6 +1568,8 @@
       senior_count: intVal("addSeniors"),
       pet_count: intVal("addPets"),
       children_0_5: intVal("addKids05"),
+      dining_cabanas: intVal("addDining"),
+      lounge_cabanas: intVal("addLounge"),
       total_amount: pr.total,
       subtotal_people: b.rated && !pr.kept ? P.r2(b.subtotalPeople) : undefined,
       cabana_total: b.rated && !pr.kept ? P.r2(b.isPackage ? b.extraCabanaCost : b.cabanaTotal) : undefined,
@@ -1582,7 +1640,7 @@
       if (before !== after) out.push({ label: f[1], before: before || "—", after: after || "—" });
     });
     var b = cabanaListText(beforeCabanas), a = cabanaListText(afterCabanas);
-    if (b !== a) out.push({ label: "Cabana(s)", before: b, after: a });
+    if (b !== a) out.push({ label: "Cabana no.", before: b, after: a });
     return out;
   }
 
@@ -1596,6 +1654,9 @@
     if (vals.pet_count > 2) return showFormError("A maximum of two pets are permitted per reservation.");
     if (!vals.guest_name) return showFormError("Guest name is required.");
     if (vals.senior_count > vals.adults) return showFormError("Senior citizens are counted within adults — senior count can't be more than adults.");
+    if (assignedCount("dining") > vals.dining_cabanas || assignedCount("lounge") > vals.lounge_cabanas) {
+      return showFormError("More cabana numbers are assigned than the booking has — untick some numbers or raise the Dining / Lounge count.");
+    }
     saveBookingBtn.disabled = true;
     if (notifyEl.checked && !notifyEl.disabled) saveBookingBtn.textContent = editingRow ? "Saving & emailing…" : "Saving & sending…";
 
@@ -1611,7 +1672,8 @@
       var beforeCabanas = (r.booking_cabanas || []).map(function (bc) { return bc.cabana_id; });
       var afterCabanas = modalCabanaIds.slice();
       var changes = guestChanges(r, patch, beforeCabanas, afterCabanas);
-      var notify = notifyEl.checked && !notifyEl.disabled && changes.length > 0;
+      var cabanaMoved = !notifyEl.disabled && changes.some(function (ch) { return ch.label === "Cabana no."; });
+      var notify = (notifyEl.checked && !notifyEl.disabled && changes.length > 0) || cabanaMoved;
       var file = payFileEl.files && payFileEl.files[0];
       saveBookingBtn.textContent = "Saving…";
 
@@ -1806,7 +1868,8 @@
       var tr = document.createElement("tr");
       if (plannerSource && plannerSource.row.id === r.id) tr.className = "is-source";
       var cabs = (r.booking_cabanas || []).map(function (bc) { return cabLabel(bc.cabana_id); }).join(", ");
-      if (!cabs && (r.legacy_dining_cabanas || r.legacy_lounge_cabanas)) cabs = (r.legacy_dining_cabanas || 0) + " dining, " + (r.legacy_lounge_cabanas || 0) + " lounge (no numbers)";
+      var nc = countsOf(r);
+      if (!cabs && (nc.dining || nc.lounge)) cabs = nc.dining + " dining, " + nc.lounge + " lounge (no numbers yet)";
       [r.guest_name || "—", r.order_code || "—", partySize(r) + " pax", cabs || "— not assigned", STATUS_LABELS[r.status] || r.status].forEach(function (t) {
         var td = document.createElement("td"); td.textContent = t; tr.appendChild(td);
       });
@@ -1924,8 +1987,9 @@
   });
 
   function emailMove(r, beforeIds, afterIds) {
-    if (!$("plannerNotify").checked || !EMAIL_RE.test(String(r.guest_email || "").trim())) return Promise.resolve();
-    var changes = [{ label: "Cabana(s)", before: cabanaListText(beforeIds), after: cabanaListText(afterIds) }];
+    // v28: always emailed — cabana moves are never silent.
+    if (!EMAIL_RE.test(String(r.guest_email || "").trim())) return Promise.resolve();
+    var changes = [{ label: "Cabana no.", before: cabanaListText(beforeIds), after: cabanaListText(afterIds) }];
     return sb.rpc("notify_booking_change", { p_booking_id: r.id, p_changes: changes, p_old_check_in: null });
   }
 
@@ -2000,11 +2064,10 @@
         .map(function (bc) { return cabanasById[bc.cabana_id] ? cabanasById[bc.cabana_id].label : ""; })
         .filter(Boolean)
         .join("; ");
-      if (!cabanaLabels && (r.legacy_dining_cabanas || r.legacy_lounge_cabanas)) {
-        var legacyBits = [];
-        if (r.legacy_dining_cabanas) legacyBits.push(r.legacy_dining_cabanas + " dining");
-        if (r.legacy_lounge_cabanas) legacyBits.push(r.legacy_lounge_cabanas + " lounge");
-        cabanaLabels = legacyBits.join(", ") + " (from 2026 sheet)";
+      var ncsv = countsOf(r);
+      if (ncsv.dining || ncsv.lounge) {
+        cabanaLabels = [ncsv.dining ? ncsv.dining + " dining" : "", ncsv.lounge ? ncsv.lounge + " lounge" : ""].filter(Boolean).join(", ") +
+          (cabanaLabels ? " — " + cabanaLabels : "");
       }
       if (r.stay_type === "overnight" && window.VBRVillas) cabanaLabels = window.VBRVillas.labelsFor(r).join("; ");
       lines.push([
@@ -2194,13 +2257,6 @@
     });
     return out;
   }
-  function legacyCabanas(r) {
-    var pick = function (kind) { return cabanasList.filter(function (c) { return String(c.cabana_type || "").indexOf(kind) === 0; })[0]; };
-    var out = [], d = pick("dining"), l = pick("lounge");
-    for (var i = 0; i < (r.legacy_dining_cabanas || 0); i++) out.push({ label: "Dining cabana", cabana_type: "dining", price: d ? d.price : 1500, capacity: d ? d.capacity : 10 });
-    for (i = 0; i < (r.legacy_lounge_cabanas || 0); i++) out.push({ label: "Lounge cabana", cabana_type: "lounge", price: l ? l.price : 2000, capacity: l ? l.capacity : 4 });
-    return out;
-  }
   function openBreakdown(r) {
     bdRow = r;
     document.getElementById("bdTitle").textContent = "Price breakdown" + (r.order_code ? " · " + r.order_code : "");
@@ -2246,9 +2302,8 @@
           '<p class="bill-note">' + q.nights + " night(s) · " + q.weekday_nights + " weekday, " + q.weekend_nights + " weekend/peak · " + q.guests + " guest(s)</p>" + foot(Math.round(calc * 100) / 100);
       });
     } else {
-      var cabs = (r.booking_cabanas || []).map(function (bc) { return cabanasById[bc.cabana_id]; }).filter(Boolean);
-      if (!cabs.length) cabs = legacyCabanas(r);
-      var b = P.compute({ type: r.stay_type, adults: r.adults, kids612: r.children_6_12, kids05: r.children_0_5, seniors: r.senior_count, pets: r.pet_count, cabanas: cabs });
+      var nb = countsOf(r);
+      var b = P.compute({ type: r.stay_type, adults: r.adults, kids612: r.children_6_12, kids05: r.children_0_5, seniors: r.senior_count, pets: r.pet_count, dining: nb.dining, lounge: nb.lounge });
       if (!b.rated) {
         bdBody.innerHTML = '<div class="bill-lines">' + billRow(esc(FULL_TYPE_NAMES[r.stay_type] || r.stay_type || "Booking"), "Quoted by hand") + "</div>" + foot(null);
       } else {
@@ -2318,5 +2373,9 @@
     TYPE_LABELS: TYPE_LABELS, statusLabel: statusLabel, villaStatusKey: villaStatusKey, openModal: openModal,
     openBreakdown: openBreakdown, listRows: function () { return renderQueue; },
     section: function () { return activeSection; }, sort: function () { return { field: sortField, dir: sortDir }; }, cabanaLabel: function (id) { return cabanasById[id] ? cabanasById[id].label : ""; },
+    cabanas: function () { return cabanasList; }, cabanaById: function (id) { return cabanasById[id]; },
+    cabKind: cabKind, cabShort: cabShort, countsOf: countsOf, cabanasFreeOn: cabanasFreeOn, blocksForDate: blocksForDate,
+    cabanaListText: cabanaListText, releasesCabanas: releasesCabanas, isVillaRow: isVillaRow,
+    stock: function () { return cabanaStock; }, setStock: function (s) { cabanaStock = s; },
   };
 })();

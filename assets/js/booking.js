@@ -46,9 +46,7 @@
   var formWrap = document.getElementById("bookingFormWrap");
 
   var cabanaStep = document.getElementById("cabanaStep");
-  var cabanaMapStatus = document.getElementById("cabanaMapStatus");
-  var cabanaMapEl = document.getElementById("cabanaMap");
-  var cabanaSelectedNote = document.getElementById("cabanaSelectedNote");
+  var cabanaStatus = document.getElementById("cabanaMapStatus");
 
   var TYPE_NAMES = {
     day_trip: "Day Trip (Full Day)",
@@ -67,107 +65,117 @@
     return "₱" + n.toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   }
 
-  var cabanasLoaded = null;
-  var selectedCabanas = [];
-  var selectedForDate = null;
-
-  function clearSelection() {
-    selectedCabanas = [];
-    renderSelectedList();
-  }
-
-  function toggleCabana(c, heldSet) {
-    if (heldSet && heldSet.has(c.id)) return;
-    var idx = -1;
-    for (var i = 0; i < selectedCabanas.length; i++) {
-      if (selectedCabanas[i].id === c.id) { idx = i; break; }
-    }
-    if (idx >= 0) selectedCabanas.splice(idx, 1);
-    else selectedCabanas.push(c);
-    renderSelectedList();
+  // ---------- cabanas by count (booking-v29) ----------
+  // Guests choose HOW MANY dining / lounge cabanas; our team assigns the
+  // numbers later. Availability = cabanas still free that day.
+  var counts = { dining: 0, lounge: 0 };
+  var left = null;            // { dining, lounge } for the chosen date, or null
+  var availSeq = 0;
+  var cabanaCards = {};
+  Array.prototype.forEach.call(document.querySelectorAll(".cab-type"), function (card) {
+    var k = card.getAttribute("data-kind");
+    cabanaCards[k] = card;
+    card.querySelector(".st-minus").addEventListener("click", function () { setCount(k, counts[k] - 1); });
+    card.querySelector(".st-plus").addEventListener("click", function () { setCount(k, counts[k] + 1); });
+  });
+  function maxFor(k) { return left ? left[k] : 20; }
+  function setCount(k, n) {
+    counts[k] = Math.max(0, Math.min(n, maxFor(k), 20));
+    renderCabanaCards();
     renderBill();
   }
-
-  function renderSelectedList() {
-    if (!selectedCabanas.length) {
-      cabanaSelectedNote.hidden = true;
-      cabanaSelectedNote.innerHTML = "";
-      return;
-    }
-    cabanaSelectedNote.hidden = false;
-    var chips = selectedCabanas.map(function (c, i) {
-      return (
-        '<span class="cabana-chip">' + c.label + " — " + peso(c.price) +
-        ' <button type="button" class="cabana-chip-remove" data-idx="' + i + '" aria-label="Remove ' + c.label + '">&times;</button></span>'
-      );
-    });
-    cabanaSelectedNote.innerHTML =
-      "<strong>Selected (" + selectedCabanas.length + "):</strong> " + chips.join(" ");
-    Array.prototype.forEach.call(cabanaSelectedNote.querySelectorAll(".cabana-chip-remove"), function (btn) {
-      btn.addEventListener("click", function () {
-        var idx = parseInt(btn.getAttribute("data-idx"), 10);
-        selectedCabanas.splice(idx, 1);
-        renderSelectedList();
-        renderBill();
-        renderMapFor(checkInEl.value);
-      });
+  function renderCabanaCards() {
+    var rate = (P.PRICING[stayTypeEl.value] || P.PRICING.day_trip);
+    Object.keys(cabanaCards).forEach(function (k) {
+      var card = cabanaCards[k];
+      card.querySelector(".cab-price").textContent = peso(rate[k]).replace(/\.00$/, "");
+      card.querySelector(".st-count").textContent = counts[k];
+      card.querySelector(".st-minus").disabled = counts[k] <= 0;
+      card.querySelector(".st-plus").disabled = counts[k] >= maxFor(k);
+      card.classList.toggle("is-picked", counts[k] > 0);
+      var full = !!left && left[k] <= 0;
+      card.classList.toggle("is-full", full);
+      card.querySelector(".vt-avail").textContent = !checkInEl.value ? "Pick a date to check availability"
+        : !left ? "Checking availability…"
+        : full ? "Fully booked on this date — try another date"
+        : left[k] + " available on this date";
     });
   }
-
-  function renderMapFor(dateStr) {
-    if (!sb || !window.VBRCabanaMap) {
-      cabanaMapStatus.textContent =
-        "Live availability isn't connected yet — mention your preferred cabana(s) in the notes below and we'll confirm by hand.";
-      return;
-    }
-    // The map itself (layout, numbering, dining vs. lounge) never depends on
-    // a date, so it loads and is tappable right away. Only the held/taken
-    // state is date-specific — until a date is picked we show every cabana
-    // as open, then swap in real availability once loadHolds resolves.
-    cabanaMapStatus.textContent = dateStr
-      ? "Loading availability for " + dateStr + "…"
-      : "Tap all the cabanas you'd like — pick a date above to check live availability for that day.";
-
-    var loadCabanas = cabanasLoaded || window.VBRCabanaMap.loadCabanas(sb);
-    cabanasLoaded = loadCabanas;
-    var loadHolds = dateStr ? window.VBRCabanaMap.loadHolds(sb, dateStr) : Promise.resolve(new Set());
-
-    Promise.all([loadCabanas, loadHolds])
-      .then(function (results) {
-        var cabanas = results[0];
-        var heldSet = results[1];
-        cabanaMapStatus.textContent = dateStr
-          ? "Tap all the cabanas you'd like for " + dateStr + " — you can pick more than one."
-          : "Tap all the cabanas you'd like — pick a date above to check live availability for that day.";
-        window.VBRCabanaMap.render(cabanaMapEl, {
-          cabanas: cabanas,
-          heldSet: heldSet,
-          selectedIds: selectedCabanas.map(function (c) { return c.id; }),
-          onSelect: function (c) {
-            toggleCabana(c, heldSet);
-            renderMapFor(dateStr);
-          },
-        });
-      })
-      .catch(function () {
-        cabanaMapStatus.textContent =
-          "Couldn't load live availability right now — mention your preferred cabana(s) in the notes below and we'll confirm by hand.";
-      });
+  function loadAvailability() {
+    var dateStr = checkInEl.value, seq = ++availSeq;
+    left = null;
+    renderCabanaCards();
+    if (!dateStr) return;
+    if (!sb) { cabanaStatus.hidden = false; cabanaStatus.textContent = "Live availability isn't connected yet — we'll confirm your cabanas by hand."; return; }
+    sb.rpc("daytrip_availability", { p_from: dateStr, p_to: dateStr }).then(function (res) {
+      if (seq !== availSeq) return;
+      var row = !res.error && res.data && res.data[0];
+      if (!row) {
+        cabanaStatus.hidden = false;
+        cabanaStatus.textContent = "Couldn't check live availability just now — pick what you need and we'll confirm it.";
+        left = { dining: 20, lounge: 20 };
+      } else {
+        cabanaStatus.hidden = true;
+        left = { dining: row.dining_left, lounge: row.lounge_left };
+      }
+      var trimmed = false;
+      ["dining", "lounge"].forEach(function (k) { if (counts[k] > left[k]) { counts[k] = left[k]; trimmed = true; } });
+      if (trimmed) { cabanaStatus.hidden = false; cabanaStatus.textContent = "Fewer cabanas are free on this date — we've adjusted your choice."; }
+      renderCabanaCards();
+      renderBill();
+    });
   }
 
   function refreshCabanaStep() {
     if (!usesCabanaMap()) {
       cabanaStep.hidden = true;
-      clearSelection();
+      counts.dining = counts.lounge = 0;
       renderBill();
       return;
     }
     cabanaStep.hidden = false;
-    var dateStr = checkInEl.value;
-    if (selectedCabanas.length && selectedForDate !== dateStr) clearSelection();
-    selectedForDate = dateStr;
-    renderMapFor(dateStr);
+    loadAvailability();
     renderBill();
+  }
+
+  // ---------- discount code (booking-v28) ----------
+  // The server checks the code (quote_daytrip_code) and works out the peso
+  // discount from the cabana rental or the whole day trip; it's re-checked
+  // when the booking is sent (submit_daytrip_booking).
+  var codeRow = document.getElementById("dtCodeRow");
+  var codeEl = document.getElementById("dtCode");
+  var codeMsg = document.getElementById("dtCodeMsg");
+  var appliedCode = "", codeResult = null, codeSeq = 0, codeTimer = null;
+  function showCodeMsg(ok, text) {
+    if (!codeMsg) return;
+    codeMsg.hidden = !text;
+    codeMsg.className = "code-msg " + (ok ? "is-ok" : "is-bad");
+    codeMsg.textContent = text || "";
+  }
+  function checkCode() {
+    if (!appliedCode) { codeResult = null; showCodeMsg(true, ""); renderBill(true); return; }
+    if (!sb) { showCodeMsg(false, "Codes can't be checked right now — mention it in the notes and we'll apply it."); return; }
+    var bill = computeBill(), seq = ++codeSeq;
+    sb.rpc("quote_daytrip_code", {
+      p_code: appliedCode, p_check_in: checkInEl.value || null,
+      p_cabana_total: bill.isPackage ? bill.extraCabanaCost : bill.cabanaTotal, p_total: bill.total,
+    }).then(function (res) {
+      if (seq !== codeSeq) return;
+      var r = res.error ? { ok: false, error: /quote_daytrip_code/.test(res.error.message) ? "Discount codes aren't available for day trips yet." : res.error.message } : res.data;
+      codeResult = r && r.ok ? r : null;
+      showCodeMsg(!!codeResult, codeResult ? "Code " + r.code + " applied — you save " + peso(r.discount) + "." : (r && r.error) || "That discount code isn't valid.");
+      renderBill(true);
+    });
+  }
+  function recheckCode() { if (!appliedCode) return; clearTimeout(codeTimer); codeTimer = setTimeout(checkCode, 350); }
+  if (codeEl) {
+    document.getElementById("dtCodeApply").addEventListener("click", function () {
+      appliedCode = (codeEl.value || "").trim().toUpperCase().replace(/\s+/g, "");
+      codeEl.value = appliedCode;
+      checkCode();
+    });
+    codeEl.addEventListener("keydown", function (e) { if (e.key === "Enter") { e.preventDefault(); document.getElementById("dtCodeApply").click(); } });
+    codeEl.addEventListener("input", function () { if (!codeEl.value.trim() && appliedCode) { appliedCode = ""; checkCode(); } });
   }
 
   // ---------- live bill ----------
@@ -183,7 +191,8 @@
       kids05: kids05El.value,
       seniors: seniors,
       pets: petCountEl && petCountEl.value,
-      cabanas: selectedCabanas,
+      dining: usesCabanaMap() ? counts.dining : 0,
+      lounge: usesCabanaMap() ? counts.lounge : 0,
     });
   }
 
@@ -199,9 +208,11 @@
       " guests and " + bill.includedCabanas + " cabana. Extra guests, pets, and cabanas beyond that are billed at the add-on rates below.";
   }
 
-  function renderBill() {
+  function renderBill(fromCode) {
     if (!billSummaryEl) return;
+    if (fromCode !== true) recheckCode();
     var bill = computeBill();
+    if (codeRow) codeRow.hidden = !usesCabanaMap();
     renderPackageNote(bill);
 
     if (seniorIdWrap) seniorIdWrap.hidden = bill.seniors <= 0;
@@ -254,23 +265,25 @@
       }
     }
     if (!bill.isPackage) {
-      selectedCabanas.forEach(function (c) {
-        lines.push('<div class="bill-row"><span>' + c.label + "</span><span>" + peso(bill.cabanaPrice(c)) + "</span></div>");
+      bill.cabanaLines.forEach(function (l) {
+        lines.push('<div class="bill-row"><span>' + l.qty + " × " + l.label + (l.qty === 1 ? "" : "s") + " @ " + peso(l.rate) + "</span><span>" + peso(l.amount) + "</span></div>");
       });
     }
 
     var warning = "";
-    if (selectedCabanas.length && bill.totalCapacity < bill.totalGuests) {
+    if (bill.cabanaCount && bill.totalCapacity < bill.totalGuests) {
       warning =
-        '<p class="bill-warning">Heads up — the cabana' + (selectedCabanas.length === 1 ? "" : "s") + " you picked seat" +
-        (selectedCabanas.length === 1 ? "s" : "") + " up to " + bill.totalCapacity + ", and your party is " + bill.totalGuests +
+        '<p class="bill-warning">Heads up — ' + (bill.cabanaCount === 1 ? "that cabana seats" : "those cabanas seat") +
+        " up to " + bill.totalCapacity + ", and your party is " + bill.totalGuests +
         ". Feel free to add another cabana above, or we can help sort seating when we confirm.</p>";
     }
 
+    var codeDisc = codeResult ? Math.min(Number(codeResult.discount) || 0, bill.total) : 0;
+    if (codeDisc > 0) lines.push('<div class="bill-row is-discount"><span>' + codeResult.desc.replace(/[<>&]/g, "") + "</span><span>−" + peso(codeDisc) + "</span></div>");
     billSummaryEl.innerHTML =
       '<div class="bill-lines">' + (lines.join("") || '<div class="bill-row"><span>Add your party size and cabana(s) above</span><span>—</span></div>') + "</div>" +
       warning +
-      '<div class="bill-total"><span>Estimated Total</span><span>' + peso(bill.total) + "</span></div>" +
+      '<div class="bill-total"><span>Estimated Total</span><span>' + peso(bill.total - codeDisc) + "</span></div>" +
       '<p class="field-hint">This is an estimate for your reference — our team confirms the final amount when arranging payment.</p>';
   }
 
@@ -336,7 +349,6 @@
   stayTypeEl.addEventListener("change", refreshCabanaStep);
   checkInEl.addEventListener("change", function () {
     refreshHalfDay();
-    clearSelection();
     refreshCabanaStep();
   });
   refreshCabanaStep();
@@ -367,6 +379,9 @@
       cabana_total: usesCabanaMap() ? (bill.isPackage ? bill.extraCabanaCost : bill.cabanaTotal) : null,
       senior_discount: usesCabanaMap() ? bill.seniorDiscount : null,
       total_amount: usesCabanaMap() ? bill.total : null,
+      discount_code: usesCabanaMap() && codeResult ? codeResult.code : null,
+      dining_cabanas: usesCabanaMap() ? bill.dining : 0,
+      lounge_cabanas: usesCabanaMap() ? bill.lounge : 0,
     };
   }
 
@@ -377,7 +392,7 @@
       "",
       "Type: " + (payload.stay_type_label || payload.stay_type),
       "Preferred Date: " + (payload.check_in || "—"),
-      "Cabana(s): " + (selectedCabanas.length ? selectedCabanas.map(function (c) { return c.label; }).join(", ") : "—"),
+      "Cabanas: " + ((payload.dining_cabanas || 0) + " dining, " + (payload.lounge_cabanas || 0) + " lounge"),
       "Adults: " + payload.adults + (payload.senior_count ? " (incl. " + payload.senior_count + " senior citizen" + (payload.senior_count === 1 ? "" : "s") + ")" : ""),
       "Children (6–12): " + payload.children_6_12,
       "Children (0–5): " + payload.children_0_5,
@@ -455,14 +470,6 @@
     }));
   }
 
-  function attachCabanas(bookingId) {
-    if (!sb || !selectedCabanas.length) return Promise.resolve();
-    var rows = selectedCabanas.map(function (c) { return { booking_id: bookingId, cabana_id: c.id }; });
-    return sb.from("booking_cabanas").insert(rows).then(function (res) {
-      if (res.error) throw res.error;
-    });
-  }
-
   form.addEventListener("submit", function (e) {
     e.preventDefault();
     var bill = computeBill();
@@ -514,8 +521,8 @@
         payload.senior_id_paths = paths.length ? paths : null;
         payload.pet_vaccination_paths = petPaths.length ? petPaths : null;
         payload.pet_policy_agreed = bill.pets > 0 && !!(petPolicyAgreeEl && petPolicyAgreeEl.checked);
-        var cabanaIds = selectedCabanas.length ? selectedCabanas.map(function (c) { return c.id; }) : null;
-        return sb.rpc("submit_booking_request", { payload: payload, cabana_ids: cabanaIds });
+        // v29: always through submit_daytrip_booking (counts, availability, code)
+        return sb.rpc("submit_daytrip_booking", { payload: payload, cabana_ids: null });
       })
       .then(function (res) {
         if (res.error) throw res.error;
@@ -524,17 +531,25 @@
         showSuccess(payload, false, row && row.order_code);
       })
       .catch(function (err) {
-        // A cabana can be blocked (or taken) between loading the map and
-        // sending — say so plainly and refresh the map instead of the
-        // generic "something went wrong".
-        if (err && /Cabana not available/i.test(err.message || "")) {
+        // Cabanas can sell out between loading the page and sending — say so
+        // plainly and refresh availability instead of "something went wrong".
+        var m = err && err.message ? String(err.message) : "";
+        if (/cabanas? (is|are) left|Cabana not available/i.test(m)) {
           statusEl.hidden = false;
           statusEl.className = "form-status form-status-error";
-          statusEl.textContent = "Sorry — one of the cabanas you picked is no longer available on that date. The map has been refreshed; please pick another and send again.";
+          statusEl.textContent = m.replace(/^Cabana not available.*$/i, "Sorry — those cabanas are no longer available on that date. Please check the numbers above and send again.");
           submitBtn.disabled = false;
           submitBtn.textContent = "Send Request";
-          clearSelection();
           refreshCabanaStep();
+          return;
+        }
+        if (/discount code|code [A-Z0-9_-]+ |fully redeemed|once per guest|taking bookings up to/i.test(m)) {
+          statusEl.hidden = false;
+          statusEl.className = "form-status form-status-error";
+          statusEl.textContent = m;
+          submitBtn.disabled = false;
+          submitBtn.textContent = "Send Request";
+          if (/code/i.test(m)) { codeResult = null; showCodeMsg(false, m); renderBill(true); }
           return;
         }
         showError(payload, bill);

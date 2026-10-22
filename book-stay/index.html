@@ -9,7 +9,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400..600;1,9..144,400..600&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="../assets/css/style.css?v=020b20a6c9">
+<link rel="stylesheet" href="../assets/css/style.css?v=450dec73c0">
 </head>
 <body>
 <header class="site-header no-hero">
@@ -50,8 +50,8 @@
         <div class="stay-step">
           <div class="stay-step-head"><span class="stay-step-num">1</span><div><h2>Your dates</h2><p>Check-in from 2:00 PM &middot; check-out by 11:30 AM</p></div></div>
           <div class="row-2">
-            <div><label for="checkIn">Check-in</label><input id="checkIn" type="date" required></div>
-            <div><label for="checkOut">Check-out</label><input id="checkOut" type="date" required></div>
+            <div><label for="checkIn">Check-in</label><input id="checkIn" type="date" required data-booking-date="checkin"></div>
+            <div><label for="checkOut">Check-out</label><input id="checkOut" type="date" required data-booking-date="checkout"></div>
           </div>
           <p class="stay-nights" id="nightsLine"></p>
         </div>
@@ -428,6 +428,7 @@
 
 <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
 <script src="../assets/js/booking-config.js?v=c116a3a0ae"></script>
+<script src="../assets/js/booking-window.js?v=7b532699f3"></script>
 <script src="../assets/js/stay-booking.js?v=610888bef2"></script>
 <footer class="site-footer">
   <div class="wrap">

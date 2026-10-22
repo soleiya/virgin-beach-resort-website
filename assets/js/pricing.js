@@ -37,25 +37,37 @@
   }
 
   // p = { type, adults, kids612, kids05, seniors, pets, cabanas: [{price, capacity, cabana_type, label}] }
+  // v29: cabanas are booked by count (dining / lounge); the cabana numbers
+  // are assigned by staff and don't change the price. p.dining / p.lounge,
+  // or (older callers) a list of cabanas p.cabanas to count.
+  var CAPACITY = { dining: 10, lounge: 4 };
+  function isLounge(c) { return String(c.cabana_type || "").indexOf("lounge") === 0; }
   function compute(p) {
     var type = p.type;
     var adults = int(p.adults), kids612 = int(p.kids612), kids05 = int(p.kids05);
     var seniors = Math.min(int(p.seniors), adults);
     var pets = int(p.pets);
     var cabanas = p.cabanas || [];
+    var dining = p.dining != null || p.lounge != null ? int(p.dining) : cabanas.filter(function (c) { return !isLounge(c); }).length;
+    var lounge = p.dining != null || p.lounge != null ? int(p.lounge) : cabanas.filter(isLounge).length;
     var regularAdults = adults - seniors;
     var totalGuests = adults + kids612 + kids05;
-    var cp = function (c) { return cabanaPrice(type, c); };
-    var cabanaTotal = cabanas.reduce(function (s, c) { return s + cp(c); }, 0);
-    var totalCapacity = cabanas.reduce(function (s, c) { return s + (Number(c.capacity) || 0); }, 0);
+    var r0 = PRICING[type] || PRICING.day_trip;
+    var cp = function (c) { return isLounge(c) ? r0.lounge : r0.dining; };
+    var cabanaTotal = dining * r0.dining + lounge * r0.lounge;
+    var totalCapacity = dining * CAPACITY.dining + lounge * CAPACITY.lounge;
+    var cabanaLines = [];
+    if (dining) cabanaLines.push({ kind: "dining", label: "Dining Cabana", qty: dining, rate: r0.dining, amount: dining * r0.dining });
+    if (lounge) cabanaLines.push({ kind: "lounge", label: "Lounge Cabana", qty: lounge, rate: r0.lounge, amount: lounge * r0.lounge });
     var base = { type: type, adults: adults, kids612: kids612, kids05: kids05, seniors: seniors, pets: pets,
       regularAdults: regularAdults, totalGuests: totalGuests, cabanaTotal: cabanaTotal, totalCapacity: totalCapacity,
+      dining: dining, lounge: lounge, cabanaCount: dining + lounge, cabanaLines: cabanaLines,
       cabanaPrice: cp, cabanas: cabanas, rated: hasRateSheet(type) };
 
     var pkg = PACKAGE_PRICING[type];
     if (pkg) {
       var extraPax = Math.max(0, totalGuests - pkg.includedPax);
-      var extraCabanas = Math.max(0, cabanas.length - pkg.includedCabanas);
+      var extraCabanas = Math.max(0, dining + lounge - pkg.includedCabanas);
       var extraPaxCost = extraPax * pkg.addlAdult, extraPetCost = pets * pkg.addlPet, extraCabanaCost = extraCabanas * pkg.addlCabana;
       return Object.assign(base, {
         isPackage: true, base: pkg.base, includedPax: pkg.includedPax, includedCabanas: pkg.includedCabanas,
@@ -87,7 +99,7 @@
   }
 
   window.VBRPricing = {
-    PRICING: PRICING, PACKAGE_PRICING: PACKAGE_PRICING, SENIOR_DISCOUNT_RATE: SENIOR_DISCOUNT_RATE, seniorPrice: seniorPrice,
+    PRICING: PRICING, PACKAGE_PRICING: PACKAGE_PRICING, CAPACITY: CAPACITY, SENIOR_DISCOUNT_RATE: SENIOR_DISCOUNT_RATE, seniorPrice: seniorPrice,
     hasRateSheet: hasRateSheet, cabanaPrice: cabanaPrice, compute: compute, discountAmount: discountAmount, r2: r2,
   };
 })();

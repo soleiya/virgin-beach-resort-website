@@ -20,12 +20,17 @@ before_stay = [
      "<p>To secure your booking, pay at least 50% &mdash; or the full amount &mdash; within 24 hours of booking, and upload your proof of payment. "
      "The balance is due 15 days before arrival; bookings made 14 days or less before arrival are paid in full. Full payment guarantees your reservation.</p>"
      "<p>Pay by bank or e-wallet transfer (InstaPay / PESONet to our UnionBank, BDO or Metrobank account &mdash; GCash and Maya can send via InstaPay). "
-     "Have a discount code? Enter it when you book your villa stay on our website.</p>"
+     "Have a discount code? Enter it when you book on our website.</p>"
      "<p>At the resort, incidental charges are settled in cash (Philippine Peso or USD) or by credit/debit card (Visa or Mastercard). Check payments are not allowed.</p>"),
     ("What are your check-in and check-out times?",
      "<p>For overnight guests: Check-in &mdash; 2:00 PM, Check-out &mdash; 11:30 AM. For Day Trip guests: Check-in &mdash; 8:00 AM, "
      "Check-out &mdash; 5:00 PM.</p><p>Day Tour guests may avail of dinner at our overnight section. Should you wish to stay for dinner, kindly "
      "inform our front office beforehand. Seating is subject to table availability.</p>"),
+    ("Can I choose a specific cabana for my day trip?",
+     "<p>When you book a day trip, you choose how many Dining Cabanas (up to 10 persons) and Lounge Cabanas (up to 4 persons) you need. "
+     "Our team assigns your cabana number(s) before or on the day of your visit and emails them to you.</p>"
+     "<p>Cabana numbers are subject to change due to privacy and group concerns &mdash; for example, to keep a large group together or give every "
+     "party its own space. If we need to move you, it's to a comparable cabana, and we'll email you the new number.</p>"),
     ("Can I get an early check-in or late check-out?",
      "<p>We accommodate early check-in or late check-out options subject to room availability. Early check-in can commence from 9:00 AM onwards, "
      "with an hourly charge of &#8369;750. Late check-out is permissible until 3:00 PM, also with an hourly charge of &#8369;750. Staying beyond "

@@ -60,8 +60,8 @@ body = f"""
         <div class="stay-step">
           <div class="stay-step-head"><span class="stay-step-num">1</span><div><h2>Your dates</h2><p>Check-in from 2:00 PM &middot; check-out by 11:30 AM</p></div></div>
           <div class="row-2">
-            <div><label for="checkIn">Check-in</label><input id="checkIn" type="date" required></div>
-            <div><label for="checkOut">Check-out</label><input id="checkOut" type="date" required></div>
+            <div><label for="checkIn">Check-in</label><input id="checkIn" type="date" required data-booking-date="checkin"></div>
+            <div><label for="checkOut">Check-out</label><input id="checkOut" type="date" required data-booking-date="checkout"></div>
           </div>
           <p class="stay-nights" id="nightsLine"></p>
         </div>
@@ -200,6 +200,7 @@ body = f"""
 
 <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
 <script src="../assets/js/booking-config.js?v={asset_v('assets/js/booking-config.js')}"></script>
+<script src="../assets/js/booking-window.js?v={asset_v('assets/js/booking-window.js')}"></script>
 <script src="../assets/js/stay-booking.js?v={asset_v('assets/js/stay-booking.js')}"></script>
 """
 

@@ -831,6 +831,7 @@ form.inquiry .field-hint { font-size: 0.8rem; color: var(--ink-soft); margin-top
 .code-msg { margin: 6px 0 0; font-size: .88rem; font-weight: 600; }
 .code-msg.is-ok { color: var(--lagoon-deep); }
 .code-msg.is-bad { color: #b3261e; }
+.bw-note { margin: 6px 0 0; font-size: .86rem; font-weight: 600; color: #b3261e; }
 
 /* Day Trip page: booking box in the hero (same as the home page's) */
 .day-hero .quickbook { margin-top: 26px; max-width: 880px; }

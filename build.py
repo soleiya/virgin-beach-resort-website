@@ -168,20 +168,46 @@ def booking_form_section(default_type="day_trip"):
   <form class="inquiry" id="bookingForm">
     <div>
       <label for="checkIn" id="checkInLabel">Preferred Date</label>
-      <input id="checkIn" type="date" required>
+      <input id="checkIn" type="date" required data-booking-date="visit">
     </div>
 
     {stay_type_field}
 
     <div id="cabanaStep" hidden>
-      <label id="cabanaStepLabel">Choose your cabana(s)</label>
-      <p class="field-hint" id="cabanaHint">Tap the map to see exactly where each cabana sits — pick a date above to check live availability for that day, and you can select more than one cabana.</p>
-      <p class="field-hint cabana-fineprint">Cabana numbers are <strong>preferred cabanas</strong>. To make sure every group has its own space, the resort may move your party to a comparable cabana if a large group books in &mdash; we'll always let you know.</p>
-      <div class="cabana-map-wrap">
-        <div id="cabanaMapStatus" class="cabana-map-status">Loading the cabana map…</div>
-        <div id="cabanaMap"></div>
-        <div id="cabanaSelectedNote" class="cabana-selected-note" hidden></div>
+      <label id="cabanaStepLabel">Your cabana(s)</label>
+      <p class="field-hint" id="cabanaHint">Choose how many you need &mdash; book more than one for a bigger group.</p>
+      <div class="villa-type-list" id="cabanaTypes">
+        <div class="villa-type cab-type" data-kind="dining">
+          <img src="../assets/images/dining-cabana-thatch.jpg" alt="Dining Cabana" loading="lazy">
+          <div>
+            <h3>Dining Cabana</h3>
+            <div class="vt-meta">Seating under a thatched pavilion by the beach &middot; up to 10 persons</div>
+            <div class="vt-rate"><b class="cab-price"></b> <span class="muted">/ day</span></div>
+            <div class="vt-avail">Pick a date to check availability</div>
+          </div>
+          <div class="stepper" role="group" aria-label="Number of Dining Cabanas">
+            <button type="button" class="st-minus" aria-label="One fewer Dining Cabana">&minus;</button>
+            <output class="st-count">0</output>
+            <button type="button" class="st-plus" aria-label="One more Dining Cabana">+</button>
+          </div>
+        </div>
+        <div class="villa-type cab-type" data-kind="lounge">
+          <img src="../assets/images/lounge-cabana-canopy.jpg" alt="Lounge Cabana" loading="lazy">
+          <div>
+            <h3>Lounge Cabana</h3>
+            <div class="vt-meta">Curtained daybed facing the ocean &middot; up to 4 persons</div>
+            <div class="vt-rate"><b class="cab-price"></b> <span class="muted">/ day</span></div>
+            <div class="vt-avail">Pick a date to check availability</div>
+          </div>
+          <div class="stepper" role="group" aria-label="Number of Lounge Cabanas">
+            <button type="button" class="st-minus" aria-label="One fewer Lounge Cabana">&minus;</button>
+            <output class="st-count">0</output>
+            <button type="button" class="st-plus" aria-label="One more Lounge Cabana">+</button>
+          </div>
+        </div>
       </div>
+      <p class="field-hint cabana-fineprint">Our team assigns your cabana number(s) before or on the day of your visit and emails them to you. Cabana numbers are <strong>subject to change due to privacy and group concerns</strong> &mdash; for example, to keep a large group together or give every party its own space &mdash; and if we move you, it's to a comparable cabana and we'll email you again.</p>
+      <div id="cabanaMapStatus" class="cabana-map-status" hidden></div>
     </div>
 
     <div class="row-2" style="grid-template-columns:1fr 1fr 1fr;">
@@ -243,6 +269,11 @@ def booking_form_section(default_type="day_trip"):
       </div>
     </div>
 
+    <div class="code-row" id="dtCodeRow" hidden>
+      <label for="dtCode">Discount code <span class="muted">(optional)</span></label>
+      <div class="code-input"><input id="dtCode" type="text" autocomplete="off" autocapitalize="characters" spellcheck="false" maxlength="30" placeholder="Enter code"><button type="button" class="btn btn-ghost" id="dtCodeApply">Apply</button></div>
+      <p class="code-msg" id="dtCodeMsg" hidden></p>
+    </div>
     <div id="billSummary" class="bill-summary" hidden></div>
 
     <div>
@@ -284,12 +315,12 @@ def booking_form_section(default_type="day_trip"):
 
 
 def booking_scripts():
-    """Script tags the booking form (and the live cabana map inside it) need
+    """Script tags the booking form (and its live cabana availability) need
     — include once, at the bottom of any page that embeds booking_form_section()."""
     return f"""
 <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
 <script src="../assets/js/booking-config.js?v={asset_v('assets/js/booking-config.js')}"></script>
-<script src="../assets/js/cabana-map.js?v={asset_v('assets/js/cabana-map.js')}"></script>
+<script src="../assets/js/booking-window.js?v={asset_v('assets/js/booking-window.js')}"></script>
 <script src="../assets/js/pricing.js?v={asset_v('assets/js/pricing.js')}"></script>
 <script src="../assets/js/booking.js?v={asset_v('assets/js/booking.js')}"></script>
 """

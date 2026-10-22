@@ -109,6 +109,52 @@ html = """<!doctype html>
   .web-sub { display: block; font-size: 0.72rem; color: var(--ink-soft); margin-top: 2px; }
   .codes-form { background: var(--sand-deep); border-radius: 12px; padding: 14px 16px 6px; }
   .codes-actions { margin-bottom: 10px; }
+  .cab-assign { display: grid; gap: 8px; }
+  .modal.dcal-modal { max-width: 1440px; width: calc(100vw - 32px); }
+  #dcalBackdrop { z-index: 150; }  /* the booking form and breakdown open on top of the calendar */
+  .dcal-nav input[type=month] { width: auto; }
+  .dcal-nav .btn-sm { width: auto; }
+  .dcal-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; }
+  .dcal-head h2 { margin: 0; }
+  .dcal-nav { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+  .dcal-nav input[type=month] { border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px; background: var(--sand); font: inherit; }
+  .dcal-sum { font-size: 0.85rem; color: var(--ink-soft); margin: 8px 0 10px; }
+  .dcal-scroll { max-height: calc(100vh - 230px); overflow: auto; border: 1px solid var(--line); border-radius: 10px; }
+  .dcal-table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
+  .dcal-table th { position: sticky; top: 0; z-index: 2; background: var(--sand-deep, #eadfc8); text-align: left; padding: 7px 8px; font-size: 0.7rem; letter-spacing: .05em; text-transform: uppercase; white-space: nowrap; }
+  .dcal-table td { padding: 6px 8px; border-top: 1px solid var(--line); vertical-align: top; }
+  .dcal-table .num { text-align: right; white-space: nowrap; }
+  .dcal-day td { background: #f3ecdc; font-weight: 700; border-top: 2px solid #d9cba9; }
+  .dcal-day.is-today td { background: #e3f1ee; }
+  .dcal-day .dcal-cap { font-weight: 600; font-size: 0.78rem; color: var(--ink-soft); margin-left: 12px; }
+  .dcal-day .dcal-cap b { color: var(--ink); }
+  .dcal-day .dcal-cap .full { color: #9b2c2c; }
+  .dcal-day .btn-sm { margin-left: 10px; padding: 2px 10px; font-size: 0.74rem; }
+  .dcal-row { cursor: pointer; }
+  .dcal-row:hover td { background: #fbf7ee; }
+  .dcal-row.is-off td { color: var(--ink-soft); text-decoration: line-through; }
+  .dcal-empty td { color: var(--ink-soft); font-style: italic; }
+  .dcal-remarks { max-width: 260px; white-space: normal; color: var(--ink-soft); }
+  .dcal-cabno { white-space: nowrap; }
+  .dcal-cabno .cab-tag { display: inline-block; background: var(--lagoon, #1f7a72); color: #fff; border-radius: 6px; padding: 1px 6px; margin: 1px 2px 1px 0; font-weight: 700; font-size: 0.74rem; }
+  .dcal-cabno .cab-tag.lounge { background: #c7832b; }
+  .dcal-cabno button { font-size: 0.72rem; padding: 2px 8px; }
+  .dcal-pop { position: fixed; z-index: 1200; background: var(--surface, #fffdf8); border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 12px 40px rgba(0,0,0,.18); padding: 12px; width: min(560px, calc(100vw - 24px)); max-height: 70vh; overflow: auto; }
+  .dcal-pop-head { display: flex; flex-direction: column; gap: 2px; margin-bottom: 8px; }
+  .dcal-pop-actions { display: flex; justify-content: flex-end; gap: 6px; margin-top: 8px; }
+  .cab-assign-group { border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; }
+  .cab-assign-group h4 { font-size: 0.72rem; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-soft); margin: 0 0 6px; }
+  .cab-assign-chips { display: flex; flex-wrap: wrap; gap: 5px; }
+  .cab-chip { border: 1px solid var(--line); background: var(--sand); border-radius: 7px; padding: 3px 8px; font-size: 0.8rem; font-weight: 700; cursor: pointer; min-width: 36px; text-align: center; color: var(--ink); }
+  .cab-chip.lounge { border-style: dashed; }
+  .cab-chip.is-on { background: var(--lagoon, #1f7a72); color: #fff; border-color: transparent; }
+  .cab-chip.is-taken { opacity: .38; cursor: not-allowed; text-decoration: line-through; }
+  .cab-chip.is-blocked { background: repeating-linear-gradient(45deg, #eee, #eee 4px, #ddd 4px, #ddd 8px); color: #777; cursor: not-allowed; }
+  .cd-h { font-size: 0.72rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-soft); margin: 6px 0 10px; font-weight: 700; }
+  .cd-hint { font-size: 0.74rem; }
+  .cd-types { display: flex; flex-wrap: wrap; gap: 4px 16px; }
+  .cd-types .modal-check { margin: 2px 0; font-weight: 500; }
+  .codes-table .cd-cond { font-size: 0.78rem; color: var(--ink-soft); line-height: 1.4; }
   .code-st { display: inline-block; padding: 2px 9px; border-radius: 999px; font-size: 0.72rem; font-weight: 700; }
   .code-st.on { background: #e3f4ec; color: #17694a; } .code-st.later { background: #e6eefb; color: #2350a0; }
   .code-st.expired, .code-st.off { background: #eef1f4; color: #4a5563; }
@@ -422,11 +468,13 @@ html = """<!doctype html>
       </div>
       <div class="toolbar-right">
         <button class="btn-sm ghost" id="villaCalBtn" data-section="villas">Villa Calendar</button>
+        <button class="btn-sm ghost" id="dcalBtn" data-section="daytrip">Day Trip Calendar</button>
         <button class="btn-sm ghost" id="plannerBtn" data-section="daytrip">Cabana Map</button>
         <button class="btn-sm ghost" id="logBtn">Activity Log</button>
         <button class="btn-sm ghost" id="teamBtn">Team Activity</button>
         <button class="btn-sm ghost" id="webBtn">Website Bookings</button>
         <button class="btn-sm ghost" id="codesBtn">Discount Codes</button>
+        <button class="btn-sm ghost" id="windowBtn">Booking Window</button>
         <button class="btn-sm ghost" id="exportBtn">Export CSV</button>
         <button class="btn-sm primary" id="addVillaBtn" data-section="villas">+ Villa Booking</button>
         <button class="btn-sm primary" id="addBtn" data-section="daytrip">+ Day Trip Booking</button>
@@ -612,10 +660,24 @@ html = """<!doctype html>
           <input id="addPets" type="number" min="0" max="2" value="0">
         </div>
       </div>
+      <div class="modal-row three" id="addCabanaCounts">
+        <div class="modal-field" style="margin-bottom:0;">
+          <label for="addDining">Dining cabanas</label>
+          <input id="addDining" type="number" min="0" max="60" value="0">
+        </div>
+        <div class="modal-field" style="margin-bottom:0;">
+          <label for="addLounge">Lounge cabanas</label>
+          <input id="addLounge" type="number" min="0" max="20" value="0">
+        </div>
+        <div class="modal-field" style="margin-bottom:0;">
+          <label>Free that day</label>
+          <p class="modal-hint" id="addCabanaLeft" style="margin-top:8px;">Pick a date</p>
+        </div>
+      </div>
       <div class="modal-field">
-        <label>Cabana(s)</label>
-        <p class="modal-map-status" id="addMapStatus">Pick a preferred date to see which cabanas are free that day.</p>
-        <div id="addCabanaMap"></div>
+        <label>Cabana no. <span class="muted">(optional &mdash; assign any time; the guest is emailed the numbers)</span></label>
+        <p class="modal-map-status" id="addMapStatus">Pick a date to see which cabanas are free that day.</p>
+        <div id="addCabanaMap" class="cab-assign"></div>
         <div class="modal-map-selected" id="addCabanaSelected"></div>
       </div>
       <div class="modal-field" id="addPricing">
@@ -851,7 +913,7 @@ html = """<!doctype html>
       <button class="btn-sm ghost" type="button" id="plannerToday">Today</button>
       <button class="btn-sm ghost" type="button" id="plannerNext">Next day &rarr;</button>
       <button class="btn-sm ghost" type="button" id="plannerBlockBtn" title="Take cabanas off sale: under repair, unavailable or blocked">&#9940; Block cabanas&hellip;</button>
-      <label class="modal-check" style="margin-left:auto;"><input type="checkbox" id="plannerNotify" checked> Email guests whose cabana is moved</label>
+      <label class="modal-check" style="margin-left:auto;" title="Guests are always emailed when their cabana changes"><input type="checkbox" id="plannerNotify" checked disabled> Guests are emailed when their cabana is moved</label>
     </div>
     <div class="planner-block" id="plannerBlockPanel" hidden>
       <div class="planner-block-head"><b>Block cabanas</b><span class="muted">Click cabanas on the map to pick them. Guests can't book them on these dates; the reason is only shown to staff.</span></div>
@@ -967,33 +1029,101 @@ html = """<!doctype html>
 <div class="modal-backdrop" id="codesModalBackdrop">
   <div class="modal modal-wide web-modal">
     <h2>Discount Codes</h2>
-    <p style="color:var(--ink-soft); font-size:0.85rem; margin:-10px 0 16px;">Codes guests can enter when booking a villa on the website (staff can enter them in the villa booking form too). A code is checked against the day the booking is made; bookings keep their discount even after a code expires or is switched off.</p>
+    <p style="color:var(--ink-soft); font-size:0.85rem; margin:-10px 0 16px;">Codes guests can enter when booking on the website (overnight stays and/or day trips; staff can enter them in the villa booking form too). A code is checked against the day the booking is made; bookings keep their discount even after a code expires or is switched off.</p>
     <form class="codes-form" id="codesForm" autocomplete="off">
+      <h3 class="cd-h">The discount</h3>
       <div class="modal-row three">
         <div class="modal-field"><label for="cdCode">Code</label><input id="cdCode" type="text" maxlength="30" required placeholder="e.g. SUMMER25" style="text-transform:uppercase;"></div>
-        <div class="modal-field"><label for="cdApplies">Takes the % off</label>
-          <select id="cdApplies"><option value="rooms">Casita nightly rates only</option><option value="add_ons">Add-ons only</option><option value="all">The whole stay</option></select></div>
-        <div class="modal-field"><label for="cdPercent">Percent off</label><input id="cdPercent" type="number" min="1" max="100" step="0.01" required placeholder="50"></div>
+        <div class="modal-field"><label for="cdKind">Type</label>
+          <select id="cdKind"><option value="percent">Percent off (%)</option><option value="fixed">Fixed amount off (&#8369;)</option></select></div>
+        <div class="modal-field"><label for="cdAmount" id="cdAmountLabel">Percent off</label><input id="cdAmount" type="number" min="0.01" step="0.01" required placeholder="50"></div>
       </div>
       <div class="modal-row three">
-        <div class="modal-field"><label for="cdMin">Casita charges must be over (₱)</label><input id="cdMin" type="number" min="0" step="1" placeholder="0 = no minimum"></div>
-        <div class="modal-field"><label for="cdStart">Valid from <span class="muted">(blank = now)</span></label><input id="cdStart" type="date"></div>
-        <div class="modal-field"><label for="cdEnd">Expires after <span class="muted">(blank = never)</span></label><input id="cdEnd" type="date"></div>
+        <div class="modal-field"><label for="cdApplies">Takes it off</label>
+          <select id="cdApplies"><option value="rooms">Casita rates / cabana rental</option><option value="add_ons">Add-ons only (overnight)</option><option value="all">The whole booking</option></select></div>
+        <div class="modal-field"><label>For</label>
+          <label class="modal-check"><input type="checkbox" id="cdKOvernight" checked> Overnight stays</label>
+          <label class="modal-check"><input type="checkbox" id="cdKDay"> Day trips</label></div>
+        <div class="modal-field"><label for="cdMin">Minimum spend (&#8369;)</label><input id="cdMin" type="number" min="0" step="1" placeholder="0 = none"><span class="field-hint cd-hint">Casita charges for stays; the day-trip total for day trips</span></div>
       </div>
-      <div class="modal-row">
-        <div class="modal-field" style="flex:2;"><label for="cdLabel">Description <span class="muted">(staff only)</span></label><input id="cdLabel" type="text" maxlength="200" placeholder="e.g. 50% off all casita rates — partners"></div>
+      <h3 class="cd-h">When it works</h3>
+      <div class="modal-row three">
+        <div class="modal-field"><label for="cdStart">Can be used from <span class="muted">(booking date)</span></label><input id="cdStart" type="date"></div>
+        <div class="modal-field"><label for="cdEnd">Expires after <span class="muted">(blank = never)</span></label><input id="cdEnd" type="date"></div>
+        <div class="modal-field"><label for="cdMinNights">Minimum nights <span class="muted">(stays)</span></label><input id="cdMinNights" type="number" min="0" step="1" placeholder="0 = any"></div>
+      </div>
+      <div class="modal-row three">
+        <div class="modal-field"><label for="cdStayFrom">Stay / visit dates from</label><input id="cdStayFrom" type="date"></div>
+        <div class="modal-field"><label for="cdStayTo">Stay / visit dates to</label><input id="cdStayTo" type="date"></div>
+        <div class="modal-field"><span class="field-hint cd-hint" style="margin-top:24px;display:block;">Check-in (or day-trip) date must fall in this range. Blank = any date.</span></div>
+      </div>
+      <div class="modal-field" id="cdTypesWrap"><label>Only for these casitas <span class="muted">(stays; none ticked = all casitas)</span></label><div class="cd-types" id="cdTypes"><span class="muted">Loading&hellip;</span></div></div>
+      <h3 class="cd-h">Limits</h3>
+      <div class="modal-row three">
+        <div class="modal-field"><label for="cdMaxUses">Maximum uses <span class="muted">(blank = unlimited)</span></label><input id="cdMaxUses" type="number" min="1" step="1" placeholder="e.g. 20"></div>
+        <div class="modal-field"><label class="modal-check" style="margin-top:26px;"><input type="checkbox" id="cdOnce"> Once per guest email</label></div>
         <div class="modal-field"><label class="modal-check" style="margin-top:26px;"><input type="checkbox" id="cdActive" checked> Active</label></div>
       </div>
+      <div class="modal-field"><label for="cdLabel">Description <span class="muted">(staff only)</span></label><input id="cdLabel" type="text" maxlength="200" placeholder="e.g. Rainy-season promo for partners"></div>
       <p class="form-error-box" id="cdError" style="display:none;"></p>
       <div class="codes-actions"><button type="submit" class="btn-sm primary" id="cdSave">Add code</button> <button type="button" class="btn-sm ghost" id="cdNew" hidden>New code</button></div>
     </form>
     <div class="log-scroll" style="margin-top:14px;">
       <table class="log-table web-table codes-table">
-        <thead><tr><th>Code</th><th>Discount</th><th>Minimum</th><th>Valid</th><th>Status</th><th class="num">Used</th><th class="num">Discount given</th><th></th></tr></thead>
-        <tbody id="codesBody"><tr><td colspan="8" style="padding:24px;text-align:center;color:var(--ink-soft);">Loading&hellip;</td></tr></tbody>
+        <thead><tr><th>Code</th><th>Discount</th><th>For</th><th>Conditions</th><th>Valid</th><th>Status</th><th class="num">Used</th><th class="num">Discount given</th><th></th></tr></thead>
+        <tbody id="codesBody"><tr><td colspan="9" style="padding:24px;text-align:center;color:var(--ink-soft);">Loading&hellip;</td></tr></tbody>
       </table>
     </div>
     <div class="modal-actions"><button type="button" class="btn-sm ghost" id="codesClose">Close</button></div>
+  </div>
+</div>
+
+<div class="modal-backdrop" id="dcalBackdrop">
+  <div class="modal dcal-modal">
+    <div class="dcal-head">
+      <h2>Day Trip Calendar</h2>
+      <div class="dcal-nav">
+        <button type="button" class="btn-sm ghost" id="dcalPrev" aria-label="Previous month">&lsaquo;</button>
+        <input type="month" id="dcalMonth">
+        <button type="button" class="btn-sm ghost" id="dcalNext" aria-label="Next month">&rsaquo;</button>
+        <button type="button" class="btn-sm ghost" id="dcalToday">Today</button>
+        <label class="modal-check" style="margin:0 0 0 8px;"><input type="checkbox" id="dcalEmpty"> Show days with no bookings</label>
+        <label class="modal-check" style="margin:0 0 0 8px;"><input type="checkbox" id="dcalCancelled"> Show cancelled / expired</label>
+      </div>
+    </div>
+    <p class="dcal-sum" id="dcalSum"></p>
+    <div class="dcal-scroll">
+      <table class="dcal-table">
+        <thead><tr>
+          <th>Booker</th><th>Guest</th><th class="num">Adult</th><th class="num">Kids</th><th class="num">0&ndash;5</th><th class="num">PWD | Sr</th><th class="num">Pet</th>
+          <th class="num">Dining</th><th class="num">Lounge</th><th>Package</th><th class="num">Total</th><th>Status</th><th>Remarks</th><th>Cabana no.</th>
+        </tr></thead>
+        <tbody id="dcalBody"></tbody>
+      </table>
+    </div>
+    <div class="modal-actions"><button type="button" class="btn-sm ghost" id="dcalClose">Close</button></div>
+  </div>
+</div>
+
+<div class="dcal-pop" id="dcalPop" hidden>
+  <div class="dcal-pop-head"><strong id="dcalPopTitle"></strong><span class="muted" id="dcalPopSub"></span></div>
+  <div class="cab-assign" id="dcalPopList"></div>
+  <p class="modal-hint" id="dcalPopNote"></p>
+  <div class="dcal-pop-actions"><button type="button" class="btn-sm ghost" id="dcalPopCancel">Cancel</button> <button type="button" class="btn-sm primary" id="dcalPopSave">Save &amp; email guest</button></div>
+</div>
+
+<div class="modal-backdrop" id="windowModalBackdrop">
+  <div class="modal">
+    <h2>Booking Window &amp; Cabanas</h2>
+    <p style="color:var(--ink-soft); font-size:0.85rem; margin:-10px 0 16px;">The last date guests can book on the website &mdash; overnight stays (last night) and day trips. Staff can still enter later bookings in the dashboard.</p>
+    <div class="modal-field"><label for="bwUntil">Guests can book up to</label><input id="bwUntil" type="date"><span class="field-hint" id="bwInfo"></span></div>
+    <div class="modal-row">
+      <div class="modal-field"><label for="bwDining">Dining cabanas per day</label><input id="bwDining" type="number" min="0" max="200"></div>
+      <div class="modal-field"><label for="bwLounge">Lounge cabanas per day</label><input id="bwLounge" type="number" min="0" max="50"></div>
+    </div>
+    <p class="field-hint" style="margin-top:-6px;">How many of each the website and the Day Trip Calendar count as available each day (before blocks and bookings).</p>
+    <p class="form-error-box" id="bwError" style="display:none;"></p>
+    <div class="modal-actions"><button type="button" class="btn-sm ghost" id="bwClose">Close</button> <button type="button" class="btn-sm primary" id="bwSave">Save</button></div>
   </div>
 </div>
 
@@ -1100,6 +1230,7 @@ html = """<!doctype html>
 <script src="../assets/js/staff-activity.js?v=__V_ACT__"></script>
 <script src="../assets/js/staff-website.js?v=__V_WEB__"></script>
 <script src="../assets/js/staff-codes.js?v=__V_CODES__"></script>
+<script src="../assets/js/staff-daycal.js?v=__V_DCAL__"></script>
 <script src="../assets/js/staff-cloudbeds.js?v=__V_CBJS__"></script>
 <script src="../assets/js/staff-cloudbeds-pages.js?v=__V_CBPAGES__"></script>
 </body>
@@ -1116,6 +1247,7 @@ html = (html.replace("__V_CSS__", v("assets/css/style.css"))
             .replace("__V_ACT__", v("assets/js/staff-activity.js"))
             .replace("__V_WEB__", v("assets/js/staff-website.js"))
             .replace("__V_CODES__", v("assets/js/staff-codes.js"))
+            .replace("__V_DCAL__", v("assets/js/staff-daycal.js"))
             .replace("__V_MAIL__", v("assets/js/staff-email.js"))
             .replace("__V_CBCSS__", v("assets/css/staff-cloudbeds.css"))
             .replace("__V_CBJS__", v("assets/js/staff-cloudbeds.js"))

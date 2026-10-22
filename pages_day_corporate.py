@@ -16,11 +16,11 @@ day_body = """
   <div class="wrap page-hero-content">
     <span class="eyebrow">Day Trip</span>
     <h1>A fleeting escape that will leave you wanting more.</h1>
-    <p class="lede">Pick your date and party &mdash; see the free cabanas on the beach map and your price right away.</p>
+    <p class="lede">Pick your date and party &mdash; see how many cabanas are free and your price right away.</p>
 
     <form class="quickbook" id="dayQuick" novalidate>
       <div class="qb-fields qb-day4">
-        <label class="qb-field"><span>Date of your visit</span><input type="date" id="dqDate" required></label>
+        <label class="qb-field"><span>Date of your visit</span><input type="date" id="dqDate" required data-booking-date="visit"></label>
         <label class="qb-field qb-small"><span>Adults</span><select id="dqAdults"></select></label>
         <label class="qb-field qb-small"><span>Kids 6&ndash;12</span><select id="dqKids"></select></label>
         <label class="qb-field qb-small"><span>Kids 0&ndash;5</span><select id="dqKids05"></select></label>
@@ -35,7 +35,7 @@ day_body = """
 <section class="center" id="planYourTrip" style="max-width:640px; margin:0 auto; padding-bottom:0;">
   <span class="eyebrow">Reservations</span>
   <h2>Plan your day trip</h2>
-  <p class="prose mx-auto" style="margin-top:14px;">Choose your cabana on the map, tell us who's coming, and your quotation with the full amount arrives by email right away. Prefer to talk first?
+  <p class="prose mx-auto" style="margin-top:14px;">Choose how many cabanas you need, tell us who's coming, and your quotation with the full amount arrives by email right away. Prefer to talk first?
   Call (02) 8815 2584 or 87, or email
   <a class="text-link" href="mailto:reservations@virginbeachresort.com">reservations@virginbeachresort.com</a></p>
 </section>
