@@ -698,9 +698,8 @@ ${statusBox([
 ${h2("Your reservation")}${kv(reservationRows(r, cabanas))}${cabanaNote(cabanas)}
 ${h2("Quotation")}${quoteTable(q)}
 ${h2("How to pay")}
-${p(`<strong>Option 1 — Bank or e-wallet transfer</strong> (InstaPay / PESONet &mdash; GCash and Maya can send to these accounts via InstaPay). Please put <strong>${esc(r.order_code)}</strong> and your name in the reference / remarks.`)}
+${p(`<strong>Bank or e-wallet transfer</strong> (InstaPay / PESONet &mdash; GCash and Maya can send to these accounts via InstaPay). Please put <strong>${esc(r.order_code)}</strong> and your name in the reference / remarks.`)}
 ${bankTable()}
-${p(`<strong>Option 2 — Card or e-wallet payment link.</strong> Reply to this email with the amount you'd like to pay (50% or 100%) and we'll send you a secure Xendit payment link.`, "margin-top:14px;")}
 ${h2("After you pay")}
 <ol style="margin:0 0 12px;padding-left:20px;font-size:14px;">
 <li style="margin:0 0 8px;"><strong>Send us your proof of payment</strong> — upload the screenshot or transaction slip using the button below, or simply reply to this email with it attached.</li>
@@ -793,7 +792,6 @@ ${q ? h2("Quotation sent") + quoteTable(q) : ""}
 ${h2("Follow-up checklist")}
 <ol style="margin:0 0 14px;padding-left:20px;font-size:14px;">
 <li>Watch the guest thread (search the Booking ID) for proof of payment, the signed agreement and one valid ID. Website uploads also alert this inbox.</li>
-<li>Guest asks for card / e-wallet? Create a Xendit invoice for <strong>${q ? esc(peso(q.total)) : "the quoted amount"}</strong> with description <strong>Booking# ${esc(r.order_code)}</strong>, and reply in the guest's thread with the link and the same pay-by time.</li>
 <li>Verify the deposit against the bank statement, then click <strong>Verify</strong> on the payment in the dashboard (Payments) — that confirms the booking and emails the guest.</li>
 <li>No payment by ${esc(dl.label)}? The booking automatically turns <strong>Expired</strong> and the cabana(s) are released. Nothing to do unless the guest calls.</li>
 </ol>
@@ -1054,7 +1052,8 @@ export function guestRoster(r: Any): { name: string; group: string }[] {
 }
 function rosterComplete(r: Any) {
   const party = int(r.adults) + int(r.children_6_12) + int(r.children_0_5);
-  return Array.isArray(r.companions) && r.companions.length + 1 === party;
+  const companions = Array.isArray(r.companions) ? r.companions.length : 0;
+  return companions + 1 >= party; // a party of one has no companions to list
 }
 function rosterTable(r: Any) {
   const td = `padding:6px 8px;border-bottom:1px solid ${C.line};font-size:13.5px;`;
@@ -1132,9 +1131,8 @@ ${h2("Your reservation")}${kv(overnightRows(r, villas))}${cabanaNote(villas)}
 ${h2("Guest list")}${rosterTable(r)}
 ${q ? h2("Quotation") + quoteTable(q) + p("The full-board meal package (lunch, dinner and breakfast) is mandatory for every guest and is charged per guest, per night. Children 0–5 eat free.", `font-size:12.5px;color:${C.soft};margin-top:8px;`) : ""}
 ${h2("How to pay")}
-${p(`<strong>Option 1 — Bank or e-wallet transfer</strong> (InstaPay / PESONet &mdash; GCash and Maya can send to these accounts via InstaPay). Please put <strong>${esc(r.order_code)}</strong> and your name in the reference / remarks.`)}
+${p(`<strong>Bank or e-wallet transfer</strong> (InstaPay / PESONet &mdash; GCash and Maya can send to these accounts via InstaPay). Please put <strong>${esc(r.order_code)}</strong> and your name in the reference / remarks.`)}
 ${bankTable()}
-${p(`<strong>Option 2 — Card or e-wallet payment link.</strong> Reply to this email with the amount you'd like to pay (50% or 100%) and we'll send you a secure Xendit payment link${q && q.onlineDiscount ? ` &mdash; the Convenience Discount doesn't apply to payment-link payments, so the full price is ${esc(peso(q.cardTotal ?? q.total))}` : ""}.`, "margin-top:14px;")}
 ${h2("After you pay")}
 <ol style="margin:0 0 12px;padding-left:20px;font-size:14px;">
 <li style="margin:0 0 8px;"><strong>Send us your proof of payment</strong> — upload the screenshot or transaction slip using the button below, or simply reply to this email with it attached.</li>
@@ -1207,7 +1205,6 @@ ${q ? h2("Quotation sent") + quoteTable(q) : ""}
 ${h2("Follow-up checklist")}
 <ol style="margin:0 0 14px;padding-left:20px;font-size:14px;">
 <li>Watch the guest thread (search the Booking ID) for proof of payment, the signed agreement and a valid ID. Website uploads also alert this inbox.</li>
-<li>Guest asks for card / e-wallet? Create a Xendit invoice for <strong>${q ? esc(peso(q.cardTotal ?? q.total)) : "the quoted amount"}</strong>${q && q.onlineDiscount ? " (no Convenience Discount on card payments)" : ""} with description <strong>Booking# ${esc(r.order_code)}</strong>, and reply in the guest's thread with the link and the same pay-by time.</li>
 <li>Verify the deposit against the bank statement, then click <strong>Verify</strong> on the payment in the dashboard (Payments) — that confirms the booking and emails the guest.</li>
 <li>No payment by ${esc(dl.label)}? The booking automatically turns <strong>Expired</strong> and the casita(s) are released.</li>
 <li>Share the guest count with the kitchen (full board, ${plural(nightsOf(r), "night")}) and any extra mattress with Housekeeping once confirmed.</li>

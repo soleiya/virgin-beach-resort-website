@@ -181,9 +181,7 @@ TEMPLATES["655215"] = dict(
 {status_box([("Confirmation no.", CONF), ("Arrival", "[start date]"), ("Departure", "[end date]")], "warn")}
 {ROOM_ROWS}
 {h2("How to pay")}
-{p("<strong>Option 1 — Card or e-wallet</strong>, through our secure payment page:")}
-{button(PAY_LINK, "Pay online")}
-{p("<strong>Option 2 — Bank or e-wallet transfer</strong> (InstaPay / PESONet; GCash and Maya can send via InstaPay) to:", "margin-top:14px;")}
+{p("<strong>Bank or e-wallet transfer</strong> (InstaPay / PESONet; GCash and Maya can send via InstaPay) to:")}
 {bank_table()}
 {p("Then <strong>reply to this email with your payment screenshot</strong> — we'll confirm your booking once it's verified (office hours 9:00 AM–4:00 PM, Monday–Friday).", "margin-top:14px;")}
 {small("Paid 50%? The balance is due 15 days before arrival. Bookings made within 14 days of arrival are paid in full.")}
@@ -217,9 +215,7 @@ TEMPLATES["655217"] = dict(
 {h1("Your invoice, [first name]")}
 {p("Here's the invoice for your reservation at Virgin Beach Resort.")}
 {status_box([("Invoice no.", "[invoice number]"), ("Due", "[invoice datedue]"), ("Confirmation no.", CONF)])}
-{p("<strong>To pay</strong>, use our secure payment page or transfer to one of our accounts, then reply with the screenshot:")}
-{button(PAY_LINK, "Pay online")}
-<div style="height:10px;"></div>
+{p("<strong>To pay</strong>, transfer to one of our accounts (InstaPay / PESONet; GCash and Maya can send via InstaPay), then reply with the screenshot:")}
 {bank_table()}
 {small("Questions about this invoice? Just reply to this email.")}""", hero=False))
 
@@ -248,13 +244,16 @@ TEMPLATES["655218"] = dict(
 TEMPLATES["672223"] = dict(
     name="Website Booking (Payment Link)",
     subject="Complete your payment to confirm your stay — [conf number]",
-    body=shell("Your secure payment link — valid for 24 hours.", f"""
+    body=shell("Your casita is held for 24 hours — complete your payment to confirm it.", f"""
 {h1("Almost there, [first name]")}
-{p("We've received your reservation, but your payment didn't go through. Your casita is held for <strong>24 hours</strong> — complete your payment through our secure page to confirm it.")}
+{p("We've received your reservation. Your casita is held for <strong>24 hours</strong> — pay <strong>50% or 100%</strong> by bank or e-wallet transfer to confirm it.")}
 {status_box([("Confirmation no.", CONF), ("Arrival", "[start date]"), ("Departure", "[end date]")], "warn")}
 {ROOM_ROWS}
-{button(PAY_LINK, "Complete my payment")}
-{small("The link is valid for 24 hours; after that the reservation is released automatically. Prefer a bank transfer? Reply to this email and we'll send our account details.")}
+{h2("How to pay")}
+{p("<strong>Bank or e-wallet transfer</strong> (InstaPay / PESONet; GCash and Maya can send via InstaPay) to:")}
+{bank_table()}
+{p("Then <strong>reply to this email with your payment screenshot</strong> — we'll confirm your booking once it's verified (office hours 9:00 AM–4:00 PM, Monday–Friday).", "margin-top:14px;")}
+{small("Unpaid reservations are released automatically after 24 hours.")}
 {h2("Good to know")}
 {ul(["<strong>Full-board meals</strong> are required for every guest each night and are settled at check-in: Adult (13+) ₱2,695 · Child (6–12) ₱1,347.50 · Child (0–5) free, per night.",
      "<strong>Check-in</strong> from 2:00 PM (you're welcome to arrive early and relax at the Pavilion — your first meal is lunch) · <strong>check-out</strong> at 11:30 AM."])}"""))
@@ -281,12 +280,14 @@ TEMPLATES["720038"] = dict(
 TEMPLATES["1191702"] = dict(
     name="OTA Booking (Pending Payment)",
     subject="Your reservation — one quick step to secure it · [conf number]",
-    body=shell("Please send us your email address so we can send your payment link.", f"""
+    body=shell("One quick step to secure your stay — your payment details are inside.", f"""
 {h1("Thank you for booking with us, [first name]")}
 {p("We've received your reservation. <strong>No amount has been charged to your card on file yet.</strong>")}
 {status_box([("Confirmation no.", "[conf number]"), ("Arrival", "[start date]"), ("Departure", "[end date]")], "warn")}
 {ROOM_ROWS}
-{p("To secure your stay, please <strong>reply with your personal email address</strong> and we'll send you a secure payment link right away.")}
+{p("To secure your stay, please pay <strong>50% or 100%</strong> by bank or e-wallet transfer (InstaPay / PESONet; GCash and Maya can send via InstaPay) to:")}
+{bank_table()}
+{p("Then <strong>reply to this email with your payment screenshot</strong> and your personal email address, so we can keep you updated directly.", "margin-top:14px;")}
 {h2("Good to know")}
 {ul(["<strong>Full-board meals</strong> are required for every guest each night and are settled at check-in: Adult (13+) ₱2,695 · Child (6–12) ₱1,347.50 · Child (0–5) free, per night.",
      "<strong>Check-in</strong> from 2:00 PM (arrive early and relax at the Pavilion — your first meal is lunch) · <strong>check-out</strong> at 11:30 AM.",
