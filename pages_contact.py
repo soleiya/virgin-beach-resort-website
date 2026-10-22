@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-from build import page
+from build import page, asset_v
 
 body = """
 <section class="page-hero" style="min-height:44vh;">
@@ -55,17 +55,18 @@ body = """
       <div class="map-frame mb-lg" style="margin-bottom:28px;">
         <iframe src="https://maps.google.com/maps?q=Virgin%20Beach%20Resort&t=m&z=14&output=embed&iwloc=near" loading="lazy" title="Map to Virgin Beach Resort" allowfullscreen></iframe>
       </div>
-      <form class="inquiry" onsubmit="return false;">
+      <div id="contactStatus" class="form-status" hidden role="status" aria-live="polite"></div>
+      <form class="inquiry" id="contactForm" novalidate>
         <div class="row-2">
-          <div><label for="fname">First Name</label><input id="fname" type="text" required></div>
-          <div><label for="lname">Last Name</label><input id="lname" type="text" required></div>
+          <div><label for="fname">First Name</label><input id="fname" type="text" autocomplete="given-name" maxlength="80" required></div>
+          <div><label for="lname">Last Name</label><input id="lname" type="text" autocomplete="family-name" maxlength="80" required></div>
         </div>
         <div class="row-2">
-          <div><label for="cnum">Contact No.</label><input id="cnum" type="tel" required></div>
-          <div><label for="email">Email</label><input id="email" type="email" required></div>
+          <div><label for="cnum">Contact No.</label><input id="cnum" type="tel" autocomplete="tel" maxlength="40" required></div>
+          <div><label for="email">Email</label><input id="email" type="email" autocomplete="email" maxlength="200" required></div>
         </div>
         <div class="row-2">
-          <div><label for="country">Country</label><input id="country" type="text" required></div>
+          <div><label for="country">Country</label><input id="country" type="text" autocomplete="country-name" maxlength="80" value="Philippines" required></div>
           <div>
             <label for="inquiry">Type of Inquiry</label>
             <select id="inquiry">
@@ -76,12 +77,18 @@ body = """
             </select>
           </div>
         </div>
-        <div><label for="msg">Message</label><textarea id="msg" required></textarea></div>
+        <div><label for="msg">Message</label><textarea id="msg" maxlength="5000" required></textarea></div>
+        <div style="position:absolute;left:-9999px;" aria-hidden="true"><label for="website">Website</label><input id="website" type="text" tabindex="-1" autocomplete="off"></div>
         <button class="btn btn-primary" type="submit">Send</button>
       </form>
     </div>
   </div>
 </section>
+"""
+
+body += f"""
+<script src="../assets/js/booking-config.js?v={asset_v('assets/js/booking-config.js')}"></script>
+<script src="../assets/js/contact-form.js?v={asset_v('assets/js/contact-form.js')}"></script>
 """
 
 page("contact/index.html", "Contact", "Contact Virgin Beach Resort — reservations, corporate events, address, and map to Laiya, San Juan, Batangas.", body)

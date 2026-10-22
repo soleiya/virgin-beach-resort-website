@@ -9,7 +9,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400..600;1,9..144,400..600&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="../assets/css/style.css?v=db7649c07b">
+<link rel="stylesheet" href="../assets/css/style.css?v=020b20a6c9">
 </head>
 <body>
 <header class="site-header no-hero">
@@ -86,17 +86,18 @@
       <div class="map-frame mb-lg" style="margin-bottom:28px;">
         <iframe src="https://maps.google.com/maps?q=Virgin%20Beach%20Resort&t=m&z=14&output=embed&iwloc=near" loading="lazy" title="Map to Virgin Beach Resort" allowfullscreen></iframe>
       </div>
-      <form class="inquiry" onsubmit="return false;">
+      <div id="contactStatus" class="form-status" hidden role="status" aria-live="polite"></div>
+      <form class="inquiry" id="contactForm" novalidate>
         <div class="row-2">
-          <div><label for="fname">First Name</label><input id="fname" type="text" required></div>
-          <div><label for="lname">Last Name</label><input id="lname" type="text" required></div>
+          <div><label for="fname">First Name</label><input id="fname" type="text" autocomplete="given-name" maxlength="80" required></div>
+          <div><label for="lname">Last Name</label><input id="lname" type="text" autocomplete="family-name" maxlength="80" required></div>
         </div>
         <div class="row-2">
-          <div><label for="cnum">Contact No.</label><input id="cnum" type="tel" required></div>
-          <div><label for="email">Email</label><input id="email" type="email" required></div>
+          <div><label for="cnum">Contact No.</label><input id="cnum" type="tel" autocomplete="tel" maxlength="40" required></div>
+          <div><label for="email">Email</label><input id="email" type="email" autocomplete="email" maxlength="200" required></div>
         </div>
         <div class="row-2">
-          <div><label for="country">Country</label><input id="country" type="text" required></div>
+          <div><label for="country">Country</label><input id="country" type="text" autocomplete="country-name" maxlength="80" value="Philippines" required></div>
           <div>
             <label for="inquiry">Type of Inquiry</label>
             <select id="inquiry">
@@ -107,12 +108,16 @@
             </select>
           </div>
         </div>
-        <div><label for="msg">Message</label><textarea id="msg" required></textarea></div>
+        <div><label for="msg">Message</label><textarea id="msg" maxlength="5000" required></textarea></div>
+        <div style="position:absolute;left:-9999px;" aria-hidden="true"><label for="website">Website</label><input id="website" type="text" tabindex="-1" autocomplete="off"></div>
         <button class="btn btn-primary" type="submit">Send</button>
       </form>
     </div>
   </div>
 </section>
+
+<script src="../assets/js/booking-config.js?v=c116a3a0ae"></script>
+<script src="../assets/js/contact-form.js?v=d58b4a41fa"></script>
 <footer class="site-footer">
   <div class="wrap">
     <div class="footer-grid">
