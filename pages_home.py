@@ -91,29 +91,9 @@ body = f"""
 </section>
 
 <section class="section-tight">
-  <div class="wrap">
-    <div class="feature-row">
-      <div class="feature-media wide"><img src="assets/images/day-trip.jpg" alt="Aerial view of dining cabanas lining the beach"></div>
-      <div>
-        <span class="eyebrow">Day trip</span>
-        <h2>Spend the day with us</h2>
-        <p class="prose" style="margin-top:18px;">A full day on the beach from &#8369;1,250 per adult (kids 6&ndash;12 &#8369;825, 0&ndash;5 free),
-        with your own dining cabana (&#8369;1,500, up to 10 people) or lounge cabana (&#8369;2,000, up to 4).
-        Pick your cabana on the beach map when you book.</p>
-        <div class="hero-actions" style="margin-top:22px;">
-          <a class="btn btn-primary" href="book/index.html">Book a day trip</a>
-          <a class="btn btn-ghost" href="day-packages/index.html">Packages &amp; rates</a>
-          <a class="btn btn-ghost" href="corporate/index.html">Corporate outings</a>
-        </div>
-      </div>
-    </div>
-  </div>
-</section>
-
-<section>
   <div class="wrap stack">
     <div class="feature-row">
-      <div class="feature-media"><img src="assets/images/Day-Trip-Area-with-mountains-at-the-back.jpg" alt="Aerial view of Sigayan Bay and the mountains of Daguldol and Lobo"></div>
+      <div class="feature-media wide"><img src="assets/images/paradise-within-reach-coastline.jpg" alt="Aerial view of the resort's tree-lined beachfront beside the coastal road in Laiya"></div>
       <div>
         <span class="eyebrow">Paradise within reach</span>
         <h2>Paradise within reach</h2>
@@ -125,12 +105,32 @@ body = f"""
     </div>
 
     <div class="feature-row reverse">
-      <div class="feature-media"><img src="assets/images/private-villas-tucked-in.jpg" alt="Aerial view of private villas nestled amidst the tree canopy"></div>
+      <div class="feature-media"><img src="assets/images/privacy-casita-among-trees.jpg" alt="Aerial view of a private casita tucked among the trees"></div>
       <div>
-        <span class="eyebrow">Privacy &amp; Serenity</span>
-        <h2>Privacy &amp; Serenity.</h2>
+        <span class="eyebrow">Privacy and Exclusivity</span>
+        <h2>Privacy and Exclusivity</h2>
         <p class="prose" style="margin-top:18px;">The resort features only oceanfront accommodations, sprawled out and nestled amidst a variety of
         trees, strategically designed so that one can enjoy the utmost privacy.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <div class="feature-row">
+      <div class="feature-media"><img src="assets/images/day-trip-beach-cabanas-pools.jpg" alt="Aerial view of the beach cabanas and pools along the white sand shore"></div>
+      <div>
+        <span class="eyebrow">Day trip</span>
+        <h2>Spend the day with us</h2>
+        <p class="prose" style="margin-top:18px;">A full day on the beach from &#8369;1,250 per adult (kids 6&ndash;12 &#8369;825, 0&ndash;5 free),
+        with your own dining cabana (&#8369;1,500, up to 10 people) or lounge cabana (&#8369;2,000, up to 4).
+        Pick your cabana on the beach map when you book.</p>
+        <div class="hero-actions" style="margin-top:22px;">
+          <a class="btn btn-primary" href="book/index.html">Book a day trip</a>
+          <a class="btn btn-ghost" href="day-packages/index.html">Packages &amp; rates</a>
+          <a class="btn btn-ghost" href="corporate/index.html">Corporate outings</a>
+        </div>
       </div>
     </div>
   </div>
