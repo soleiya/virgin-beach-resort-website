@@ -829,3 +829,8 @@ form.inquiry .field-hint { font-size: 0.8rem; color: var(--ink-soft); margin-top
 .code-msg { margin: 6px 0 0; font-size: .88rem; font-weight: 600; }
 .code-msg.is-ok { color: var(--lagoon-deep); }
 .code-msg.is-bad { color: #b3261e; }
+
+/* Day Trip page: booking box in the hero (same as the home page's) */
+.day-hero .quickbook { margin-top: 26px; max-width: 880px; }
+.qb-fields.qb-day4 { grid-template-columns: 1.4fr 0.6fr 0.6fr 0.6fr auto; }
+@media (max-width: 760px) { .qb-fields.qb-day4 { grid-template-columns: 1fr 1fr; } .qb-fields.qb-day4 .qb-field:first-child { grid-column: 1 / -1; } }

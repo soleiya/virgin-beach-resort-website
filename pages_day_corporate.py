@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-from build import page, booking_form_section, booking_scripts
+from build import page, booking_form_section, booking_scripts, asset_v
 
 FINE_PRINT_A = """
 <div class="fine-print">
@@ -11,12 +11,45 @@ FINE_PRINT_A = """
 # ---------------------------------------------------------------- Day Trip
 
 day_body = """
-<section class="page-hero">
+<section class="page-hero day-hero">
   <img src="../assets/images/day-trip-area.jpg" alt="Aerial view of dining and lounge cabanas along the shoreline, mountains in the background">
   <div class="wrap page-hero-content">
     <span class="eyebrow">Day Trip</span>
     <h1>A fleeting escape that will leave you wanting more.</h1>
-    <p class="lede">For guests who would like to spend the day here, we offer Day Trip packages to suit your every need.</p>
+    <p class="lede">Pick your date and party &mdash; see the free cabanas on the beach map and your price right away.</p>
+
+    <form class="quickbook" id="dayQuick" novalidate>
+      <div class="qb-fields qb-day4">
+        <label class="qb-field"><span>Date of your visit</span><input type="date" id="dqDate" required></label>
+        <label class="qb-field qb-small"><span>Adults</span><select id="dqAdults"></select></label>
+        <label class="qb-field qb-small"><span>Kids 6&ndash;12</span><select id="dqKids"></select></label>
+        <label class="qb-field qb-small"><span>Kids 0&ndash;5</span><select id="dqKids05"></select></label>
+        <button type="submit" class="btn btn-primary qb-go">See available cabanas</button>
+      </div>
+      <p class="qb-error" id="dqError" hidden></p>
+      <a class="qb-paylink" href="../pay/index.html"><span>Already booked?</span> <b>Upload your payment &rarr;</b></a>
+    </form>
+  </div>
+</section>
+
+<section class="center" id="planYourTrip" style="max-width:640px; margin:0 auto; padding-bottom:0;">
+  <span class="eyebrow">Reservations</span>
+  <h2>Plan your day trip</h2>
+  <p class="prose mx-auto" style="margin-top:14px;">Choose your cabana on the map, tell us who's coming, and your quotation with the full amount arrives by email right away. Prefer to talk first?
+  Call (02) 8815 2584 or 87, or email
+  <a class="text-link" href="mailto:reservations@virginbeachresort.com">reservations@virginbeachresort.com</a></p>
+</section>
+
+<section>
+  <div class="wrap" style="max-width:760px;">
+    {booking_form}
+  </div>
+</section>
+
+<section class="section-tight center day-details-head" style="padding-bottom:0;">
+  <div class="wrap" style="max-width:640px; margin:0 auto;">
+    <span class="eyebrow">Good to know</span>
+    <h2>What&rsquo;s included</h2>
   </div>
 </section>
 
@@ -114,20 +147,6 @@ day_body = """
   </div>
 </section>
 
-<section class="center" id="planYourTrip" style="max-width:640px; margin:0 auto; padding-bottom:0;">
-  <span class="eyebrow">Reservations</span>
-  <h2>Plan your day trip</h2>
-  <p class="prose mx-auto" style="margin-top:14px;">Fill in the form below and our reservations team will confirm availability directly with you. Prefer to talk first?
-  Call (02) 8815 2584 or 87, or email
-  <a class="text-link" href="mailto:reservations@virginbeachresort.com">reservations@virginbeachresort.com</a></p>
-</section>
-
-<section>
-  <div class="wrap" style="max-width:760px;">
-    {booking_form}
-  </div>
-</section>
-
 <section class="band-tint center">
   <div class="wrap" style="max-width:560px; margin:0 auto;">
     <span class="eyebrow">Already booked?</span>
@@ -137,7 +156,8 @@ day_body = """
   </div>
 </section>
 {booking_scripts_html}
-""".format(fine_print_1=FINE_PRINT_A, booking_form=booking_form_section("day_trip"), booking_scripts_html=booking_scripts())
+<script src="../assets/js/day-quick.js?v={dq_v}"></script>
+""".format(fine_print_1=FINE_PRINT_A, dq_v=asset_v("assets/js/day-quick.js"), booking_form=booking_form_section("day_trip"), booking_scripts_html=booking_scripts())
 
 page("day-packages/index.html", "Day Trip", "Day Trip packages at Virgin Beach Resort — dining and lounge cabanas, with instant online booking.", day_body, cta_label="Book a Day Trip", cta_href="#planYourTrip")
 
