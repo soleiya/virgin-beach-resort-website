@@ -107,7 +107,7 @@ dining_body = f"""
     <div class="grid-3">
       <div><h3>&Agrave; la carte</h3><p class="prose" style="margin-top:8px;">Wood-fired pizza, burgers, pasta and more are available to order any time, in addition to your full-board meals.</p></div>
       <div><h3>Private dinner on the beach</h3><p class="prose" style="margin-top:8px;">Celebrating? Book a candlelit table for two by the shore. <a class="text-link" href="../experiences/index.html">See Experiences</a></p></div>
-      <div><h3>Meals for your staff</h3><p class="prose" style="margin-top:8px;">Travelling with a driver or nanny? Meals for guests' staff are available at &#8369;750 per day.</p></div>
+      <div><h3>Meals for your staff</h3><p class="prose" style="margin-top:8px;">Travelling with a driver or nanny? Meals for guests' staff are available at &#8369;825 per day.</p></div>
     </div>
     <div class="casita-gallery gallery-4 mt-lg" data-lightbox>{dining_gallery}
     </div>

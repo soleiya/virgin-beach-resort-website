@@ -83,7 +83,7 @@ dining = [
      "<p>The daily meal package includes three meals that are mandatory for the duration of our guests' overnight stay, comprised of lunch upon "
      "arrival, dinner, and breakfast the following morning, not necessarily in that order. Our menu is made up of international and local cuisine "
      "served managed buffet style. &Agrave; la carte meals are available in addition to the mandatory full board meals availed during the stay. "
-     "Meals for guests' staff are available for &#8369;750/day.</p>"
+     "Meals for guests' staff are available for &#8369;825/day.</p>"
      "<table class='rate-table'><tbody>"
      "<tr><td>Adult</td><td class='num'>&#8369;2,695.00</td></tr>"
      "<tr><td>Child (6&ndash;12)</td><td class='num'>&#8369;1,347.50</td></tr>"

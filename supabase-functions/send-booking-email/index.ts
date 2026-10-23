@@ -1116,7 +1116,7 @@ ${li("<strong>Fewer guests?</strong> Please tell us at least 7 days before arriv
 ${li("<strong>Every guest</strong> must be present at check-in with a valid government-issued ID. Unregistered guests may be refused entry.")}
 ${li("<strong>Tourism Ecological Fee:</strong> ₱50.00 per visitor, collected by the Municipality of San Juan at its booth at Km 3, Buhay na Sapa, San Juan (or at our Front Office).")}
 ${li("<strong>Outside food &amp; drinks</strong> are not allowed, except chips, biscuits and bottled water. Corkage applies to specific beverages.")}
-${li("<strong>Drivers, nannies &amp; bodyguards:</strong> ₱1,000 per night for quarters plus ₱750 per night for meals — please let us know in advance.")}
+${li("<strong>Drivers, nannies &amp; bodyguards:</strong> ₱1,000 per night for quarters plus ₱825 per night for meals — please let us know in advance.")}
 </ul>`;
 }
 
