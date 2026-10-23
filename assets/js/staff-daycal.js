@@ -550,18 +550,21 @@
         if ((fam || bark) && !dining && !lounge) dining = fam + bark; // the package's own cabana
         var tod = /(\d+)\s*(toddlers?|infants?|bab(y|ies))/i.exec(rem);
         var k05 = tod ? +tod[1] : 0;
-        if (pwdKids) notes.push(pwdKids + " PWD child" + (pwdKids > 1 ? "ren" : ""));
+        // remarks as the first import wrote them: "<remarks> | Others: 1,000.00 | PWD child: 1"
+        if (n[19]) notes.push("Others: " + Number(n[19]).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
+        if (pwdKids) notes.push("PWD child: " + pwdKids);
         var exclusive = /exclusive(ly)?\s*(booking|use|booked)|exclusively booked/i.test(name + " " + rem) && !dining && !lounge && !reg && !hd;
         if (exclusive) { dining = stock.dining; lounge = stock.lounge; }
         var phone = "";
         var pm = /(\+?63|0)9\d{2}[\s-]?\d{3}[\s-]?\d{4}/.exec(name);
         if (pm) { phone = pm[0].replace(/[\s-]/g, ""); name = txt(name.replace(pm[0], "").replace(/[|\/,-]\s*$/, "")); }
+        if (type === "day_trip" && !Math.round(adults) && !Math.round(kids) && !k05) type = "other";
         out.push({
           sheet: MONTHS[mi], row: i + 1, date: year + "-" + pad(mi + 1) + "-" + pad(day),
           booker: booker, name: name, phone: phone, stay_type: type,
           adults: Math.round(adults), seniors: Math.round(Math.min(seniors, adults)), kids: Math.round(kids), kids05: k05,
           pets: Math.round(n[4] + n[16]), dining: Math.round(dining), lounge: Math.round(lounge),
-          others: n[19] || 0, total: Math.round(total * 100) / 100, remarks: rem, notes: notes.join(" · "), exclusive: exclusive,
+          others: 0, total: Math.round(total * 100) / 100, remarks: [rem].concat(notes).filter(Boolean).join(" | "), notes: "", exclusive: exclusive,
         });
       }
     });

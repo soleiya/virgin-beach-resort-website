@@ -1,5 +1,7 @@
 -- ============================================================================
 -- booking-v30 — bring the Day Trip Calendar sheet into the website
+-- (v30b, 23 Oct: rows for the same guest on the same day are paired by
+--  total + adults first, so they never swap; 'other' / add-on rows allowed)
 --
 --   Staff dashboard → Day Trips → Calendar → "Import from Sheet": pick the
 --   2026 Day Trip Calendar .xlsx (File → Download → Microsoft Excel). The
@@ -65,27 +67,45 @@ begin
   if exists (select 1 from _sx where date is null or date < v_from or date >= v_to) then
     raise exception 'Some rows aren''t dated in % — is this the % sheet?', p_year, p_year using errcode = 'P0001';
   end if;
-  if exists (select 1 from _sx where coalesce(stay_type, '') not in ('day_trip', 'half_day', 'flash_sale', 'all_inclusive_family', 'all_inclusive_barkada')) then
+  if exists (select 1 from _sx where coalesce(stay_type, '') not in ('day_trip', 'half_day', 'flash_sale', 'all_inclusive_family', 'all_inclusive_barkada', 'other')) then
     raise exception 'Unknown package on some rows.' using errcode = 'P0001';
   end if;
   -- months the file covers (a month tab that's missing isn't treated as "everything removed")
   select array_agg(distinct extract(month from date)::int) into v_months from _sx;
 
-  alter table _sx add column nth int;
-  update _sx s set nth = q.n from (
-    select ctid as c, row_number() over (partition by date, nkey order by sheet, row) as n from _sx
-  ) q where q.c = s.ctid;
-
   -- the sheet's own bookings already on the website
   drop table if exists _ex;
   create temp table _ex on commit drop as
   select b.id, b.check_in, daytrip_name_key(b.guest_name) as nkey, b.status::text as status, b.staff_notes,
-         row_number() over (partition by b.check_in, daytrip_name_key(b.guest_name)
-                            order by (b.status::text in ('declined', 'expired')), coalesce(b.sheet_row, 2147483647), b.created_at,
-                                     length(coalesce(b.legacy_source_row, '')), b.legacy_source_row, b.id)::int as nth
+         b.total_amount, coalesce(b.adults, 0) as adults, b.sheet_row, b.created_at, b.legacy_source_row
     from booking_requests b
    where b.source = 'sheet_import' and coalesce(b.stay_type, '') <> 'overnight'
      and b.check_in >= v_from and b.check_in < v_to;
+
+  -- pair sheet rows with those bookings: first the ones whose total and
+  -- adults are unchanged (so two rows for the same guest on the same day
+  -- never swap), then whatever is left, in sheet order
+  drop table if exists _pair;
+  create temp table _pair (sheet text, row int, booking_id uuid) on commit drop;
+  insert into _pair
+  select s.sheet, s.row, e.id from
+    (select sheet, row, date, nkey, total, coalesce(adults, 0) as adults,
+            row_number() over (partition by date, nkey, total, coalesce(adults, 0) order by sheet, row) as k from _sx) s
+    join (select id, check_in, nkey, total_amount, adults,
+                 row_number() over (partition by check_in, nkey, total_amount, adults
+                                    order by (status in ('declined', 'expired')), coalesce(sheet_row, 2147483647), created_at,
+                                             length(coalesce(legacy_source_row, '')), legacy_source_row, id) as k from _ex) e
+      on e.check_in = s.date and e.nkey = s.nkey and e.total_amount is not distinct from s.total and e.adults = s.adults and e.k = s.k;
+  insert into _pair
+  select s.sheet, s.row, e.id from
+    (select sx2.sheet, sx2.row, sx2.date, sx2.nkey, row_number() over (partition by sx2.date, sx2.nkey order by sx2.sheet, sx2.row) as k
+       from _sx sx2 where not exists (select 1 from _pair p where p.sheet = sx2.sheet and p.row = sx2.row)) s
+    join (select ex2.id, ex2.check_in, ex2.nkey,
+                 row_number() over (partition by ex2.check_in, ex2.nkey
+                                    order by (ex2.status in ('declined', 'expired')), coalesce(ex2.sheet_row, 2147483647), ex2.created_at,
+                                             length(coalesce(ex2.legacy_source_row, '')), ex2.legacy_source_row, ex2.id) as k
+            from _ex ex2 where not exists (select 1 from _pair p where p.booking_id = ex2.id)) e
+      on e.check_in = s.date and e.nkey = s.nkey and e.k = s.k;
 
   -- guests already booked that day on the website / by staff (not from the sheet)
   drop table if exists _web;
@@ -108,15 +128,17 @@ begin
            else 'confirmed'
          end as new_status,
          trim(v_prefix || ' ' || concat_ws(' · ', nullif(trim(coalesce(s.remarks, '')), ''), nullif(trim(coalesce(s.notes, '')), ''))) as new_notes,
-         case s.stay_type
+         case when s.exclusive then 'Exclusive booking' else case s.stay_type
            when 'half_day' then 'Half-Day Trip' when 'flash_sale' then 'Flash Sale Day Trip'
-           when 'all_inclusive_family' then 'All Inclusive — Family Package'
-           when 'all_inclusive_barkada' then 'All Inclusive — Barkada Package'
-           else case when s.exclusive then 'Exclusive booking' else 'Day Trip (Full Day)' end
+           when 'all_inclusive_family' then 'All-Inclusive Family Day Trip'
+           when 'all_inclusive_barkada' then 'All-Inclusive Barkada Day Trip'
+           when 'other' then 'Other / Add-on'
+           else 'Day Trip (Full Day)' end
          end as new_label,
          'sheet:' || p_year || ':' || s.sheet || ':' || s.row as new_ref
     from _sx s
-    left join _ex e on e.check_in = s.date and e.nkey = s.nkey and e.nth = s.nth
+    left join _pair pr on pr.sheet = s.sheet and pr.row = s.row
+    left join _ex e on e.id = pr.booking_id
     left join _web w on w.check_in = s.date and w.nkey = s.nkey;
 
   -- matched rows: which fields change
