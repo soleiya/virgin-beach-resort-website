@@ -680,6 +680,7 @@ export function methodFor(method: unknown, list: Any[]): string {
   const pick =
     m === "cash" ? find(/cash/) :
     m === "card" ? find(/credit|card/) :
+    m === "xendit" ? find(/xendit/) || find(/link|online|mecx|gateway/) || find(/credit|card/) :
     m === "link" ? find(/link|online|mecx|paymongo|gateway/) || find(/credit|card/) :
     find(/bank|transfer|ebanking/);
   return pick || find(/bank|transfer|ebanking/) || find(/cash/) || list[0]?.code || "cash";

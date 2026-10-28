@@ -837,3 +837,8 @@ form.inquiry .field-hint { font-size: 0.8rem; color: var(--ink-soft); margin-top
 .day-hero .quickbook { margin-top: 26px; max-width: 880px; }
 .qb-fields.qb-day4 { grid-template-columns: 1.4fr 0.6fr 0.6fr 0.6fr auto; }
 @media (max-width: 760px) { .qb-fields.qb-day4 { grid-template-columns: 1fr 1fr; } .qb-fields.qb-day4 .qb-field:first-child { grid-column: 1 / -1; } }
+
+/* Online payment (Xendit) buttons — booking page success + pay page */
+.pay-now-row { display: flex; flex-wrap: wrap; gap: 10px; margin: 14px 0 6px; }
+.pay-now-error { color: #9b2c1f; background: #fbe7e2; border-radius: 8px; padding: 8px 12px; font-size: 0.92rem; }
+#payOnline { margin: 6px 0 18px; }

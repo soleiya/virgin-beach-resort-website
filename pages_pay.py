@@ -6,8 +6,8 @@ body = f"""
   <img src="../assets/images/day-trip.jpg" alt="Aerial view of Virgin Beach Resort">
   <div class="wrap page-hero-content">
     <span class="eyebrow">Payment</span>
-    <h1>Upload Payment &amp; Documents</h1>
-    <p class="lede">Find your booking to see your balance and due date, then upload your payment screenshot &mdash; partial (50%) or full &mdash; plus any documents your booking needs.</p>
+    <h1>Pay &amp; Upload Documents</h1>
+    <p class="lede">Find your booking to see your balance and due date, then pay &mdash; partial (50%) or full &mdash; and add any documents your booking needs. Villa stays are paid online; day trips by bank transfer with a screenshot.</p>
   </div>
 </section>
 
@@ -37,8 +37,13 @@ body = f"""
           <div class="pay-kind-opts" id="payKindOpts"></div>
           <p class="field-hint" id="payKindHint"></p>
         </fieldset>
-        <div class="pay-step-head"><span class="pay-step-num">3</span><h2>Upload your proof</h2></div>
-        <div>
+        <div id="payOnline" hidden>
+          <button class="btn btn-primary" type="button" id="payOnlineBtn">Pay now</button>
+          <p class="field-hint">Secure checkout by our payment partner <strong>Xendit</strong> &mdash; card, GCash, Maya, QR Ph and more. Your stay is confirmed as soon as the payment goes through.</p>
+          <p class="pay-now-error" id="payOnlineError" hidden></p>
+        </div>
+        <div class="pay-step-head" id="payStep3"><span class="pay-step-num">3</span><h2 id="payStep3Title">Upload your proof</h2></div>
+        <div id="payProofWrap">
           <label>Payment screenshot</label>
           <label class="upload-drop" for="payFile">
             Tap to choose an image (JPG or PNG, under 10MB)
@@ -89,7 +94,8 @@ body = f"""
 
 <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
 <script src="../assets/js/booking-config.js?v={asset_v('assets/js/booking-config.js')}"></script>
+<script src="../assets/js/xendit-pay.js?v={asset_v('assets/js/xendit-pay.js')}"></script>
 <script src="../assets/js/payment-upload.js?v={asset_v('assets/js/payment-upload.js')}"></script>
 """
 
-page("pay/index.html", "Upload Payment & Documents", "Upload your payment screenshot, Senior Citizen / PWD IDs and pet vaccination cards for a Virgin Beach Resort booking using your Booking ID.", body)
+page("pay/index.html", "Pay & Upload Documents", "Upload your payment screenshot, Senior Citizen / PWD IDs and pet vaccination cards for a Virgin Beach Resort booking using your Booking ID.", body)

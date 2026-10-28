@@ -303,10 +303,16 @@ export type PaySummary = {
 };
 export const KIND_WORDS: Record<string, string> = { deposit: "50% down payment", full: "full payment", balance: "remaining balance", other: "payment" };
 // "To secure your reservation, pay at least 50% …" (quotation)
+// Villa stays booked on the website are paid online through Xendit
+// (booking-v31-xendit.sql); day trips by bank transfer + proof upload.
+export const paysOnline = (r: Any) => isOvernight(r) && !r?.cb_owned;
+const ONLINE_METHODS = "card, GCash, Maya, QR Ph and more";
+
 function securePara(r: Any, total: number, dl: { label: string }, units: string) {
   const t = payTerms(r, total);
+  const how = paysOnline(r) ? " online with the <strong>Pay now</strong> button below" : ", and send us your proof of payment";
   return t.half
-    ? `<strong>To secure your reservation, pay at least 50% (${esc(peso(t.deposit))}) &mdash; or the full ${esc(peso(t.total))} &mdash; by ${esc(dl.label)}</strong>, and send us your proof of payment. The remaining balance is due by <strong>${esc(t.balanceDueLabel)}</strong> (${BALANCE_DAYS} days before arrival). Unpaid bookings are automatically cancelled and the ${units} released.`
+    ? `<strong>To secure your reservation, pay at least 50% (${esc(peso(t.deposit))}) &mdash; or the full ${esc(peso(t.total))} &mdash; by ${esc(dl.label)}</strong>${how}. The remaining balance is due by <strong>${esc(t.balanceDueLabel)}</strong> (${BALANCE_DAYS} days before arrival). Unpaid bookings are automatically cancelled and the ${units} released.`
     : `<strong>Full payment of ${esc(peso(t.total))} is required by ${esc(dl.label)}</strong> to secure the reservation, as ${isOvernight(r) ? "your stay" : "your visit"} is less than ${BALANCE_DAYS} days away. Unpaid bookings are automatically cancelled and the ${units} released.`;
 }
 function secureRows(r: Any, total: number, dl: { label: string }): [string, string][] {
@@ -1155,26 +1161,25 @@ ${h2("Your reservation")}${kv(overnightRows(r, villas))}${cabanaNote(villas)}
 ${h2("Guest list")}${rosterTable(r)}
 ${q ? h2("Quotation") + quoteTable(q) + p("The full-board meal package (lunch, dinner and breakfast) is mandatory for every guest and is charged per guest, per night. Children 0–5 eat free.", `font-size:12.5px;color:${C.soft};margin-top:8px;`) : ""}
 ${h2("How to pay")}
-${p(`<strong>Bank or e-wallet transfer</strong> (InstaPay / PESONet &mdash; GCash and Maya can send to these accounts via InstaPay). Please put <strong>${esc(r.order_code)}</strong> and your name in the reference / remarks.`)}
-${bankTable()}
-${h2("After you pay")}
+${p(`<strong>Pay online</strong> &mdash; ${ONLINE_METHODS} &mdash; through our secure payment partner <strong>Xendit</strong>. Choose 50% or the full amount on the next page; your stay is confirmed as soon as the payment goes through.`)}
+${button(payUrl, "Pay now")}
+${h2("Next steps")}
 <ol style="margin:0 0 12px;padding-left:20px;font-size:14px;">
-<li style="margin:0 0 8px;"><strong>Send us your proof of payment</strong> — upload the screenshot or transaction slip using the button below, or simply reply to this email with it attached.</li>
+<li style="margin:0 0 8px;"><strong>Pay online</strong> using the button above &mdash; you'll get your booking confirmation by email right after.</li>
 ${need.seniors ? `<li style="margin:0 0 8px;"><strong>Upload the Senior Citizen / PWD ID${int(r.senior_count) > 1 ? "s" : ""}</strong> on the same page — the 20% discount applies only with a valid ID. Please bring ${int(r.senior_count) > 1 ? "them" : "it"} on arrival too.</li>` : ""}
 ${need.pets ? `<li style="margin:0 0 8px;"><strong>Upload your pet${int(r.pet_count) > 1 ? "s'" : "'s"} vaccination card${int(r.pet_count) > 1 ? "s" : ""}</strong> and agree to the Pet Policy on the same page.</li>` : ""}
 ${int(r.pet_count) && !need.pets ? `<li style="margin:0 0 8px;"><strong>Bringing your pet${int(r.pet_count) > 1 ? "s" : ""}:</strong> please bring the vaccination card${int(r.pet_count) > 1 ? "s" : ""} you uploaded, a leash, food and water bowls. Pets stay only in the casita they're registered to.</li>` : ""}
 <li style="margin:0 0 8px;"><strong>Reply with the signed Reservations Agreement</strong> (attached as a PDF — a photo of the signed last page is fine) and a photo of <strong>one (1) valid ID</strong> of the primary guest.</li>
-<li style="margin:0 0 8px;"><strong>We'll email your confirmation</strong> as soon as the payment is verified (office hours, 9:00 AM–4:00 PM, Monday–Friday).</li>
 </ol>
-${button(payUrl, need.any ? "Upload payment & documents" : "Upload proof of payment")}
-<p style="margin:14px 0 0;padding:12px 14px;background:${C.sand};border-radius:8px;font-size:13px;color:${C.soft};">This is a quotation, not yet a confirmed booking. Your casita${villas.length === 1 ? " is" : "s are"} held until the payment deadline above and confirmed once your payment is verified. In the absence of a signed agreement, guests are not relieved of the resort rules, regulations and conditions.</p>
+${need.any ? button(payUrl, "Upload documents") : ""}
+<p style="margin:14px 0 0;padding:12px 14px;background:${C.sand};border-radius:8px;font-size:13px;color:${C.soft};">This is a quotation, not yet a confirmed booking. Your casita${villas.length === 1 ? " is" : "s are"} held until the payment deadline above and confirmed once your payment goes through. In the absence of a signed agreement, guests are not relieved of the resort rules, regulations and conditions.</p>
 ${overnightGoodToKnow()}
 ${cancellationTable()}
 ${p("<strong>Need to change your dates or guest list?</strong> Just reply to this email and we'll help.", `font-size:13.5px;color:${C.soft};margin-top:14px;`)}
 ${signature(c)}`;
   return {
     subject: guestSubject(r, c),
-    html: shell({ preheader: `${r.order_code} · ${q ? (payTerms(r, q.total).half ? `50% (${peso(r2(q.total / 2))}) secures it · ` : peso(q.total) + " due · ") : ""}${stayRange(r)} · Bank details inside`, body: applyIntro(body, customOf(r, "quote"), r), c }),
+    html: shell({ preheader: `${r.order_code} · ${q ? (payTerms(r, q.total).half ? `50% (${peso(r2(q.total / 2))}) secures it · ` : peso(q.total) + " due · ") : ""}${stayRange(r)} · Pay online`, body: applyIntro(body, customOf(r, "quote"), r), c }),
   };
 }
 
@@ -1228,8 +1233,8 @@ ${h2("Guest list")}${rosterTable(r)}
 ${q ? h2("Quotation sent") + quoteTable(q) : ""}
 ${h2("Follow-up checklist")}
 <ol style="margin:0 0 14px;padding-left:20px;font-size:14px;">
-<li>Watch the guest thread (search the Booking ID) for proof of payment, the signed agreement and a valid ID. Website uploads also alert this inbox.</li>
-<li>Verify the deposit against the bank statement, then click <strong>Verify</strong> on the payment in the dashboard (Payments) — that confirms the booking and emails the guest.</li>
+<li>The guest pays online through <strong>Xendit</strong>: the payment is recorded and posted to Cloudbeds, and the booking is confirmed automatically (Cloudbeds sends the confirmation).</li>
+<li>Watch the guest thread (search the Booking ID) for the signed agreement and a valid ID. ID / pet-card uploads also alert this inbox.</li>
 <li>No payment by ${esc(dl.label)}? The booking automatically turns <strong>Expired</strong> and the casita(s) are released.</li>
 <li>Share the guest count with the kitchen (full board, ${plural(nightsOf(r), "night")}) and any extra mattress with Housekeeping once confirmed.</li>
 </ol>
@@ -1284,11 +1289,14 @@ ${statusBox([
     ["Due by", esc(fmtDate(ps.balance_due, "short"))],
   ])}
 ${h2("How to pay")}
-${p(`Bank or e-wallet transfer (InstaPay / PESONet &mdash; GCash and Maya can send to these accounts via InstaPay). Please put <strong>${esc(r.order_code)}</strong> and your name in the reference / remarks.`)}
+${paysOnline(r)
+    ? `${p(`Pay online &mdash; ${ONLINE_METHODS} &mdash; through our secure payment partner <strong>Xendit</strong>.`)}
+${button(uploadUrl(r, c), "Pay balance now")}`
+    : `${p(`Bank or e-wallet transfer (InstaPay / PESONet &mdash; GCash and Maya can send to these accounts via InstaPay). Please put <strong>${esc(r.order_code)}</strong> and your name in the reference / remarks.`)}
 ${bankTable()}
 ${keep}
 ${p("Then upload your proof of payment &mdash; or simply reply to this email with it attached.")}
-${button(uploadUrl(r, c), "Upload balance payment")}
+${button(uploadUrl(r, c), "Upload balance payment")}`}
 ${cancellationTable()}
 ${signature(c)}`;
   return {
@@ -1680,7 +1688,8 @@ async function onBalance(r: Any, overdue: boolean) {
   const ps = await paySummary(r.id);
   if (!ps || ps.fully_paid || !(ps.balance > 0.5)) return { skipped: "nothing outstanding" };
   const out: Record<string, unknown> = {};
-  if (r.guest_email && EMAIL_RE.test(String(r.guest_email).trim()) && !inCloudbeds(r)) {
+  // villas paying online get the reminder too (Cloudbeds doesn't send one with a pay button)
+  if (r.guest_email && EMAIL_RE.test(String(r.guest_email).trim()) && (!inCloudbeds(r) || paysOnline(r))) {
     const g = guestBalanceEmail(r, ps, c, overdue);
     out.guest = await send({ booking: r, kind: overdue ? "balance_overdue_guest" : "balance_due", to: String(r.guest_email).trim(), subject: g.subject, html: g.html, thread: "guest" });
   }

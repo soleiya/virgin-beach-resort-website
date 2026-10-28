@@ -20,7 +20,7 @@
   if (!backdrop) return;
   var current = null;
   var KIND = { deposit: "50% down payment", full: "Full payment", balance: "Balance", other: "Payment" };
-  var METHOD = { transfer: "Bank / e-wallet transfer", link: "Payment link (card / e-wallet)", cash: "Cash", card: "Card at the resort", other: "Other" };
+  var METHOD = { transfer: "Bank / e-wallet transfer", xendit: "Online · Xendit", link: "Payment link (card / e-wallet)", cash: "Cash", card: "Card at the resort", other: "Other" };
   var esc = D.esc, peso = D.peso;
 
   function close() { backdrop.classList.remove("open"); current = null; }

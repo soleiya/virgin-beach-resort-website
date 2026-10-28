@@ -571,13 +571,36 @@
     st.hidden = false;
     st.className = "form-status form-status-success";
     var first = esc(payload.guest_name.split(" ")[0]);
+    var code = row && row.order_code || "";
+    var total = row && row.total != null ? Number(row.total) : null;
+    // 50% is allowed while the balance date (15 days before arrival) is still ahead
+    var bal = new Date(payload.check_in + "T00:00:00Z"); bal.setUTCDate(bal.getUTCDate() - 15);
+    var half = total != null && bal.toISOString().slice(0, 10) > todayManila();
+    var payUrl = "../pay/index.html?order=" + encodeURIComponent(code) + "&email=" + encodeURIComponent(payload.guest_email);
     st.innerHTML = "<h3>Request received — thank you, " + first + "!</h3>" +
-      "<p>Your Booking ID is <strong>" + esc(row && row.order_code || "—") + "</strong>" + (row && row.total != null ? " · Total <strong>" + peso(row.total) + "</strong>" : "") + ".</p>" +
+      "<p>Your Booking ID is <strong>" + esc(code || "—") + "</strong>" + (total != null ? " · Total <strong>" + peso(total) + "</strong>" : "") + ".</p>" +
       "<p>We're holding " + esc(picked.map(function (v) { return v.room_type_name + " (" + v.unit_label + ")"; }).join(", ")) +
-      " for " + fmtDay(payload.check_in) + " → " + fmtDay(payload.check_out) + ". Your quotation, bank details and next steps are on their way to <strong>" + esc(payload.guest_email) +
-      "</strong>. Transfer 50% or 100% by bank or e-wallet within 24 hours and upload your proof to secure it" + (payload.discount_code ? " — your discount code " + esc(payload.discount_code) + " is already applied" : "") + ".</p>" +
-      "<p>Can't find the email? Check Spam or Promotions, or call us at +63 917 792 0712.</p>" +
-      '<p><a class="btn btn-ghost" href="../pay/index.html?order=' + encodeURIComponent(row && row.order_code || "") + "&email=" + encodeURIComponent(payload.guest_email) + '">Upload payment proof</a></p>';
+      " for " + fmtDay(payload.check_in) + " → " + fmtDay(payload.check_out) + " for <strong>24 hours</strong>. " +
+      "<strong>Pay online now to confirm it</strong> — by card, GCash, Maya and more, through our secure payment partner Xendit" +
+      (half ? "; 50% secures it and the balance is due 15 days before arrival" : "") +
+      (payload.discount_code ? ". Your discount code " + esc(payload.discount_code) + " is already applied" : "") + ".</p>" +
+      '<div class="pay-now-row">' +
+      (half ? '<button type="button" class="btn btn-primary" data-pay="deposit">Pay 50% now · ' + peso(Math.round(total * 50) / 100) + "</button>" : "") +
+      '<button type="button" class="btn ' + (half ? "btn-ghost" : "btn-primary") + '" data-pay="full">Pay in full' + (total != null ? " · " + peso(total) : "") + "</button>" +
+      "</div>" +
+      '<p class="pay-now-error" hidden></p>' +
+      "<p>Your quotation is on its way to <strong>" + esc(payload.guest_email) + "</strong> with the same payment button. " +
+      "Can't find it? Check Spam or Promotions, or call us at +63 917 792 0712.</p>" +
+      '<p class="muted" style="font-size:0.9rem;">Need to upload a Senior / PWD ID or pet vaccination card? <a class="text-link" href="' + payUrl + '">Use the Upload page</a>.</p>';
+    Array.prototype.forEach.call(st.querySelectorAll("[data-pay]"), function (b) {
+      b.addEventListener("click", function () {
+        var err = st.querySelector(".pay-now-error");
+        err.hidden = true;
+        window.VBRPay.start(sb, code, payload.guest_email, b.getAttribute("data-pay"), b, function (m) {
+          err.textContent = m; err.hidden = false;
+        });
+      });
+    });
     window.scrollTo({ top: st.getBoundingClientRect().top + window.scrollY - 120, behavior: "smooth" });
   }
 

@@ -28,6 +28,12 @@
   var petWrap = $("docPetWrap"), petFiles = $("docPetFiles"), petHint = $("docPetHint");
   var petPolicy = $("docPetPolicy"), petAgree = $("docPetAgree");
   var kindWrap = $("payKindWrap"), kindOpts = $("payKindOpts"), kindHint = $("payKindHint");
+  // villa stays pay online (Xendit); day trips upload a bank-transfer screenshot
+  var onlineWrap = $("payOnline"), onlineBtn = $("payOnlineBtn"), onlineErr = $("payOnlineError");
+  var proofWrap = $("payProofWrap"), step3 = $("payStep3"), step3Title = $("payStep3Title");
+  var payOnline = function () { return !!(needs && needs.pay_online); };
+  var backFromXendit = qs_paid();
+  function qs_paid() { var v = new URLSearchParams(location.search).get("paid"); return v === "1" ? "ok" : v === "0" ? "failed" : ""; }
 
   // The booking found (from get_booking_uploads), or null.
   var needs = null;
@@ -161,6 +167,55 @@
     }
   }
 
+  // ------------------------------------------------------------- online (villas)
+  function renderMode() {
+    var online = payOnline();
+    var m = money();
+    var docsNeeded = !seniorWrap.hidden || !petWrap.hidden;
+    onlineWrap.hidden = !online || kindWrap.hidden || m.remaining <= 0.5;
+    proofWrap.hidden = online;
+    // (style, not the hidden attribute — the CSS sets display on these)
+    step3.style.display = online && !docsNeeded ? "none" : "";
+    step3Title.textContent = online ? "Upload documents" : "Upload your proof";
+    submitBtn.style.display = online && !docsNeeded ? "none" : "";
+    submitBtn.textContent = online ? "Upload documents" : "Upload";
+    if (online) fileHint.hidden = true;
+    if (online && backFromXendit) showReturn();
+  }
+  onlineBtn.addEventListener("click", function () {
+    onlineErr.hidden = true;
+    window.VBRPay.start(sb, needs.order_code, emailEl.value.trim(), chosenKind(), onlineBtn, function (msg) {
+      onlineErr.textContent = msg; onlineErr.hidden = false;
+    });
+  });
+  // Back from Xendit: the payment webhook can take a few seconds — keep checking.
+  var returnTries = 0;
+  function showReturn() {
+    var paid = needs.xendit_paid;
+    var recent = paid && paid.paid_at && (Date.now() - new Date(paid.paid_at).getTime()) < 30 * 60 * 1000;
+    var box = document.getElementById("payReturnMsg");
+    if (!box) { box = document.createElement("div"); box.id = "payReturnMsg"; lookupEl.parentNode.insertBefore(box, lookupEl); }
+    if (backFromXendit === "failed") {
+      box.innerHTML = '<p class="pl-msg pl-warn">Your payment wasn\'t completed. You can try again below &mdash; nothing was charged.</p>';
+      backFromXendit = "";
+      return;
+    }
+    if (recent) {
+      box.innerHTML = '<p class="pl-msg pl-ok"><strong>Payment received &mdash; thank you!</strong> ' + peso(paid.amount) +
+        (paid.channel ? " via " + esc(paid.channel) : "") + ". Your stay is confirmed; you'll receive the confirmation by email shortly.</p>";
+      backFromXendit = "";
+      return;
+    }
+    if (returnTries < 10) {
+      box.innerHTML = '<p class="pl-msg">Thank you! We\'re confirming your payment with Xendit&hellip;</p>';
+      returnTries++;
+      setTimeout(function () { lookup(false); }, 3000);
+    } else {
+      box.innerHTML = '<p class="pl-msg">Thank you! Your payment is still being processed &mdash; you\'ll receive an email as soon as it\'s confirmed. No need to pay again.</p>';
+      backFromXendit = "";
+    }
+  }
+
   // ------------------------------------------------------------- lookup
   var seq = 0;
   function lookup(show) {
@@ -191,6 +246,7 @@
       var open = renderSummary();
       renderKinds();
       renderDocs();
+      renderMode();
       uploadPart.hidden = !open;
     });
   }

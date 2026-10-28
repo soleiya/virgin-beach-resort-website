@@ -171,7 +171,7 @@ body = f"""
           <label class="inline-check" style="font-size:0.85rem !important; color:var(--ink-soft) !important;"><input type="checkbox" id="marketingOptIn" checked> Send me occasional promos and updates from Virgin Beach Resort.</label>
           <div class="form-error-box" id="formError" hidden></div>
           <button class="btn btn-primary" type="submit" id="submitBtn">Request Booking</button>
-          <p class="field-hint">Your casita is held while you pay: you'll get the quotation and bank details by email right away. Transfer <strong>50% or 100% within 24 hours</strong> and upload your proof to secure it; the balance is due 15 days before arrival (bookings within 14 days of arrival are paid in full).</p>
+          <p class="field-hint">Your casita is held for 24 hours while you pay. Right after booking you can <strong>pay 50% or 100% online</strong> — card, GCash, Maya and more, through our secure payment partner Xendit — and your stay is confirmed as soon as it goes through. The balance is due 15 days before arrival (bookings within 14 days of arrival are paid in full).</p>
         </div>
       </form>
     </div>
@@ -182,9 +182,9 @@ body = f"""
 <section class="band-tint center">
   <div class="wrap" style="max-width:560px; margin:0 auto;">
     <span class="eyebrow">Already booked?</span>
-    <h2>Upload your payment</h2>
-    <p class="prose mx-auto mt-lg">Paid already? Send us proof of payment using the Booking ID from your quotation email.</p>
-    <a class="btn btn-ghost mt-lg" href="../pay/index.html">Upload Payment Proof</a>
+    <h2>Pay for your stay</h2>
+    <p class="prose mx-auto mt-lg">Pay your down payment or balance online with the Booking ID from your quotation email, and upload any Senior / PWD IDs or pet vaccination cards.</p>
+    <a class="btn btn-ghost mt-lg" href="../pay/index.html">Pay or upload documents</a>
   </div>
 </section>
 
@@ -201,6 +201,7 @@ body = f"""
 <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
 <script src="../assets/js/booking-config.js?v={asset_v('assets/js/booking-config.js')}"></script>
 <script src="../assets/js/booking-window.js?v={asset_v('assets/js/booking-window.js')}"></script>
+<script src="../assets/js/xendit-pay.js?v={asset_v('assets/js/xendit-pay.js')}"></script>
 <script src="../assets/js/stay-booking.js?v={asset_v('assets/js/stay-booking.js')}"></script>
 """
 
