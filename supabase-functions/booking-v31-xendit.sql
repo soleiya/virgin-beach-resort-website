@@ -13,6 +13,8 @@
 --     is posted to the Cloudbeds folio (method Xendit), and the guest gets
 --     "paid in full" when it completes the total.
 --   * An unpaid invoice expires with the booking's 24-hour hold.
+--   * Payment is only offered once Cloudbeds has accepted the reservation
+--     (cb_reservation_id set), so nobody pays for a stay Cloudbeds refused.
 -- Re-runnable.
 -- ============================================================================
 
@@ -79,6 +81,14 @@ begin
   end if;
   if b.total_amount is null or b.total_amount <= 0 then
     return jsonb_build_object('error', 'This booking has no amount to pay yet — please contact us.');
+  end if;
+  -- Only take money once Cloudbeds has accepted the reservation (it can refuse
+  -- a stay the website thought was free, e.g. dates without rates).
+  if cb_push_enabled() and b.cb_reservation_id is null then
+    if b.cb_push_state = 'error' then
+      return jsonb_build_object('error', 'We couldn''t confirm your casita for these dates in our reservations system, so we haven''t taken a payment. Please call +63 917 792 0712 or email reservations@virginbeachresort.com and our team will sort it out.');
+    end if;
+    return jsonb_build_object('error', 'We''re still securing your casita in our reservations system — please try again in a minute.', 'retry', true);
   end if;
 
   v_paid := coalesce((select sum(amount) from booking_payments where booking_id = b.id and status in ('verified', 'pending')), 0);

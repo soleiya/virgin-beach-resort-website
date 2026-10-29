@@ -556,7 +556,7 @@
       (function poll() {
         sb.rpc("booking_ref", { p_booking_id: row.id }).then(function (res) {
           var d = res && !res.error ? res.data : null;
-          if (d && (d.final || d.failed)) return resolve(Object.assign({}, row, { order_code: d.order_code || row.order_code }));
+          if (d && (d.final || d.failed)) return resolve(Object.assign({}, row, { order_code: d.order_code || row.order_code, push_failed: !!d.failed && !d.final }));
           if (res && res.error) return resolve(row); // not set up yet → show what we have
           if (++tries >= 12) return resolve(Object.assign({}, row, d && d.order_code ? { order_code: d.order_code } : {}));
           setTimeout(poll, 2000);
@@ -584,7 +584,9 @@
       "<strong>Pay online now to confirm it</strong> — by card, GCash, Maya and more, through our secure payment partner Xendit" +
       (half ? "; 50% secures it and the balance is due 15 days before arrival" : "") +
       (payload.discount_code ? ". Your discount code " + esc(payload.discount_code) + " is already applied" : "") + ".</p>" +
-      '<div class="pay-now-row">' +
+      (row && row.push_failed
+        ? '<p class="pay-now-error">We couldn\'t lock in your casita in our reservations system just now, so please don\'t pay yet &mdash; our team will check availability and get back to you by email, or call us at +63 917 792 0712.</p><div class="pay-now-row" style="display:none">'
+        : '<div class="pay-now-row">') +
       (half ? '<button type="button" class="btn btn-primary" data-pay="deposit">Pay 50% now · ' + peso(Math.round(total * 50) / 100) + "</button>" : "") +
       '<button type="button" class="btn ' + (half ? "btn-ghost" : "btn-primary") + '" data-pay="full">Pay in full' + (total != null ? " · " + peso(total) : "") + "</button>" +
       "</div>" +
