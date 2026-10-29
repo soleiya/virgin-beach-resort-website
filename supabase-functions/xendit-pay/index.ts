@@ -152,8 +152,14 @@ async function create(body: Any) {
 // ---------- 2. Xendit webhook ---------------------------------------------------
 
 async function webhook(req: Request, body: Any) {
-  const token = env("XENDIT_CALLBACK_TOKEN");
-  if (!token || !same(req.headers.get("x-callback-token") || "", token)) return json({ error: "unauthorized" }, 401);
+  // (trimmed: a value pasted into Supabase Secrets can pick up a line break)
+  const token = env("XENDIT_CALLBACK_TOKEN").trim();
+  const got = (req.headers.get("x-callback-token") || "").trim();
+  if (!token || !same(got, token)) {
+    // diagnostic without revealing the token: lengths and last 3 characters only
+    console.warn(`xendit-pay: callback token mismatch — received len ${got.length} …${got.slice(-3)}, expected len ${token.length} …${token.slice(-3)}`);
+    return json({ error: "unauthorized" }, 401);
+  }
   // Xendit's invoice callback (v2): id, external_id, status, paid_amount, payment_method, payment_channel, paid_at
   const d = body?.data && body?.event ? body.data : body;
   if (!d?.external_id && !d?.id) return json({ ignored: "no invoice" });
