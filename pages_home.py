@@ -57,7 +57,6 @@ body = f"""
         <button type="submit" class="btn btn-primary qb-go">Book a day trip</button>
       </div>
       <p class="qb-error" id="qbError" hidden></p>
-      <a class="qb-paylink" href="pay/index.html"><span>Already booked?</span> <b>Upload your payment &rarr;</b></a>
     </form>
   </div>
 </section>
@@ -68,9 +67,9 @@ body = f"""
     <h2>Book in a few minutes &mdash; that&rsquo;s it</h2>
     <ol class="steps-4">
       <li><b>Pick your dates</b><span>Choose your casita, or how many cabanas you need &mdash; you see the price right away.</span></li>
-      <li><b>Get your quotation</b><span>It arrives by email instantly, with the amount and our bank details.</span></li>
-      <li><b>Settle it online</b><span>Transfer 50% or 100% within 24 hours and upload your proof of payment. Paid 50%? The balance is due 15 days before arrival.</span><a class="step-link" href="pay/index.html">Upload Payment &rsaquo;</a></li>
-      <li><b>You&rsquo;re booked</b><span>We verify your payment and email your confirmation. See you at the beach!</span></li>
+      <li><b>Get your quotation</b><span>You see it right away, and it arrives by email with a secure payment link.</span></li>
+      <li><b>Pay online</b><span>Pay 50% or 100% within 24 hours &mdash; card, GCash, Maya and more, through Xendit. Paid 50%? The balance is due 15 days before arrival.</span></li>
+      <li><b>You&rsquo;re booked</b><span>Your confirmation is emailed as soon as the payment goes through. See you at the beach!</span></li>
     </ol>
   </div>
 </section>
@@ -188,7 +187,6 @@ body = f"""
     <div class="hero-actions" style="justify-content:center;">
       <a class="btn btn-primary" href="{stay_link("")}">Book an overnight stay</a>
       <a class="btn btn-ghost" href="book/index.html">Book a day trip</a>
-      <a class="btn btn-ghost" href="pay/index.html">Upload Payment</a>
     </div>
   </div>
 </section>

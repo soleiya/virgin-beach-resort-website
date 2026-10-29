@@ -1,6 +1,7 @@
 // Supabase Edge Function: xendit-pay
 // ---------------------------------------------------------------------------
-// Online payment for villa bookings made on the website (booking-v31-xendit.sql).
+// Online payment for bookings made on the website — villa stays and day trips
+// (booking-v31-xendit.sql, booking-v32-daytrip-xendit-atv.sql).
 //
 //   1. The booking page / Upload page calls it with
 //        { action: "create", order_code, email, kind: "deposit" | "full" | "balance" }
@@ -104,7 +105,7 @@ export function invoiceBody(s: Any, site: string) {
       ...(mobile ? { mobile_number: mobile } : {}),
     },
     customer_notification_preference: { invoice_paid: ["email"] },
-    items: [{ name: `Overnight stay ${s.order_code} — ${label}`, quantity: 1, price: Number(s.amount), category: "Accommodation" }],
+    items: [{ name: `${s.stay_label || "Booking"} ${s.order_code} — ${label}`, quantity: 1, price: Number(s.amount), category: s.stay_type === "overnight" ? "Accommodation" : "Day use" }],
     success_redirect_url: back + "&paid=1",
     failure_redirect_url: back + "&paid=0",
   };

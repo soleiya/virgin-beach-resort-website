@@ -182,9 +182,9 @@ body = f"""
 <section class="band-tint center">
   <div class="wrap" style="max-width:560px; margin:0 auto;">
     <span class="eyebrow">Already booked?</span>
-    <h2>Pay for your stay</h2>
+    <h2>Pay for your booking</h2>
     <p class="prose mx-auto mt-lg">Pay your down payment or balance online with the Booking ID from your quotation email, and upload any Senior / PWD IDs or pet vaccination cards.</p>
-    <a class="btn btn-ghost mt-lg" href="../pay/index.html">Pay or upload documents</a>
+    <a class="btn btn-ghost mt-lg" href="../pay/index.html">Pay online</a>
   </div>
 </section>
 

@@ -307,7 +307,7 @@ def booking_form_section(default_type="day_trip"):
     </label>
 
     <button class="btn btn-primary" type="submit" id="submitBtn">Send Request</button>
-    <p class="field-hint">You'll get your quotation and bank details by email right away. Pay 50% or 100% within 24 hours to secure your booking (the balance is due 15 days before your visit) &mdash; it's confirmed once payment is verified.</p>
+    <p class="field-hint">Pay online right after you send &mdash; card, GCash, Maya and more, through Xendit. Pay 50% or 100% within 24 hours to secure your booking (the balance is due 15 days before your visit); it's confirmed as soon as the payment goes through.</p>
   </form>
 </div>
 <div id="bookingStatus" class="form-status" hidden></div>
@@ -322,6 +322,7 @@ def booking_scripts():
 <script src="../assets/js/booking-config.js?v={asset_v('assets/js/booking-config.js')}"></script>
 <script src="../assets/js/booking-window.js?v={asset_v('assets/js/booking-window.js')}"></script>
 <script src="../assets/js/pricing.js?v={asset_v('assets/js/pricing.js')}"></script>
+<script src="../assets/js/xendit-pay.js?v={asset_v('assets/js/xendit-pay.js')}"></script>
 <script src="../assets/js/booking.js?v={asset_v('assets/js/booking.js')}"></script>
 """
 
@@ -378,7 +379,6 @@ def nav_html(base, current_path, solid=False, cta_label=None, cta_href=None):
       <ul class="nav-links">{nav_links}</ul>
     </nav>
     <div class="nav-cta">
-      <a class="nav-pay" href="{base}pay/index.html" title="Already booked? Upload your proof of payment"><span class="nav-pay-ico" aria-hidden="true">&#8593;</span>Upload Payment</a>
       <a class="btn {"btn-primary" if solid else "btn-on-dark"}" id="bookBtn" href="{cta_href}">{cta_label}</a>
       <button class="nav-toggle" aria-label="Menu">&#9776;</button>
     </div>
@@ -386,7 +386,6 @@ def nav_html(base, current_path, solid=False, cta_label=None, cta_href=None):
   <div class="mobile-panel">
     <div class="mp-actions">
       <a class="btn btn-primary" href="{stay_link(base)}">Book Now</a>
-      <a class="btn btn-ghost" href="{base}pay/index.html">&#8593; Upload Payment</a>
     </div>
     <ul>{mobile_links_html}</ul>
   </div>
@@ -412,7 +411,6 @@ def footer_html(base):
           <li><a href="{base}dining/index.html">Dining</a></li>
           <li><a href="{base}experiences/index.html">Experiences</a></li>
           <li><a href="{base}gallery/index.html">Gallery</a></li>
-          <li><a href="{base}pay/index.html"><strong>Upload Payment</strong></a></li>
         </ul>
       </div>
       <div>

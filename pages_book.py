@@ -25,9 +25,9 @@ body = f"""
 <section class="band-tint center">
   <div class="wrap" style="max-width:560px; margin:0 auto;">
     <span class="eyebrow">Already booked?</span>
-    <h2>Upload your payment screenshot</h2>
-    <p class="prose mx-auto mt-lg">Paid already? Send us proof of payment using the Booking ID from your confirmation email.</p>
-    <a class="btn btn-ghost mt-lg" href="../pay/index.html">Upload Payment Proof</a>
+    <h2>Pay for your booking</h2>
+    <p class="prose mx-auto mt-lg">Pay your down payment or balance online &mdash; card, GCash, Maya and more &mdash; with the Booking ID from your quotation email, and upload any Senior / PWD IDs or pet vaccination cards.</p>
+    <a class="btn btn-ghost mt-lg" href="../pay/index.html">Pay online</a>
   </div>
 </section>
 

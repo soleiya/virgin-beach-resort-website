@@ -7,7 +7,7 @@ body = f"""
   <div class="wrap page-hero-content">
     <span class="eyebrow">Payment</span>
     <h1>Pay &amp; Upload Documents</h1>
-    <p class="lede">Find your booking to see your balance and due date, then pay &mdash; partial (50%) or full &mdash; and add any documents your booking needs. Villa stays are paid online; day trips by bank transfer with a screenshot.</p>
+    <p class="lede">Find your booking to see your balance and due date, then pay &mdash; partial (50%) or full &mdash; and add any documents your booking needs. Payments are made online &mdash; card, GCash, Maya and more, through Xendit.</p>
   </div>
 </section>
 

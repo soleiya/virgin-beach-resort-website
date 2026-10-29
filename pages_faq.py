@@ -17,9 +17,10 @@ before_stay = [
     ("How long is the drive from Metro Manila?",
      "<p>The travel time by car is normally 3 hours from Metro Manila, depending on traffic and road conditions.</p>"),
     ("What payment methods do you accept?",
-     "<p>To secure your booking, pay at least 50% &mdash; or the full amount &mdash; within 24 hours of booking, and upload your proof of payment. "
+     "<p>To secure your booking, pay at least 50% &mdash; or the full amount &mdash; within 24 hours of booking. "
      "The balance is due 15 days before arrival; bookings made 14 days or less before arrival are paid in full. Full payment guarantees your reservation.</p>"
-     "<p>Pay by bank or e-wallet transfer (InstaPay / PESONet to our UnionBank, BDO or Metrobank account &mdash; GCash and Maya can send via InstaPay). "
+     "<p>Pay online right after booking, or later with the button in your quotation email &mdash; by card, GCash, Maya, QR Ph and more, through our secure payment partner Xendit. "
+     "Your booking is confirmed as soon as the payment goes through. Prefer to arrange payment with our team? Call +63 917 792 0712 or email reservations@virginbeachresort.com. "
      "Have a discount code? Enter it when you book on our website.</p>"
      "<p>At the resort, incidental charges are settled in cash (Philippine Peso or USD) or by credit/debit card (Visa or Mastercard). Check payments are not allowed.</p>"),
     ("What are your check-in and check-out times?",

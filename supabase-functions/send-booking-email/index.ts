@@ -303,9 +303,9 @@ export type PaySummary = {
 };
 export const KIND_WORDS: Record<string, string> = { deposit: "50% down payment", full: "full payment", balance: "remaining balance", other: "payment" };
 // "To secure your reservation, pay at least 50% …" (quotation)
-// Villa stays booked on the website are paid online through Xendit
-// (booking-v31-xendit.sql); day trips by bank transfer + proof upload.
-export const paysOnline = (r: Any) => isOvernight(r) && !r?.cb_owned;
+// Bookings made on the website (villas and day trips) are paid online
+// through Xendit (booking-v31-xendit.sql, v32 for day trips).
+export const paysOnline = (r: Any) => !r?.cb_owned;
 const ONLINE_METHODS = "card, GCash, Maya, QR Ph and more";
 
 function securePara(r: Any, total: number, dl: { label: string }, units: string) {
@@ -723,7 +723,18 @@ ${statusBox([
   ])}
 ${h2("Your reservation")}${kv(reservationRows(r, cabanas))}${cabanaNote(cabanas, r)}
 ${h2("Quotation")}${quoteTable(q)}
-${h2("How to pay")}
+${paysOnline(r) ? `${h2("How to pay")}
+${p(`<strong>Pay online</strong> &mdash; ${ONLINE_METHODS} &mdash; through our secure payment partner <strong>Xendit</strong>. Choose 50% or the full amount on the next page; your booking is confirmed as soon as the payment goes through.`)}
+${button(payUrl, "Pay now")}
+${h2("Next steps")}
+<ol style="margin:0 0 12px;padding-left:20px;font-size:14px;">
+<li style="margin:0 0 8px;"><strong>Pay online</strong> using the button above &mdash; you'll get your booking confirmation by email right after.</li>
+${need.seniors ? `<li style="margin:0 0 8px;"><strong>Upload the Senior Citizen / PWD ID${int(r.senior_count) > 1 ? "s" : ""}</strong> on the same page — the 20% discount applies only with a valid ID. Please bring ${int(r.senior_count) > 1 ? "them" : "it"} on the day too.</li>` : ""}
+${need.pets ? `<li style="margin:0 0 8px;"><strong>Upload your pet${int(r.pet_count) > 1 ? "s'" : "'s"} vaccination card${int(r.pet_count) > 1 ? "s" : ""}</strong> and agree to the Pet Policy on the same page. Please bring it on the day too, with a leash and food and water bowls.</li>` : ""}
+${int(r.pet_count) && !need.pets ? `<li style="margin:0 0 8px;"><strong>Bringing your pet${int(r.pet_count) > 1 ? "s" : ""}:</strong> please bring the vaccination card${int(r.pet_count) > 1 ? "s" : ""} you uploaded (we'll check ${int(r.pet_count) > 1 ? "them" : "it"} at check-in), a leash, food and water bowls. The Pet Policy you agreed to applies during your visit.</li>` : ""}
+<li style="margin:0 0 8px;"><strong>Reply with the signed Reservations Agreement</strong> (attached as a PDF — a photo of the signed last page is fine) and a photo of <strong>one (1) valid ID</strong>${int(r.senior_count) && !need.seniors ? " (we already have the Senior Citizen/PWD ID you uploaded)" : ""}.</li>
+</ol>
+${need.any ? button(payUrl, "Upload documents") : ""}` : `${h2("How to pay")}
 ${p(`<strong>Bank or e-wallet transfer</strong> (InstaPay / PESONet &mdash; GCash and Maya can send to these accounts via InstaPay). Please put <strong>${esc(r.order_code)}</strong> and your name in the reference / remarks.`)}
 ${bankTable()}
 ${h2("After you pay")}
@@ -735,7 +746,7 @@ ${int(r.pet_count) && !need.pets ? `<li style="margin:0 0 8px;"><strong>Bringing
 <li style="margin:0 0 8px;"><strong>Reply with the signed Reservations Agreement</strong> (attached as a PDF — a photo of the signed last page is fine) and a photo of <strong>one (1) valid ID</strong>${int(r.senior_count) && !need.seniors ? " (we already have the Senior Citizen/PWD ID you uploaded)" : ""}.</li>
 <li style="margin:0 0 8px;"><strong>We'll email your confirmation</strong> as soon as the payment is verified (during office hours, 9:00 AM–4:00 PM, Monday–Friday).</li>
 </ol>
-${button(payUrl, need.any ? "Upload payment & documents" : "Upload proof of payment")}
+${button(payUrl, need.any ? "Upload payment & documents" : "Upload proof of payment")}`}
 <p style="margin:14px 0 0;padding:12px 14px;background:${C.sand};border-radius:8px;font-size:13px;color:${C.soft};">This is a quotation, not yet a confirmed booking. Reservations are on a first-come, first-served basis and are confirmed only once payment is received. In the absence of a signed agreement, guests are not relieved of the resort rules, regulations and conditions.</p>
 ${goodToKnow(r.stay_type)}
 ${rebookNote()}
@@ -889,8 +900,8 @@ function paidThanks(r: Any, q: Quote | null, ps: PaySummary | null = null, c?: R
   if (ps && ps.paid > 0 && !ps.fully_paid) {
     const keep = isOvernight(r) && Number(r.online_discount) > 0 ? " Please pay it by bank or e-wallet transfer too, to keep your 5% Convenience Discount." : "";
     return p(`Thank you for your payment of <strong>${esc(peso(ps.paid))}</strong> &mdash; we've verified it, and your booking is now <strong>confirmed</strong>.`) +
-      p(`The remaining balance of <strong>${esc(peso(ps.balance))}</strong> is due by <strong>${esc(fmtDate(ps.balance_due))}</strong>.${keep} When you've paid it, upload the proof using the same link:`, `background:${C.tint};border-radius:8px;padding:10px 14px;font-size:14px;`) +
-      (c ? `<p style="margin:0 0 16px;">${button(uploadUrl(r, c), "Upload balance payment")}</p>` : "");
+      p(`The remaining balance of <strong>${esc(peso(ps.balance))}</strong> is due by <strong>${esc(fmtDate(ps.balance_due))}</strong>.${keep}${paysOnline(r) ? " You can pay it online with the button below." : " When you've paid it, upload the proof using the same link:"}`, `background:${C.tint};border-radius:8px;padding:10px 14px;font-size:14px;`) +
+      (c ? `<p style="margin:0 0 16px;">${button(uploadUrl(r, c), paysOnline(r) ? "Pay balance now" : "Upload balance payment")}</p>` : "");
   }
   const paid = !!(r.payment_uploaded_at || r.payment_screenshot_path || (ps && ps.paid > 0));
   if (!paid) return "";
