@@ -423,15 +423,39 @@
       ? "<p>Your email app should have opened with the request pre-filled — just hit send.</p>"
       : "";
     var orderLine = orderCode
-      ? "<p>Your Booking ID is <strong>" + orderCode + "</strong>.</p>"
+      ? "<p>Your Booking ID is <strong>" + orderCode + "</strong>" + (payload.total_amount ? " · Total <strong>" + peso(payload.total_amount) + "</strong>" : "") + ".</p>"
       : "";
+    // Pay online right away (Xendit) when the booking has a price
+    var canPay = !viaEmail && orderCode && payload.total_amount > 0 && window.VBRPay;
+    var bal = new Date(payload.check_in + "T00:00:00Z"); bal.setUTCDate(bal.getUTCDate() - 15);
+    var half = canPay && bal.toISOString().slice(0, 10) > todayManila();
     var body = viaEmail
       ? " — our reservations team will follow up with your quotation and payment details at " +
         payload.guest_email + " or " + payload.guest_phone + ".</p>"
-      : " — we've just emailed your quotation, bank details and next steps to <strong>" + payload.guest_email +
-        "</strong>. Your cabana is on hold — pay 50% or 100% within 24 hours and upload your proof to secure it; we confirm once payment is verified. " +
-        "Can't find the email? Check your Spam or Promotions folder, or call us at +63 917 792 0712.</p>";
-    statusEl.innerHTML = "<h3>Request received.</h3><p>Thank you, " + firstName + body + orderLine + extra;
+      : canPay
+        ? " — your cabana is on hold for <strong>24 hours</strong>. <strong>Pay online now to confirm it</strong> — by card, GCash, Maya and more, through our secure payment partner Xendit" +
+          (half ? "; 50% secures it and the balance is due 15 days before your visit" : "") + ".</p>"
+        : " — we've just emailed your request details to <strong>" + payload.guest_email +
+          "</strong>. Our team will get back to you with your quotation and a payment link. " +
+          "Can't find the email? Check your Spam or Promotions folder, or call us at +63 917 792 0712.</p>";
+    var payRow = canPay
+      ? '<div class="pay-now-row">' +
+        (half ? '<button type="button" class="btn btn-primary" data-pay="deposit">Pay 50% now · ' + peso(Math.round(payload.total_amount * 50) / 100) + "</button>" : "") +
+        '<button type="button" class="btn ' + (half ? "btn-ghost" : "btn-primary") + '" data-pay="full">Pay in full · ' + peso(payload.total_amount) + "</button>" +
+        '</div><p class="pay-now-error" hidden></p>' +
+        "<p>Your quotation is on its way to <strong>" + payload.guest_email + "</strong> with the same payment button. " +
+        "Can't find it? Check Spam or Promotions, or call us at +63 917 792 0712.</p>"
+      : "";
+    statusEl.innerHTML = "<h3>Request received.</h3><p>Thank you, " + firstName + body + orderLine + payRow + extra;
+    Array.prototype.forEach.call(statusEl.querySelectorAll("[data-pay]"), function (b) {
+      b.addEventListener("click", function () {
+        var err = statusEl.querySelector(".pay-now-error");
+        err.hidden = true;
+        window.VBRPay.start(sb, orderCode, payload.guest_email, b.getAttribute("data-pay"), b, function (m) {
+          err.textContent = m; err.hidden = false;
+        });
+      });
+    });
   }
 
   function showError(payload, bill) {

@@ -202,7 +202,7 @@
     }
     if (recent) {
       box.innerHTML = '<p class="pl-msg pl-ok"><strong>Payment received &mdash; thank you!</strong> ' + peso(paid.amount) +
-        (paid.channel ? " via " + esc(paid.channel) : "") + ". Your stay is confirmed; you'll receive the confirmation by email shortly.</p>";
+        (paid.channel ? " via " + esc(paid.channel) : "") + ". Your booking is confirmed; you'll receive the confirmation by email shortly.</p>";
       backFromXendit = "";
       return;
     }
