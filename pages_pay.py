@@ -39,7 +39,7 @@ body = f"""
         </fieldset>
         <div id="payOnline" hidden>
           <button class="btn btn-primary" type="button" id="payOnlineBtn">Pay now</button>
-          <p class="field-hint">Secure checkout by our payment partner <strong>Xendit</strong> &mdash; card, GCash, Maya, QR Ph and more. Your stay is confirmed as soon as the payment goes through.</p>
+          <p class="field-hint">Secure checkout by our payment partner <strong>Xendit</strong> &mdash; card, GCash, Maya, QR Ph and more. Your booking is confirmed as soon as the payment goes through.</p>
           <p class="pay-now-error" id="payOnlineError" hidden></p>
         </div>
         <div class="pay-step-head" id="payStep3"><span class="pay-step-num">3</span><h2 id="payStep3Title">Upload your proof</h2></div>

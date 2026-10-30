@@ -272,9 +272,8 @@
       '<td class="num">' + (r.total_amount == null ? "—" : esc(peso(r.total_amount))) + "</td>" +
       '<td><span class="status-badge readonly status-' + esc(r.status) + '">' + esc(D.statusLabel(r)) + "</span></td>" +
       '<td class="dcal-remarks">' + esc(remarks(r)) + "</td>" +
-      '<td class="dcal-cabno">' + tags + (off || !needs || (past && !ids.length) ? "" :
-        ' <button type="button" class="btn-sm ghost dcal-assign" data-id="' + esc(r.id) + '">' + (ids.length ? "Change" : "Assign") + "</button>") +
-      (!off && !past && needs && ids.length < needs ? '<span class="muted">' + (needs - ids.length) + " to assign</span>" : "") + "</td></tr>";
+      // (cabana numbers are no longer assigned — the last column only holds the quick-add buttons)
+      '<td class="dcal-cabno"></td></tr>';
   }
 
   // ------------------------------------------------------------- quick add (a new row on the day)

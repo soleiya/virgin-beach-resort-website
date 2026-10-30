@@ -124,7 +124,7 @@ body = f"""
         <h2>Spend the day with us</h2>
         <p class="prose" style="margin-top:18px;">A full day on the beach from &#8369;1,250 per adult (kids 6&ndash;12 &#8369;825, 0&ndash;5 free),
         with your own dining cabana (&#8369;1,500, up to 10 people) or lounge cabana (&#8369;2,000, up to 4).
-        Choose how many cabanas you need when you book &mdash; we assign the numbers before your visit.</p>
+        Choose how many cabanas you need when you book.</p>
         <div class="hero-actions" style="margin-top:22px;">
           <a class="btn btn-primary" href="book/index.html">Book a day trip</a>
           <a class="btn btn-ghost" href="day-packages/index.html">Packages &amp; rates</a>

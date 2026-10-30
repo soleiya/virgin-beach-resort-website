@@ -567,7 +567,7 @@ html = """<!doctype html>
       </div>
       <div class="toolbar-right">
         <button class="btn-sm ghost" id="villaCalBtn" data-section="villas">Villa Calendar</button>
-        <button class="btn-sm ghost" id="plannerBtn" data-section="daytrip">Cabana Map</button>
+        <button class="btn-sm ghost" id="plannerBtn" data-section="daytrip">Block Cabanas</button>
         <button class="btn-sm ghost" id="logBtn">Activity Log</button>
         <button class="btn-sm ghost" id="teamBtn">Team Activity</button>
         <button class="btn-sm ghost" id="webBtn">Website Bookings</button>
@@ -609,7 +609,7 @@ html = """<!doctype html>
         <table class="dcal-table">
           <thead><tr>
             <th>Booker</th><th>Guest</th><th class="num">Adult</th><th class="num">Kids</th><th class="num">0&ndash;5</th><th class="num">PWD | Sr</th><th class="num">Pet</th>
-            <th class="num cab-d">Dining</th><th class="num">Lounge</th><th>Package</th><th class="num">Total</th><th>Status</th><th>Remarks</th><th>Cabana no.</th>
+            <th class="num cab-d">Dining</th><th class="num">Lounge</th><th>Package</th><th class="num">Total</th><th>Status</th><th>Remarks</th><th></th>
           </tr></thead>
           <tbody id="dcalBody"></tbody>
         </table>
@@ -809,7 +809,7 @@ html = """<!doctype html>
           <p class="modal-hint" id="addCabanaLeft" style="margin-top:8px;">Pick a date</p>
         </div>
       </div>
-      <div class="modal-field">
+      <div class="modal-field" style="display:none;"><!-- cabana numbers are no longer assigned -->
         <label>Cabana no. <span class="muted">(optional &mdash; assign any time; the guest is emailed the numbers)</span></label>
         <p class="modal-map-status" id="addMapStatus">Pick a date to see which cabanas are free that day.</p>
         <div id="addCabanaMap" class="cab-assign"></div>
@@ -1037,8 +1037,8 @@ html = """<!doctype html>
 
 <div class="modal-backdrop" id="plannerBackdrop">
   <div class="modal modal-planner">
-    <h2>Cabana Map</h2>
-    <p style="color:var(--ink-soft); font-size:0.85rem; margin:-10px 0 16px;">See every cabana for a day and move parties around &mdash; e.g. to keep a large group together. Click a booked cabana to pick it up, then click a free cabana to move it there (or another booked cabana to swap the two). Use <b>Block cabanas</b> to take cabanas off sale (under repair, unavailable or blocked); click a blocked cabana to remove its block.</p>
+    <h2>Block Cabanas</h2>
+    <p style="color:var(--ink-soft); font-size:0.85rem; margin:-10px 0 16px;">Day-trip guests book Dining or Lounge cabanas by count &mdash; no cabana numbers are assigned. Use <b>Block cabanas</b> to take cabanas off sale (under repair, unavailable or blocked); this lowers how many guests can book that day. Click a blocked cabana to remove its block.</p>
     <div class="planner-bar">
       <div class="filter-field">
         <label for="plannerDate">Date</label>
@@ -1048,7 +1048,7 @@ html = """<!doctype html>
       <button class="btn-sm ghost" type="button" id="plannerToday">Today</button>
       <button class="btn-sm ghost" type="button" id="plannerNext">Next day &rarr;</button>
       <button class="btn-sm ghost" type="button" id="plannerBlockBtn" title="Take cabanas off sale: under repair, unavailable or blocked">&#9940; Block cabanas&hellip;</button>
-      <label class="modal-check" style="margin-left:auto;" title="Guests are always emailed when their cabana changes"><input type="checkbox" id="plannerNotify" checked disabled> Guests are emailed when their cabana is moved</label>
+      <label class="modal-check" style="display:none;" title="Guests are always emailed when their cabana changes"><input type="checkbox" id="plannerNotify" checked disabled> Guests are emailed when their cabana is moved</label>
     </div>
     <div class="planner-block" id="plannerBlockPanel" hidden>
       <div class="planner-block-head"><b>Block cabanas</b><span class="muted">Click cabanas on the map to pick them. Guests can't book them on these dates; the reason is only shown to staff.</span></div>

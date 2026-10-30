@@ -105,6 +105,7 @@ $$;
 
 -- add-ons: ATV rides only
 create table if not exists add_ons_backup_v32 as select slug, active from add_ons;
+alter table add_ons_backup_v32 enable row level security;
 update add_ons set active = false where active and slug !~ '^atv';
 
 -- To undo the add-on change:

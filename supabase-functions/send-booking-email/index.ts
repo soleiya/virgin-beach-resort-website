@@ -422,7 +422,7 @@ export function buildQuote(record: Any, cabanas: Any[]): Quote | null {
       if (!n[kind]) continue;
       // Booked by count (v29) at the rate-sheet price; numbers come later.
       const group = cabanas.filter((c) => cabanaKind(c) === kind);
-      add(`${cabanaName(kind, group[0]?.capacity)}${group.length ? " — " + group.map(shortLabel).join(", ") : ""}`, rate[kind], n[kind]);
+      add(cabanaName(kind, group[0]?.capacity), rate[kind], n[kind]);
     }
     heading = type === "half_day"
       ? "HALF-DAY TRIP AREA — Inclusive of entrance fee and afternoon snacks"
@@ -558,10 +558,8 @@ function reservationRows(r: Any, cabanas: Any[]): [string, string][] {
   ];
   const cabText = cabanaCountText(r, cabanas);
   if (cabText) {
+    // Day-trip cabanas are booked by type and count only — no cabana numbers (Oct 2026).
     rows.push(["Cabana(s)", esc(cabText)]);
-    rows.push(["Cabana no.", cabanas.length
-      ? `<strong>${esc(cabanas.map((c) => String(c.label).replace(/^Section /, "")).join(", "))}</strong>`
-      : `<span style="color:${C.soft};">Assigned by our team before or on the day of your visit — we'll email you</span>`]);
   }
   if (r.guest_names) rows.push(["Names in your party", esc(r.guest_names)]);
   if (r.notes) rows.push(["Your notes", esc(r.notes)]);
@@ -572,8 +570,8 @@ export const PREFERRED_CABANA_NOTE =
   "Our team assigns your cabana number(s) before or on the day of your visit and emails them to you. Cabana numbers are subject to change due to privacy and group concerns — for example, to keep a large group together or give every party its own space. If we move you, it's to a comparable cabana, and we'll email you again.";
 function cabanaNote(cabanas: Any[], r: Any = null) {
   if (cabanas.length && cabanas[0].unit_label) return p(esc(PREFERRED_VILLA_NOTE), `font-size:12.5px;color:${C.soft};margin-top:8px;`);
-  const has = cabanas.length || (r && !isOvernight(r) && cabanaCountText(r, cabanas));
-  return has ? p(esc(PREFERRED_CABANA_NOTE), `font-size:12.5px;color:${C.soft};margin-top:8px;`) : "";
+  // Day trips: no cabana numbers are assigned any more, so no note about them.
+  return "";
 }
 
 // Rebooking: unpaid bookings simply expire after the payment window
@@ -796,7 +794,7 @@ export function staffNewEmail(r: Any, cabanas: Any[], q: Quote | null, c: Return
   const cap = cabanas.reduce((s, x) => s + (Number(x.capacity) || 0), 0);
   const party = int(r.adults) + int(r.children_6_12) + int(r.children_0_5);
   if (cabanas.length && cap < party) flag(`Party of ${party} but cabana capacity is ${cap}.`);
-  if (!cabanas.length && r.stay_type !== "corporate") flag("No cabana selected — assign one in the dashboard.");
+  if (!cabanaCountText(r, cabanas) && r.stay_type !== "corporate") flag("No cabanas on this booking — add the Dining / Lounge count in the dashboard.");
   if (r.stay_type === "corporate") flag("Corporate request — no automatic quote was sent. Prepare a tailored quotation.");
 
   const tel = String(r.guest_phone || "").replace(/[^\d+]/g, "");
@@ -1035,7 +1033,7 @@ ${p(source === "cloudbeds"
     ? `Our reservations team has updated your booking <strong>${esc(r.order_code || "")}</strong>. Here ${changes.length === 1 ? "is the change" : "are the changes"}:`
     : `We've made the following ${changes.length === 1 ? "change" : "changes"} to your reservation <strong>${esc(r.order_code || "")}</strong>:`)}
 ${table}
-${!isOvernight(r) && changes.some((ch) => /cabana/i.test(ch.label)) ? p(esc(CABANA_MOVED_NOTE), `font-size:13.5px;color:${C.soft};margin-top:10px;`) : ""}
+${!isOvernight(r) && changes.some((ch) => /cabana no/i.test(ch.label)) ? p(esc(CABANA_MOVED_NOTE), `font-size:13.5px;color:${C.soft};margin-top:10px;`) : ""}
 ${h2("Your updated reservation")}${kv([
     ...reservationRows(r, cabanas),
     ...(r.total_amount !== null && r.total_amount !== undefined ? [["Total", `<strong>${esc(peso(Number(r.total_amount)))}</strong>`] as [string, string]] : []),
@@ -1772,7 +1770,7 @@ async function onChanged(r: Any, payload: Any) {
   if (inCloudbeds(r)) return CB_SKIP;
   const raw = Array.isArray(payload.changes) ? payload.changes.slice(0, 30) : [];
   // A day-trip cabana change is always emailed (v28), whoever made the booking.
-  const cabanaMove = !isOvernight(r) && raw.some((x: Any) => /cabana/i.test(String(x?.label ?? "")));
+  const cabanaMove = !isOvernight(r) && raw.some((x: Any) => /cabana no/i.test(String(x?.label ?? "")));
   if (!cabanaMove && !autoEmail(r, c)) return { skipped: "source " + r.source };
   if (r.cb_owned === true) return { skipped: "made in Cloudbeds" };
   if (!r.guest_email || !EMAIL_RE.test(String(r.guest_email).trim())) return { skipped: "no valid guest email" };
