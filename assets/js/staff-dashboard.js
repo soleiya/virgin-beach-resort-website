@@ -8,10 +8,6 @@
 
   var sb = window.supabase.createClient(cfg.url, cfg.anonKey);
 
-  // Day-trip cabanas are booked by count only — staff no longer assign cabana
-  // numbers (Oct 2026). Set to true to bring the number picking back.
-  var CABANA_NUMBERS = false;
-
   // Maps each staff member's dashboard login email to their display name,
   // so a booking they add through this dashboard can be attributed to them
   // by name (same idea as the old sheet's "Booker" column) instead of a
@@ -681,7 +677,6 @@
     countLine.style.fontWeight = "600";
     countLine.textContent = [n.dining ? n.dining + " dining" : "", n.lounge ? n.lounge + " lounge" : ""].filter(Boolean).join(" · ");
     td.appendChild(countLine);
-    if (!CABANA_NUMBERS) return;
     if (!assignedIds.length) {
       var na = document.createElement("div");
       na.className = "muted"; na.style.fontSize = "0.76rem";
@@ -1307,7 +1302,7 @@
     var ownBlocked = editingRow && dateStr === editingRow.check_in
       ? (editingRow.booking_cabanas || []).map(function (bc) { return bc.cabana_id; }).filter(function (id) { return h.blocked.has(id); })
       : [];
-    var dropped = CABANA_NUMBERS ? modalCabanaIds.filter(function (id) { return h.held.has(id) && ownBlocked.indexOf(id) === -1; }) : [];
+    var dropped = modalCabanaIds.filter(function (id) { return h.held.has(id) && ownBlocked.indexOf(id) === -1; });
     if (dropped.length) modalCabanaIds = modalCabanaIds.filter(function (id) { return dropped.indexOf(id) === -1; });
     var free = cabanasFreeOn(dateStr, editingRow && editingRow.id);
     var leftEl = $("addCabanaLeft");
@@ -1319,7 +1314,6 @@
       leftEl.style.color = over ? "#9b2c2c" : "";
       if (over) leftEl.textContent += " — over capacity";
     }
-    if (!CABANA_NUMBERS) { renderModalBill(); return; }
     addMapStatus.textContent = !dateStr ? "Pick a date to see which cabanas are free that day."
       : dropped.length ? dropped.length + " assigned cabana(s) are taken on this date and were removed — pick another."
       : ownBlocked.length ? "Heads-up: " + ownBlocked.map(cabLabel).join(", ") + " is now blocked on this date. Assign another cabana."
@@ -1511,6 +1505,7 @@
       $("addTotal").value = r.total_amount != null ? r.total_amount : "";
       $("addNotes").value = r.notes || "";
       $("addStaffNotes").value = r.staff_notes || "";
+      if ($("addEmailCabNo")) $("addEmailCabNo").checked = !!r.email_cabana_numbers;
       modalCabanaIds = (r.booking_cabanas || []).map(function (bc) { return bc.cabana_id; });
       var n0 = countsOf(r);
       $("addDining").value = n0.dining;
@@ -1533,6 +1528,7 @@
       $("addBookedBy").value = currentStaffName || "";
       notifyEl.checked = false;
       modalCabanaIds = [];
+      if ($("addEmailCabNo")) $("addEmailCabNo").checked = false;
     }
     notifyTouched = false;
     renderModalMap();
@@ -1586,6 +1582,8 @@
       discount_reason: pr.discountType ? (discReasonEl.value.trim() || null) : null,
       notes: $("addNotes").value.trim() || null,
       staff_notes: $("addStaffNotes").value.trim() || null,
+      // cabana numbers are internal; shown in guest emails only when ticked (v33)
+      email_cabana_numbers: !!($("addEmailCabNo") && $("addEmailCabNo").checked),
     };
   }
 
@@ -1646,7 +1644,9 @@
       if (before !== after) out.push({ label: f[1], before: before || "—", after: after || "—" });
     });
     var b = cabanaListText(beforeCabanas), a = cabanaListText(afterCabanas);
-    if (b !== a) out.push({ label: "Cabana no.", before: b, after: a });
+    // cabana numbers are internal — a change is only a guest change when they're emailed
+    var showNo = "email_cabana_numbers" in patch ? patch.email_cabana_numbers : r.email_cabana_numbers;
+    if (b !== a && showNo) out.push({ label: "Cabana no.", before: b, after: a });
     return out;
   }
 
@@ -1660,7 +1660,7 @@
     if (vals.pet_count > 2) return showFormError("A maximum of two pets are permitted per reservation.");
     if (!vals.guest_name) return showFormError("Guest name is required.");
     if (vals.senior_count > vals.adults) return showFormError("Senior citizens are counted within adults — senior count can't be more than adults.");
-    if (CABANA_NUMBERS && (assignedCount("dining") > vals.dining_cabanas || assignedCount("lounge") > vals.lounge_cabanas)) {
+    if (assignedCount("dining") > vals.dining_cabanas || assignedCount("lounge") > vals.lounge_cabanas) {
       return showFormError("More cabana numbers are assigned than the booking has — untick some numbers or raise the Dining / Lounge count.");
     }
     saveBookingBtn.disabled = true;
@@ -1787,7 +1787,7 @@
 
   function renderPlanner() {
     var dateStr = plannerDateEl.value;
-    var holds = CABANA_NUMBERS ? plannerHolds(dateStr) : {};
+    var holds = plannerHolds(dateStr);
     var heldSet = new Set(Object.keys(holds));
     var blocks = blocksForDate(dateStr);
     // Parties already sitting on a cabana that was blocked after they booked.
@@ -1815,7 +1815,7 @@
       plannerStatus.className = "planner-status";
       plannerStatus.textContent = plannerSource
         ? "Picked up " + cabLabel(plannerSource.cabanaId) + " (" + plannerSource.row.guest_name + "). Click a free cabana to move it there, another booked cabana to swap, or the same one to put it back."
-        : (!CABANA_NUMBERS ? "Use Block cabanas to take cabanas off sale on " + fmtDate(dateStr) + "." : heldSet.size ? heldSet.size + " cabana(s) booked on " + fmtDate(dateStr) + ". Hover to see who has each; click one to move it." : "No cabanas booked on " + fmtDate(dateStr) + ".") +
+        : (heldSet.size ? heldSet.size + " cabana(s) booked on " + fmtDate(dateStr) + ". Hover to see who has each; click one to move it." : "No cabanas booked on " + fmtDate(dateStr) + ".") +
           (blocks.set.size ? " " + blocks.set.size + " blocked (hatched) — click one to remove its block." : "");
     }
     if (conflicts.length && !plannerPending) {
@@ -1873,9 +1873,10 @@
     dayRows.forEach(function (r) {
       var tr = document.createElement("tr");
       if (plannerSource && plannerSource.row.id === r.id) tr.className = "is-source";
+      var cabs = (r.booking_cabanas || []).map(function (bc) { return cabLabel(bc.cabana_id); }).join(", ");
       var nc = countsOf(r);
-      var cabs = [nc.dining ? nc.dining + " dining" : "", nc.lounge ? nc.lounge + " lounge" : ""].filter(Boolean).join(", ");
-      [r.guest_name || "—", r.order_code || "—", partySize(r) + " pax", cabs || "—", STATUS_LABELS[r.status] || r.status].forEach(function (t) {
+      if (!cabs && (nc.dining || nc.lounge)) cabs = nc.dining + " dining, " + nc.lounge + " lounge (no numbers yet)";
+      [r.guest_name || "—", r.order_code || "—", partySize(r) + " pax", cabs || "— not assigned", STATUS_LABELS[r.status] || r.status].forEach(function (t) {
         var td = document.createElement("td"); td.textContent = t; tr.appendChild(td);
       });
       plannerList.appendChild(tr);
@@ -1992,8 +1993,9 @@
   });
 
   function emailMove(r, beforeIds, afterIds) {
-    // v28: always emailed — cabana moves are never silent.
-    if (!EMAIL_RE.test(String(r.guest_email || "").trim())) return Promise.resolve();
+    // Cabana numbers are internal: a move is emailed only when the booking has
+    // "Include cabana numbers in guest emails" ticked (v33).
+    if (!r.email_cabana_numbers || !EMAIL_RE.test(String(r.guest_email || "").trim())) return Promise.resolve();
     var changes = [{ label: "Cabana no.", before: cabanaListText(beforeIds), after: cabanaListText(afterIds) }];
     return sb.rpc("notify_booking_change", { p_booking_id: r.id, p_changes: changes, p_old_check_in: null });
   }
@@ -2065,7 +2067,7 @@
     }
     var lines = [headers.map(csvCell).join(",")];
     rows.forEach(function (r) {
-      var cabanaLabels = !CABANA_NUMBERS ? "" : (r.booking_cabanas || [])
+      var cabanaLabels = (r.booking_cabanas || [])
         .map(function (bc) { return cabanasById[bc.cabana_id] ? cabanasById[bc.cabana_id].label : ""; })
         .filter(Boolean)
         .join("; ");

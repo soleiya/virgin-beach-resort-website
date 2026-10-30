@@ -272,8 +272,9 @@
       '<td class="num">' + (r.total_amount == null ? "—" : esc(peso(r.total_amount))) + "</td>" +
       '<td><span class="status-badge readonly status-' + esc(r.status) + '">' + esc(D.statusLabel(r)) + "</span></td>" +
       '<td class="dcal-remarks">' + esc(remarks(r)) + "</td>" +
-      // (cabana numbers are no longer assigned — the last column only holds the quick-add buttons)
-      '<td class="dcal-cabno"></td></tr>';
+      '<td class="dcal-cabno">' + tags + (off || !needs || (past && !ids.length) ? "" :
+        ' <button type="button" class="btn-sm ghost dcal-assign" data-id="' + esc(r.id) + '">' + (ids.length ? "Change" : "Assign") + "</button>") +
+      (!off && !past && needs && ids.length < needs ? '<span class="muted">' + (needs - ids.length) + " to assign</span>" : "") + "</td></tr>";
   }
 
   // ------------------------------------------------------------- quick add (a new row on the day)
@@ -408,7 +409,7 @@
     popRow = r;
     popPicked = assignedIds(r).slice();
     var n = D.countsOf(r);
-    $("dcalPopTitle").textContent = "Cabana no. — " + (r.guest_name || "") + (r.order_code ? " · " + r.order_code : "");
+    $("dcalPopTitle").textContent = "Cabana no. (internal) — " + (r.guest_name || "") + (r.order_code ? " · " + r.order_code : "");
     $("dcalPopSub").textContent = dayName(r.check_in) + " · booked " + [n.dining ? n.dining + " dining" : "", n.lounge ? n.lounge + " lounge" : ""].filter(Boolean).join(", ");
     drawPop();
     pop.hidden = false;
@@ -474,7 +475,8 @@
       return sb.from("booking_cabanas").insert(add.map(function (id) { return { booking_id: r.id, cabana_id: id }; })).then(function (res) { if (res.error) throw res.error; });
     });
     jobs.then(function () {
-      if (!EMAIL_RE.test(String(r.guest_email || "").trim())) return null;
+      // cabana numbers are internal — emailed only when ticked on the booking (v33)
+      if (!r.email_cabana_numbers || !EMAIL_RE.test(String(r.guest_email || "").trim())) return null;
       return sb.rpc("notify_booking_change", {
         p_booking_id: r.id,
         p_changes: [{ label: "Cabana no.", before: D.cabanaListText(before) || "—", after: D.cabanaListText(after) || "—" }],

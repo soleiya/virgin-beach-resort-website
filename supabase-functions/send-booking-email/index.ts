@@ -367,6 +367,11 @@ export function cabanaCounts(r: Any, cabanas: Any[] = []) {
     lounge: Math.max(int(r.lounge_cabanas), int(r.legacy_lounge_cabanas), assigned("lounge")),
   };
 }
+// v33: day-trip cabana numbers are for internal records; guests see them only
+// when the booking has email_cabana_numbers ticked.
+export const showCabanaNumbers = (r: Any, cabanas: Any[] = []) =>
+  !isOvernight(r) && r?.email_cabana_numbers === true && cabanas.length > 0 && !cabanas[0]?.unit_label;
+
 export function cabanaCountText(r: Any, cabanas: Any[] = []) {
   const n = cabanaCounts(r, cabanas);
   return [n.dining ? plural(n.dining, "Dining Cabana") : "", n.lounge ? plural(n.lounge, "Lounge Cabana") : ""].filter(Boolean).join(", ");
@@ -422,7 +427,7 @@ export function buildQuote(record: Any, cabanas: Any[]): Quote | null {
       if (!n[kind]) continue;
       // Booked by count (v29) at the rate-sheet price; numbers come later.
       const group = cabanas.filter((c) => cabanaKind(c) === kind);
-      add(cabanaName(kind, group[0]?.capacity), rate[kind], n[kind]);
+      add(`${cabanaName(kind, group[0]?.capacity)}${showCabanaNumbers(record, cabanas) && group.length ? " — " + group.map(shortLabel).join(", ") : ""}`, rate[kind], n[kind]);
     }
     heading = type === "half_day"
       ? "HALF-DAY TRIP AREA — Inclusive of entrance fee and afternoon snacks"
@@ -558,8 +563,12 @@ function reservationRows(r: Any, cabanas: Any[]): [string, string][] {
   ];
   const cabText = cabanaCountText(r, cabanas);
   if (cabText) {
-    // Day-trip cabanas are booked by type and count only — no cabana numbers (Oct 2026).
     rows.push(["Cabana(s)", esc(cabText)]);
+    // Cabana numbers are internal; shown only when staff tick "Include cabana
+    // numbers in emails to the guest" on the booking (v33).
+    if (showCabanaNumbers(r, cabanas)) {
+      rows.push(["Cabana no.", `<strong>${esc(cabanas.map((c) => String(c.label).replace(/^Section /, "")).join(", "))}</strong>`]);
+    }
   }
   if (r.guest_names) rows.push(["Names in your party", esc(r.guest_names)]);
   if (r.notes) rows.push(["Your notes", esc(r.notes)]);
@@ -570,8 +579,8 @@ export const PREFERRED_CABANA_NOTE =
   "Our team assigns your cabana number(s) before or on the day of your visit and emails them to you. Cabana numbers are subject to change due to privacy and group concerns — for example, to keep a large group together or give every party its own space. If we move you, it's to a comparable cabana, and we'll email you again.";
 function cabanaNote(cabanas: Any[], r: Any = null) {
   if (cabanas.length && cabanas[0].unit_label) return p(esc(PREFERRED_VILLA_NOTE), `font-size:12.5px;color:${C.soft};margin-top:8px;`);
-  // Day trips: no cabana numbers are assigned any more, so no note about them.
-  return "";
+  // Day trips: numbers are internal; the "may change" note only when they're shown.
+  return r && showCabanaNumbers(r, cabanas) ? p(esc(CABANA_MOVED_NOTE), `font-size:12.5px;color:${C.soft};margin-top:8px;`) : "";
 }
 
 // Rebooking: unpaid bookings simply expire after the payment window
@@ -1768,7 +1777,10 @@ async function onProofRejected(r: Any, payload: Any) {
 async function onChanged(r: Any, payload: Any) {
   const c = cfg();
   if (inCloudbeds(r)) return CB_SKIP;
-  const raw = Array.isArray(payload.changes) ? payload.changes.slice(0, 30) : [];
+  // cabana numbers are internal unless ticked for guest emails (v33)
+  const raw = (Array.isArray(payload.changes) ? payload.changes.slice(0, 30) : [])
+    .filter((x: Any) => r.email_cabana_numbers === true || !/cabana no/i.test(String(x?.label ?? "")));
+  if (!raw.length) return { skipped: "only internal cabana-number changes" };
   // A day-trip cabana change is always emailed (v28), whoever made the booking.
   const cabanaMove = !isOvernight(r) && raw.some((x: Any) => /cabana no/i.test(String(x?.label ?? "")));
   if (!cabanaMove && !autoEmail(r, c)) return { skipped: "source " + r.source };
