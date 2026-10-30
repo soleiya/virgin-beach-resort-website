@@ -1317,45 +1317,28 @@
     addMapStatus.textContent = !dateStr ? "Pick a date to see which cabanas are free that day."
       : dropped.length ? dropped.length + " assigned cabana(s) are taken on this date and were removed — pick another."
       : ownBlocked.length ? "Heads-up: " + ownBlocked.map(cabLabel).join(", ") + " is now blocked on this date. Assign another cabana."
-      : "Tap to assign · crossed out = taken by another group, striped = blocked. Hover for who has it.";
+      : "Click cabanas on the map to assign them · taken and blocked cabanas can't be picked. Hover to see who has one.";
     addMapEl.innerHTML = "";
     if (!cabanasList.length) { addMapEl.innerHTML = '<span class="muted">Cabana list couldn\'t load.</span>'; renderModalSelected(); return; }
-    var groups = {};
-    cabanasList.forEach(function (c) {
-      var key = c.section + "|" + cabKind(c);
-      (groups[key] = groups[key] || []).push(c);
-    });
-    Object.keys(groups).sort().forEach(function (key) {
-      var parts = key.split("|");
-      var box = document.createElement("div");
-      box.className = "cab-assign-group";
-      box.innerHTML = "<h4>Section " + esc(parts[0]) + " · " + (parts[1] === "lounge" ? "Lounge" : "Dining") + "</h4>";
-      var wrap = document.createElement("div");
-      wrap.className = "cab-assign-chips";
-      groups[key].slice().sort(function (a, b) { return a.number - b.number; }).forEach(function (c) {
-        var on = modalCabanaIds.indexOf(c.id) >= 0;
-        var taken = dateStr && h.held.has(c.id) && !on;
-        var blocked = dateStr && h.blocked && h.blocked.has(c.id);
-        var btn = document.createElement("button");
-        btn.type = "button";
-        btn.className = "cab-chip" + (cabKind(c) === "lounge" ? " lounge" : "") + (on ? " is-on" : "") + (blocked && !on ? " is-blocked" : taken ? " is-taken" : "");
-        btn.textContent = String(c.number);
-        btn.title = c.label + (taken || blocked ? " — " + (h.info[c.id] || "not available") : "");
-        btn.disabled = !on && (taken || blocked);
-        btn.addEventListener("click", function () {
-          var i = modalCabanaIds.indexOf(c.id);
-          if (i >= 0) modalCabanaIds.splice(i, 1);
-          else {
-            modalCabanaIds.push(c.id);
-            var k = cabKind(c), field = k === "lounge" ? "addLounge" : "addDining";
-            if (assignedCount(k) > intVal(field)) $(field).value = assignedCount(k); // more assigned than booked: count up
-          }
-          renderModalMap();
-        });
-        wrap.appendChild(btn);
-      });
-      box.appendChild(wrap);
-      addMapEl.appendChild(box);
+    // v34: pick numbers on the resort's cabana map (internal records)
+    window.VBRCabanaMap.render(addMapEl, {
+      cabanas: cabanasList,
+      heldSet: h.held,
+      heldInfo: h.info,
+      blockedSet: h.blocked,
+      blockedInfo: h.blockedInfo,
+      selectedIds: modalCabanaIds,
+      crop: { top: 0.33, bottom: 0.56 },
+      onSelect: function (c) {
+        var i = modalCabanaIds.indexOf(c.id);
+        if (i >= 0) modalCabanaIds.splice(i, 1);
+        else {
+          modalCabanaIds.push(c.id);
+          var k = cabKind(c), field = k === "lounge" ? "addLounge" : "addDining";
+          if (assignedCount(k) > intVal(field)) $(field).value = assignedCount(k); // more assigned than booked: count up
+        }
+        renderModalMap();
+      },
     });
     renderModalSelected();
   }

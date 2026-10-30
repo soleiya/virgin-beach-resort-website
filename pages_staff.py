@@ -812,9 +812,9 @@ html = """<!doctype html>
       <div class="modal-field">
         <label>Cabana no. <span class="muted">(internal use only &mdash; for our records of who sat where; optional, assign any time)</span></label>
         <p class="modal-map-status" id="addMapStatus">Pick a date to see which cabanas are free that day.</p>
-        <div id="addCabanaMap" class="cab-assign"></div>
+        <div id="addCabanaMap"></div>
         <div class="modal-map-selected" id="addCabanaSelected"></div>
-        <label class="modal-check" style="margin-top:8px;"><input type="checkbox" id="addEmailCabNo"> Include cabana numbers in emails to the guest</label>
+        <label class="modal-check" style="margin-top:8px;"><input type="checkbox" id="addEmailCabNo"> Include the assigned cabana numbers in emails to the guest <span class="muted">(off = numbers stay hidden from the guest)</span></label>
       </div>
       <div class="modal-field" id="addPricing">
         <label>Amount</label>
