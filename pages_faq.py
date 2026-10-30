@@ -86,7 +86,7 @@ dining = [
      "<tr><td>Adult</td><td class='num'>&#8369;2,695.00</td></tr>"
      "<tr><td>Child (6&ndash;12)</td><td class='num'>&#8369;1,347.50</td></tr>"
      "<tr><td>Ages 0&ndash;5</td><td class='num'>Free</td></tr>"
-     "</tbody></table><p style='font-size:0.85rem; margin-top:10px;'>*All prices are inclusive of 12% VAT and Service Charge.</p>"),
+     "</tbody></table>"),
     ("What if my guest count decreases?",
      "<p>When there is a decrease in the number of confirmed guests, payments made towards the overnight meal package may be consumed as dining "
      "credits in the Pavilion, otherwise remaining credits are forfeited.</p>"),

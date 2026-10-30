@@ -418,7 +418,7 @@ export function buildQuote(record: Any, cabanas: Any[]): Quote | null {
   } else {
     const rate = PRICING[type] || PRICING.day_trip;
     add("Adult (13 y.o. +)", rate.adult, regular);
-    add("Senior Citizen / PWD (VAT-exempt, 20% discount)", seniorPrice(rate.adult), seniors, true);
+    add("Senior Citizen / PWD (20% discount)", seniorPrice(rate.adult), seniors, true);
     add("Child (6–12 y.o.)", rate.child612, kids612);
     add("Child (0–5 y.o.)", 0, kids05);
     add("Pet fee", rate.pet, pets);
@@ -515,22 +515,14 @@ function kv(rows: [string, string][]) {
 function quoteTable(q: Quote) {
   const td = "padding:7px 6px;border-bottom:1px solid " + C.line + ";";
   const rows = q.lines.map((l) =>
-    `<tr><td style="${td}">${esc(l.desc)}</td><td style="${td}text-align:right;white-space:nowrap;">${l.rate ? num(l.rate) : "Free"}</td><td style="${td}text-align:center;">${l.qty}</td><td style="${td}text-align:right;white-space:nowrap;">${num(l.amount)}</td></tr>`
+    `<tr><td style="${td}">${esc(String(l.desc).replace(/VAT-exempt,\s*/gi, ""))}</td><td style="${td}text-align:right;white-space:nowrap;">${l.rate ? num(l.rate) : "Free"}</td><td style="${td}text-align:center;">${l.qty}</td><td style="${td}text-align:right;white-space:nowrap;">${num(l.amount)}</td></tr>`
   ).join("");
-  const sum = (label: string, val: string, bold = false) =>
-    `<tr><td colspan="3" style="padding:4px 6px;text-align:right;color:${bold ? C.ink : C.soft};${bold ? "font-weight:bold;" : ""}">${label}</td><td style="padding:4px 6px;text-align:right;white-space:nowrap;${bold ? "font-weight:bold;" : ""}">${val}</td></tr>`;
   return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;font-size:13.5px;">
 <tr><td colspan="4" style="padding:8px 6px;background:${C.tint};color:${C.deep};font-weight:bold;font-size:12.5px;letter-spacing:.03em;">${esc(q.heading)}</td></tr>
 <tr style="color:${C.soft};font-size:12px;"><td style="padding:6px;">Description</td><td style="padding:6px;text-align:right;">Rate (₱)</td><td style="padding:6px;text-align:center;">Qty</td><td style="padding:6px;text-align:right;">Amount (₱)</td></tr>
 ${rows}
-${sum("Sub Total", num(q.subtotal))}
-${sum("VAT-Exempt Sales", num(q.vatExemptSales))}
-${sum("Vatable Sales", num(q.vatableSales))}
-${sum("VAT (12%)", num(q.vat))}
-${sum("5% Service Charge (Zero-Rated)", num(q.serviceCharge))}
 <tr><td colspan="3" style="padding:10px 6px;text-align:right;font-weight:bold;border-top:2px solid ${C.deep};font-size:15px;">TOTAL AMOUNT DUE</td><td style="padding:10px 6px;text-align:right;font-weight:bold;border-top:2px solid ${C.deep};font-size:15px;white-space:nowrap;">${peso(q.total)}</td></tr>
-</table>
-<p style="margin:6px 0 0;color:${C.soft};font-size:12px;">All prices are inclusive of 12% VAT and 5% service charge.</p>`;
+</table>`;
 }
 
 function bankTable() {
@@ -1811,7 +1803,8 @@ const CORS = {
 const PREVIEW_FIELDS = ["source", "status", "stay_type", "stay_type_label", "guest_name", "guest_email", "guest_phone", "country",
   "check_in", "check_out", "adults", "children_6_12", "children_0_5", "senior_count", "pet_count", "companions", "primary_is_senior",
   "discount_type", "discount_value", "discount_amount", "discount_reason", "total_amount", "subtotal_people", "cabana_total",
-  "senior_discount", "notes", "add_ons", "online_discount", "booked_by", "email_custom", "dining_cabanas", "lounge_cabanas"];
+  "senior_discount", "notes", "add_ons", "online_discount", "booked_by", "email_custom", "dining_cabanas", "lounge_cabanas",
+  "email_cabana_numbers"];
 
 async function staffUser(auth: string) {
   const c = cfg();

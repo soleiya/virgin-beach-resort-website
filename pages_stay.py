@@ -160,7 +160,7 @@ body = f"""
         </div>
 
         <div class="stay-step">
-          <div class="stay-step-head"><span class="stay-step-num">6</span><div><h2>Your quotation</h2><p>All prices include 12% VAT and service charge.</p></div></div>
+          <div class="stay-step-head"><span class="stay-step-num">6</span><div><h2>Your quotation</h2></div></div>
           <div class="code-row">
             <label for="discountCode">Discount code <span class="muted">(optional)</span></label>
             <div class="code-input"><input id="discountCode" type="text" autocomplete="off" autocapitalize="characters" spellcheck="false" maxlength="30" placeholder="Enter code"><button type="button" class="btn btn-ghost" id="applyCode">Apply</button></div>

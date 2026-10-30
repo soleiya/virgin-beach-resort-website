@@ -3,7 +3,6 @@ from build import page, CASITAS, stay_link, CASITA_RATES, rate_lines
 
 FINE_PRINT = """
 <div class="fine-print">
-  <p>All prices are inclusive of 12% VAT and Service Charge.</p>
   <p>Casita rates do not include the full-board meal package, which is required for every guest (&#8369;2,695 per adult, &#8369;1,347.50 per child aged 6&ndash;12, free for ages 0&ndash;5, per night).</p>
   <p>Peak season weekend rates will apply a day preceding long weekends, government declared holidays and holidays.</p>
   <p>Prices may be subject to change without prior notice.</p>
@@ -62,7 +61,7 @@ def stay_cost_box(slug):
             <div class="sc-row"><span>Full-board meals <em>buffet breakfast, lunch &amp; dinner</em></span><b>&#8369;{MEAL_ADULT:,} <small>per adult</small> &middot; &#8369;{MEAL_CHILD} <small>age 6&ndash;12</small> &middot; free <small>age 0&ndash;5</small></b></div>
           </div>
           <p class="sc-example">Example: {n} adults on a weekday night &mdash; &#8369;{wd} casita + &#8369;{meals:,} meals = <b>&#8369;{wd_num + meals:,}</b> per night, all three buffet meals included.</p>
-          <p class="sc-note">Full board is part of every overnight stay and is charged per guest, per night. Prices include 12% VAT and service charge.</p>
+          <p class="sc-note">Full board is part of every overnight stay and is charged per guest, per night.</p>
         </div>"""
 
 

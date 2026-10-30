@@ -3,7 +3,6 @@ from build import page, booking_form_section, booking_scripts, asset_v
 
 FINE_PRINT_A = """
 <div class="fine-print">
-  <p>All prices are inclusive of 12% VAT and Service Charge.</p>
   <p>Prices may be subject to change without prior notice.</p>
 </div>
 """
