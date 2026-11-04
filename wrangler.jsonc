@@ -1,0 +1,13 @@
+// Cloudflare (Workers static assets) — the live website.
+// The build step (python3 export_public.py, set in Cloudflare → Settings →
+// Build) copies only the public site into ./public; that folder is what
+// gets published. SQL, function code and scripts stay out of the site.
+{
+  "name": "virgin-beach-resort-website",
+  "compatibility_date": "2026-10-01",
+  "assets": {
+    "directory": "./public",
+    "not_found_handling": "404-page",
+    "html_handling": "auto-trailing-slash"
+  }
+}
