@@ -1169,6 +1169,17 @@
     return items.length === 1 ? items[0] : items.slice(0, -1).join(", ") + " and " + items[items.length - 1];
   }
 
+  // A staff-made booking whose quotation hasn't gone out yet (e.g. saved
+  // first without an email, the email added later): saving can send it now.
+  function editQuoteMode() {
+    var r = editingRow;
+    if (!r) return { ok: false };
+    var email = $("addEmail").value.trim(), type = $("addType").value, status = $("addStatus").value;
+    var hasTotal = P.hasRateSheet(type) || $("addTotal").value !== "";
+    return { ok: r.source !== "website" && r.email_guest !== true && EMAIL_RE.test(email) && type !== "corporate" &&
+      QUOTE_STATUSES.indexOf(status) !== -1 && hasTotal, email: email };
+  }
+
   function updateNotifyState() {
     notifyWrap.style.display = "flex";
     var email = $("addEmail").value.trim();
@@ -1193,6 +1204,17 @@
       notifyHint.textContent = "Same email as a website booking: the amount due shown above" +
         ", the pay-by time, a Pay now button (GCash, cards, Maya…), and a link for the guest to upload " + uploadList() +
         ". Unpaid bookings expire automatically after 24 hours.";
+      return;
+    }
+    var qm = editQuoteMode();
+    if (qm.ok) {
+      notifyEl.disabled = false;
+      if (!notifyTouched) notifyEl.checked = true;
+      notifyWrap.classList.remove("is-disabled");
+      notifyText.textContent = "Send the quotation to " + email + " when I save (it hasn't been sent yet)";
+      notifyHint.hidden = false;
+      notifyHint.textContent = "Same email as a website booking: the amount due, the pay-by time and a Pay now button (GCash, cards, Maya…).";
+      if (dtMail) dtMail.refresh();
       return;
     }
     var ok = EMAIL_RE.test(email);
@@ -1234,7 +1256,7 @@
     if (dtMail || !window.VBREmail) return dtMail;
     dtMail = window.VBREmail.create({
       root: document.getElementById("addMail"), notifyEl: notifyEl, hintEl: notifyHint,
-      mode: function () { return editingRow ? "change" : "quote"; },
+      mode: function () { return editingRow && !(editQuoteMode().ok && notifyEl.checked) ? "change" : "quote"; },
       overnight: function () { return false; },
       request: function () {
         var vals = formValues();
@@ -1663,7 +1685,9 @@
       var afterCabanas = modalCabanaIds.slice();
       var changes = guestChanges(r, patch, beforeCabanas, afterCabanas);
       var cabanaMoved = !notifyEl.disabled && changes.some(function (ch) { return ch.label === "Cabana no."; });
-      var notify = (notifyEl.checked && !notifyEl.disabled && changes.length > 0) || cabanaMoved;
+      // quotation not sent yet → send it (instead of a "changes" summary)
+      var quoteNow = editQuoteMode().ok && notifyEl.checked && !notifyEl.disabled;
+      var notify = !quoteNow && ((notifyEl.checked && !notifyEl.disabled && changes.length > 0) || cabanaMoved);
       var file = payFileEl.files && payFileEl.files[0];
       saveBookingBtn.textContent = "Saving…";
 
@@ -1686,6 +1710,12 @@
         })
         .then(function () { return syncCabanas(r.id, keptBefore, afterCabanas); })
         .then(function () {
+          if (quoteNow) {
+            var mq = dtMail ? dtMail.value() : { subject: "", message: "" };
+            var uq = { email_guest: true };
+            if (mq.message || mq.subject) uq.email_custom = Object.assign({}, r.email_custom || {}, { quote: { subject: mq.subject || null, message: mq.message || null } });
+            return sb.from("booking_requests").update(uq).eq("id", r.id).then(function (res) { return res.error ? res.error : null; });
+          }
           if (!notify) return null;
           var mv = dtMail ? dtMail.value() : { message: "" };
           return sb.rpc("notify_booking_change", {
