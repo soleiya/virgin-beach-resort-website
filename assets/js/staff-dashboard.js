@@ -1176,7 +1176,8 @@
     if (!r) return { ok: false };
     var email = $("addEmail").value.trim(), type = $("addType").value, status = $("addStatus").value;
     var hasTotal = P.hasRateSheet(type) || $("addTotal").value !== "";
-    return { ok: r.source !== "website" && r.email_guest !== true && EMAIL_RE.test(email) && type !== "corporate" &&
+    if (type === "corporate") hasTotal = Number($("addTotal").value) > 0;
+    return { ok: r.source !== "website" && r.email_guest !== true && EMAIL_RE.test(email) &&
       QUOTE_STATUSES.indexOf(status) !== -1 && hasTotal, email: email };
   }
 
@@ -1190,7 +1191,7 @@
       var type = $("addType").value, status = $("addStatus").value;
       var hasTotal = P.hasRateSheet(type) || $("addTotal").value !== "";
       var why = !EMAIL_RE.test(email) ? "Add the guest's email address to send them the quotation"
-        : type === "corporate" ? "Corporate outings get a tailored quote from the events team — not sent automatically"
+        : type === "corporate" && !(Number($("addTotal").value) > 0) ? "Enter the agreed Total to send this corporate quotation"
         : QUOTE_STATUSES.indexOf(status) === -1 ? "Only Pending bookings can be sent as a quotation"
         : RATE_SHEET_TYPES.indexOf(type) === -1 && !hasTotal ? "Enter the Total for this booking type to send a quotation"
         : "";

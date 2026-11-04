@@ -357,13 +357,13 @@
       payload.senior_discount = P.r2(b.seniorDiscount);
     }
     // Guest email given → the guest gets the quotation (with the Pay now
-    // button), the same as a website booking. Corporate quotes come from the
-    // events team instead.
+    // button), the same as a website booking — for corporate outings too, once
+    // the agreed total is entered.
     var email = ($("dnEmail") && $("dnEmail").value.trim()) || "";
     if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) { err.textContent = "Check the guest's email address."; $("dnEmail").focus(); return; }
     if (email) {
       payload.guest_email = email;
-      payload.email_guest = type !== "corporate" && payload.total_amount != null && Number(payload.total_amount) > 0;
+      payload.email_guest = payload.total_amount != null && Number(payload.total_amount) > 0;
     }
     if (!payload.staff_notes) delete payload.staff_notes;
     btn.disabled = true; err.textContent = "";

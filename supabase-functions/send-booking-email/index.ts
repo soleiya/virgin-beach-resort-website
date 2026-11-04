@@ -390,7 +390,21 @@ const uploadUrl = (r: Any, c: ReturnType<typeof cfg>) =>
 // asked to pay never depends on numbers the browser sent.
 export function buildQuote(record: Any, cabanas: Any[]): Quote | null {
   const type = record.stay_type;
-  if (type === "corporate") return null;
+  if (type === "corporate") {
+    // A corporate outing has a tailored price: no quote until staff enter the
+    // total; then one line with that amount (it can be paid online like any booking).
+    const t = Number(record.total_amount);
+    if (!(t > 0)) return null;
+    const guests = int(record.adults) + int(record.children_6_12) + int(record.children_0_5);
+    const cab = cabanaCountText(record, cabanas);
+    const desc = `Corporate outing package${guests ? ` — ${plural(guests, "guest")}` : ""}${cab ? `, ${cab}` : ""}`;
+    return {
+      heading: "CORPORATE OUTING — as agreed with our events team",
+      lines: [{ desc, rate: r2(t), qty: 1, amount: r2(t), vatExempt: false }],
+      subtotal: r2(t), total: r2(t), vatExemptSales: 0, vatableSales: 0, vat: 0, serviceCharge: 0,
+      websiteTotal: t, mismatch: false,
+    } as Quote;
+  }
 
   const adults = int(record.adults);
   const kids612 = int(record.children_6_12);
@@ -796,7 +810,7 @@ export function staffNewEmail(r: Any, cabanas: Any[], q: Quote | null, c: Return
   const party = int(r.adults) + int(r.children_6_12) + int(r.children_0_5);
   if (cabanas.length && cap < party) flag(`Party of ${party} but cabana capacity is ${cap}.`);
   if (!cabanaCountText(r, cabanas) && r.stay_type !== "corporate") flag("No cabanas on this booking — add the Dining / Lounge count in the dashboard.");
-  if (r.stay_type === "corporate") flag("Corporate request — no automatic quote was sent. Prepare a tailored quotation.");
+  if (r.stay_type === "corporate" && !(Number(r.total_amount) > 0)) flag("Corporate request — no automatic quote was sent. Prepare a tailored quotation.");
 
   const tel = String(r.guest_phone || "").replace(/[^\d+]/g, "");
   const dash = `${c.site}/staff/index.html?q=${encodeURIComponent(r.order_code || "")}`;
