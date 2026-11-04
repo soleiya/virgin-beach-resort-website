@@ -1162,9 +1162,10 @@
   }
 
   function uploadList() {
-    var items = ["their payment"];
+    var items = [];
     if (intVal("addSeniors") > 0) items.push("Senior Citizen/PWD ID(s)");
     if (intVal("addPets") > 0) items.push("pet vaccination card(s)");
+    if (!items.length) return "any documents";
     return items.length === 1 ? items[0] : items.slice(0, -1).join(", ") + " and " + items[items.length - 1];
   }
 
@@ -1190,7 +1191,7 @@
       notifyHint.hidden = !!why;
       if (dtMail) setTimeout(function () { dtMail.refresh(); }, 0);
       notifyHint.textContent = "Same email as a website booking: the amount due shown above" +
-        ", bank details, pay-by time, and a link for the guest to upload " + uploadList() +
+        ", the pay-by time, a Pay now button (GCash, cards, Maya…), and a link for the guest to upload " + uploadList() +
         ". Unpaid bookings expire automatically after 24 hours.";
       return;
     }

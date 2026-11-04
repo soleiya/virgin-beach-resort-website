@@ -34,7 +34,7 @@ html = """<!doctype html>
 <link rel="stylesheet" href="../assets/css/staff-cloudbeds.css?v=__V_CBCSS__">
 <style>
   body { background: var(--sand); min-height: 100vh; }
-  .dash-wrap { max-width: 1280px; margin: 0 auto; padding: 28px 20px 80px; }
+  .dash-wrap { max-width: 1920px; margin: 0 auto; padding: 28px 24px 80px; }
 
   .dash-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 24px; flex-wrap: wrap; }
   .dash-brand { display: flex; align-items: center; gap: 12px; }

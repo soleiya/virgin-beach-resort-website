@@ -284,7 +284,7 @@
     var num = function (id, title) { return '<td class="num"><input class="n" type="number" min="0" step="1" inputmode="numeric" id="' + id + '" title="' + title + '" placeholder="0"></td>'; };
     return '<tr class="dcal-new" data-date="' + x.ds + '">' +
       '<td><span class="muted">' + esc(me || "You") + "</span></td>" +
-      '<td><input id="dnName" type="text" placeholder="Guest name" autocomplete="off"><input id="dnPhone" type="tel" placeholder="Contact no." autocomplete="off">' +
+      '<td><input id="dnName" type="text" placeholder="Guest name" autocomplete="off"><input id="dnPhone" type="tel" placeholder="Contact no." autocomplete="off"><input id="dnEmail" type="email" placeholder="Email — sends the quotation" autocomplete="off">' +
       '<select id="dnVia" title="Came in via"><option value="messenger">via Messenger</option><option value="phone">via Phone</option><option value="email">via Email</option>' +
       '<option value="walk_in">Walk-in</option><option value="other">Other</option></select></td>' +
       num("dnAdults", "Adults (not counting PWD / Seniors)") + num("dnKids", "Kids 6–12") + num("dnK05", "Kids 0–5") + num("dnSr", "PWD / Seniors") + num("dnPets", "Pets") +
@@ -355,6 +355,15 @@
       payload.subtotal_people = P.r2(b.subtotalPeople);
       payload.cabana_total = P.r2(b.isPackage ? b.extraCabanaCost : b.cabanaTotal);
       payload.senior_discount = P.r2(b.seniorDiscount);
+    }
+    // Guest email given → the guest gets the quotation (with the Pay now
+    // button), the same as a website booking. Corporate quotes come from the
+    // events team instead.
+    var email = ($("dnEmail") && $("dnEmail").value.trim()) || "";
+    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) { err.textContent = "Check the guest's email address."; $("dnEmail").focus(); return; }
+    if (email) {
+      payload.guest_email = email;
+      payload.email_guest = type !== "corporate" && payload.total_amount != null && Number(payload.total_amount) > 0;
     }
     if (!payload.staff_notes) delete payload.staff_notes;
     btn.disabled = true; err.textContent = "";

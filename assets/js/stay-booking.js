@@ -593,7 +593,7 @@
       '<p class="pay-now-error" hidden></p>' +
       "<p>Your quotation is on its way to <strong>" + esc(payload.guest_email) + "</strong> with the same payment button. " +
       "Can't find it? Check Spam or Promotions, or call us at +63 917 792 0712.</p>" +
-      '<p class="muted" style="font-size:0.9rem;">Need to upload a Senior / PWD ID or pet vaccination card? <a class="text-link" href="' + payUrl + '">Use the Upload page</a>.</p>';
+      '<p class="muted" style="font-size:0.9rem;">Need to upload a Senior / PWD ID or pet vaccination card? <a class="text-link" href="' + payUrl + '">Use the Pay &amp; Upload Documents page</a>.</p>';
     Array.prototype.forEach.call(st.querySelectorAll("[data-pay]"), function (b) {
       b.addEventListener("click", function () {
         var err = st.querySelector(".pay-now-error");
