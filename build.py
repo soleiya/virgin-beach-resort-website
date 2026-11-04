@@ -317,7 +317,7 @@ def booking_scripts():
     """Script tags the booking form (and its live cabana availability) need
     — include once, at the bottom of any page that embeds booking_form_section()."""
     return f"""
-<script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+<script src="../assets/js/vendor/supabase-js-2.117.3.js"></script>
 <script src="../assets/js/booking-config.js?v={asset_v('assets/js/booking-config.js')}"></script>
 <script src="../assets/js/booking-window.js?v={asset_v('assets/js/booking-window.js')}"></script>
 <script src="../assets/js/pricing.js?v={asset_v('assets/js/pricing.js')}"></script>

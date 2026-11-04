@@ -198,7 +198,7 @@ body = f"""
   </div>
 </section>
 
-<script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+<script src="../assets/js/vendor/supabase-js-2.117.3.js"></script>
 <script src="../assets/js/booking-config.js?v={asset_v('assets/js/booking-config.js')}"></script>
 <script src="../assets/js/booking-window.js?v={asset_v('assets/js/booking-window.js')}"></script>
 <script src="../assets/js/xendit-pay.js?v={asset_v('assets/js/xendit-pay.js')}"></script>

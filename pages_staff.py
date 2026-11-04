@@ -1352,7 +1352,7 @@ html = """<!doctype html>
   </div>
 </div>
 
-<script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+<script src="../assets/js/vendor/supabase-js-2.117.3.js"></script>
 <script src="../assets/js/booking-config.js?v=__V_CFG__"></script>
 <script src="../assets/js/cabana-map.js?v=__V_MAP__"></script>
 <script src="../assets/js/pricing.js?v=__V_PRICE__"></script>

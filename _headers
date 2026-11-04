@@ -1,0 +1,19 @@
+# Cloudflare Pages response headers (security). See export_public.py.
+/*
+  Strict-Transport-Security: max-age=31536000; includeSubDomains
+  X-Content-Type-Options: nosniff
+  X-Frame-Options: DENY
+  Referrer-Policy: strict-origin-when-cross-origin
+  Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=(), usb=(), interest-cohort=()
+  Cross-Origin-Opener-Policy: same-origin
+  Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob: https://dokscqjvqtyhecmbshqd.supabase.co https://soleiya.github.io https://virginbeachresort.com; connect-src 'self' https://dokscqjvqtyhecmbshqd.supabase.co wss://dokscqjvqtyhecmbshqd.supabase.co; frame-src https://maps.google.com https://www.google.com; object-src 'none'; base-uri 'self'; form-action 'self' mailto:; frame-ancestors 'none'; upgrade-insecure-requests
+
+/staff/*
+  X-Robots-Tag: noindex, nofollow
+  Cache-Control: no-store
+
+/pay/*
+  X-Robots-Tag: noindex
+
+/assets/*
+  Cache-Control: public, max-age=86400

@@ -1,0 +1,5 @@
+User-agent: *
+Disallow: /staff/
+Disallow: /pay/
+
+Sitemap: https://virginbeachresort.com/sitemap.xml
