@@ -121,19 +121,77 @@ function same(a: string, b: string) {
 
 // ---------- 1. create -------------------------------------------------------------
 
+// ---------- v34: no double payments ---------------------------------------------
+const xauth = (key: string) => ({ Authorization: "Basic " + btoa(key + ":"), "Content-Type": "application/json" });
+
+// Record what Xendit says about one of our invoices (same as its webhook would).
+async function recordFromXendit(inv: Any) {
+  return await rpc("xendit_invoice_event", {
+    p_external_id: inv.external_id || null, p_invoice_id: inv.id || null, p_status: String(inv.status || ""),
+    p_paid_amount: inv.paid_amount ?? inv.amount ?? null, p_method: inv.payment_method || null,
+    p_channel: inv.payment_channel || inv.bank_code || inv.ewallet_type || null, p_paid_at: inv.paid_at || null,
+  });
+}
+
+// Before a new checkout page: ask Xendit about the booking's other open pages.
+// Paid already (its webhook can arrive late) → record it and stop. Still open
+// with another amount → close it in Xendit so it can't be paid as well.
+// Returns an error message when the guest shouldn't pay again.
+async function settleOpenInvoices(key: string, orderCode: string, email: string, keepAmount: number | null, closeOthers: boolean): Promise<string | null> {
+  const open: Any[] = (await rpc("xendit_open_invoices", { p_order_code: orderCode, p_guest_email: email }).catch(() => [])) || [];
+  for (const o of open) {
+    let inv: Any = null;
+    try {
+      const res = await fetch(`https://api.xendit.co/v2/invoices/${encodeURIComponent(o.invoice_id)}`, { headers: xauth(key) });
+      inv = res.ok ? await res.json() : null;
+    } catch { inv = null; }
+    if (!inv) continue;
+    const st = String(inv.status || "").toUpperCase();
+    if (st === "PAID" || st === "SETTLED") {
+      await recordFromXendit(inv);
+      return "Your earlier payment just went through — thank you! Please refresh this page to see what's left to pay (nothing was charged twice).";
+    }
+    if (st === "EXPIRED") { await recordFromXendit(inv); continue; }
+    if (!closeOthers) continue;
+    if (keepAmount !== null && Math.abs(Number(o.amount) - keepAmount) < 0.01) continue; // the one we'd reuse
+    // close it so only the new page can be paid
+    const ex = await fetch(`https://api.xendit.co/invoices/${encodeURIComponent(o.invoice_id)}/expire!`, { method: "POST", headers: xauth(key) }).catch(() => null);
+    const out: Any = ex ? await ex.json().catch(() => null) : null;
+    if (out && String(out.status || "").toUpperCase() === "EXPIRED") { await recordFromXendit(out); continue; }
+    // couldn't close it: maybe it was paid this very moment — check once more
+    const again = await fetch(`https://api.xendit.co/v2/invoices/${encodeURIComponent(o.invoice_id)}`, { headers: xauth(key) }).then((r) => r.ok ? r.json() : null).catch(() => null);
+    if (again && ["PAID", "SETTLED"].includes(String(again.status || "").toUpperCase())) {
+      await recordFromXendit(again);
+      return "Your earlier payment just went through — thank you! Please refresh this page to see what's left to pay (nothing was charged twice).";
+    }
+    return "We couldn't open a new payment page just now — please try again in a minute, or use the payment page you opened earlier.";
+  }
+  return null;
+}
+
 async function create(body: Any) {
   const key = env("XENDIT_SECRET_KEY");
   if (!key) return json({ error: "Online payment isn't switched on yet — please contact us." }, 503);
   const kind = ["deposit", "full", "balance"].includes(body.kind) ? body.kind : "full";
-  const start = await rpc("xendit_invoice_start", { p_order_code: String(body.order_code || ""), p_guest_email: String(body.email || ""), p_kind: kind });
+  const orderCode = String(body.order_code || ""), email = String(body.email || "");
+  // 1) earlier checkout pages: paid? → record and stop
+  const early = await settleOpenInvoices(key, orderCode, email, null, false).catch((e) => { console.error(e); return null; });
+  if (early) return json({ error: early, paid_earlier: true }, 409);
+  const start = await rpc("xendit_invoice_start", { p_order_code: orderCode, p_guest_email: email, p_kind: kind });
   if (!start || start.error) return json({ error: start?.error || "Couldn't start the payment." }, 400);
   if (start.reuse) return json({ url: start.invoice_url, amount: start.amount, kind: start.kind, order_code: start.order_code, reused: true });
+  // 2) a new page with a new amount: close the other open pages first
+  const block = await settleOpenInvoices(key, orderCode, email, Number(start.amount), true).catch((e) => { console.error(e); return null; });
+  if (block) {
+    await rpc("xendit_invoice_created", { p_xid: start.xid, p_invoice_id: null, p_url: null, p_expires: null, p_live: key.startsWith("xnd_production"), p_error: "not opened: " + block.slice(0, 120) }).catch(() => null);
+    return json({ error: block, paid_earlier: !block.startsWith("We couldn't") }, 409);
+  }
 
   const live = key.startsWith("xnd_production");
   try {
     const res = await fetch("https://api.xendit.co/v2/invoices", {
       method: "POST",
-      headers: { Authorization: "Basic " + btoa(key + ":"), "Content-Type": "application/json" },
+      headers: xauth(key),
       body: JSON.stringify(invoiceBody(start, SITE())),
     });
     const out: Any = await res.json().catch(() => ({}));

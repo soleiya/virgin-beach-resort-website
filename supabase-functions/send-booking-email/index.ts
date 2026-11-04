@@ -294,7 +294,7 @@ export function payTerms(r: Any, total: number | null | undefined, now = new Dat
   const ci = r?.check_in ? String(r.check_in).slice(0, 10) : null;
   const due = ci ? addDaysStr(ci, -BALANCE_DAYS) : null;
   const t = Number(total) || 0;
-  return { half: !!(due && due > manilaToday(now)), total: t, deposit: r2(t / 2), balanceDue: due, balanceDueLabel: due ? fmtDate(due) : "" };
+  return { half: !!(due && due > manilaToday(now)), total: t, deposit: Math.ceil(t / 2), balanceDue: due, balanceDueLabel: due ? fmtDate(due) : "" };
 }
 export type PaySummary = {
   total: number | null; paid: number; claimed: number; pending: number; balance: number; deposit: number;
@@ -753,7 +753,7 @@ ${signature(c)}`;
 
   return {
     subject: guestSubject(r, c),
-    html: shell({ preheader: `${r.order_code} · ${payTerms(r, q.total).half ? `50% (${peso(r2(q.total / 2))}) secures it` : `${peso(q.total)} due`} · Bank details inside`, body: applyIntro(body, customOf(r, "quote"), r), c }),
+    html: shell({ preheader: `${r.order_code} · ${payTerms(r, q.total).half ? `50% (${peso(Math.ceil(q.total / 2))}) secures it` : `${peso(q.total)} due`} · ${paysOnline(r) ? "Pay online" : "Bank details inside"}`, body: applyIntro(body, customOf(r, "quote"), r), c }),
   };
 }
 
@@ -1189,7 +1189,7 @@ ${p("<strong>Need to change your dates or guest list?</strong> Just reply to thi
 ${signature(c)}`;
   return {
     subject: guestSubject(r, c),
-    html: shell({ preheader: `${r.order_code} · ${q ? (payTerms(r, q.total).half ? `50% (${peso(r2(q.total / 2))}) secures it · ` : peso(q.total) + " due · ") : ""}${stayRange(r)} · Pay online`, body: applyIntro(body, customOf(r, "quote"), r), c }),
+    html: shell({ preheader: `${r.order_code} · ${q ? (payTerms(r, q.total).half ? `50% (${peso(Math.ceil(q.total / 2))}) secures it · ` : peso(q.total) + " due · ") : ""}${stayRange(r)} · Pay online`, body: applyIntro(body, customOf(r, "quote"), r), c }),
   };
 }
 
@@ -1345,6 +1345,52 @@ ${signature(c)}`;
   return {
     subject: "Re: " + guestSubject(r, c),
     html: shell({ preheader: `Fully paid · ${r.order_code} · see you soon`, body, c }),
+  };
+}
+
+// v34: receipt for one online (Xendit) payment — villa stays, whose
+// confirmation itself comes from Cloudbeds.
+const CHANNEL_NAMES: Record<string, string> = { GCASH: "GCash", PAYMAYA: "Maya", GRABPAY: "GrabPay", SHOPEEPAY: "ShopeePay", QRPH: "QR Ph" };
+export function channelName(ch: unknown) {
+  const k = String(ch || "").toUpperCase();
+  if (!k) return "";
+  if (CHANNEL_NAMES[k]) return CHANNEL_NAMES[k];
+  if (/^DD_/.test(k)) return k.replace(/^DD_/, "").replace(/_.*/, "") + " online banking";
+  return k.charAt(0) + k.slice(1).toLowerCase().replace(/_/g, " ");
+}
+export function guestPaymentReceivedEmail(r: Any, pay: Any, ps: PaySummary, c: ReturnType<typeof cfg>) {
+  const first = esc(String(r.guest_name || "there").trim().split(/\s+/)[0]);
+  const ch = channelName(pay?.channel);
+  const body = `${p(`Hi ${first},`)}
+${p(`Thank you &mdash; we've received your <strong>${esc(KIND_WORDS[pay?.kind] || "payment")} of ${esc(peso(Number(pay?.amount) || 0))}</strong>${ch ? ` via ${esc(ch)}` : ""} for <strong>${esc(r.order_code)}</strong>.${ps.fully_paid ? " Your reservation is now <strong>fully paid</strong>." : " Your reservation is <strong>confirmed</strong>."}`)}
+${statusBox([
+    ["Booking ID", esc(r.order_code || "—")],
+    [isOvernight(r) ? "Stay" : "Date", esc(isOvernight(r) ? stayRange(r) : fmtDate(r.check_in, "short"))],
+    ["Paid so far", `<strong>${esc(peso(ps.paid))}</strong>`],
+    ...(ps.fully_paid ? [] : [["Balance", esc(peso(ps.balance))] as [string, string], ...(ps.balance_due ? [["Balance due by", esc(fmtDate(ps.balance_due, "short"))] as [string, string]] : [])]),
+  ], "ok")}
+${!ps.fully_paid && ps.balance > 0.5 ? p(`You can pay the remaining balance online any time before ${ps.balance_due ? esc(fmtDate(ps.balance_due)) : "your arrival"}:`) + `<p style="margin:0 0 16px;">${button(uploadUrl(r, c), "Pay balance now")}</p>` : ""}
+${p(`Please keep this email as your payment acknowledgement. Your official receipt is issued by the resort${isOvernight(r) ? " at check-in" : ""}.`, `font-size:13.5px;color:${C.soft};`)}
+${signature(c)}`;
+  return {
+    subject: "Re: " + guestSubject(r, c),
+    html: shell({ preheader: `Payment received · ${peso(Number(pay?.amount) || 0)} · ${r.order_code}`, body, c }),
+  };
+}
+
+// v34: the booking was paid more than its total — staff refund it in Xendit.
+export function staffOverpaidEmail(r: Any, ps: PaySummary | null, excess: number, payments: Any[], c: ReturnType<typeof cfg>) {
+  const dash = `${c.site}/staff/index.html?q=${encodeURIComponent(r.order_code || "")}`;
+  const rows = payments.map((x: Any) => [`${esc(KIND_WORDS[x.kind] || "payment")} · ${esc(fmtDateTime(new Date(x.verified_at || x.created_at)))}`,
+    `${esc(peso(Number(x.amount) || 0))} — ${esc(String(x.note || x.method || ""))}`] as [string, string]);
+  const body = `${p(`<strong>${esc(r.order_code)}</strong> (${esc(r.guest_name || "")}) has been paid <strong>${esc(peso(excess))} more</strong> than its total of ${esc(peso(Number(r.total_amount) || 0))} through online payments.`)}
+${p("This usually means the guest paid two payment pages. Please <strong>refund the extra amount in the Xendit dashboard</strong> (Transactions → the payment → Refund) and let the guest know.")}
+${h2("Online payments on this booking")}${kv(rows)}
+${ps ? p(`Paid in total: <strong>${esc(peso(ps.paid))}</strong>.`) : ""}
+${button(dash, "Open in staff dashboard")}`;
+  return {
+    subject: `Refund needed — ${r.order_code} was paid ${peso(excess)} too much`,
+    html: shell({ preheader: `Duplicate online payment on ${r.order_code}`, body, c, internal: true }),
   };
 }
 
@@ -1722,6 +1768,37 @@ async function onPaidInFull(r: Any) {
   return await send({ booking: r, kind: "paid_in_full", to: String(r.guest_email).trim(), subject: g.subject, html: g.html, thread: "guest" });
 }
 
+async function onPaymentReceived(r: Any, payload: Any) {
+  const c = cfg();
+  // Day trips get the website's confirmation / paid-in-full emails; villa stays
+  // (confirmed through Cloudbeds) get this receipt for each online payment.
+  if (!inCloudbeds(r)) return { skipped: "not a villa in Cloudbeds — confirmation emails cover it" };
+  if (r.cb_owned === true) return { skipped: "made in Cloudbeds" };
+  if (!r.guest_email || !EMAIL_RE.test(String(r.guest_email).trim())) return { skipped: "no valid guest email" };
+  const pid = String(payload.payment_id || "");
+  if (!/^[0-9a-f-]{36}$/i.test(pid)) return { skipped: "no payment id" };
+  const res = await db(`booking_payments?id=eq.${pid}&booking_id=eq.${encodeURIComponent(r.id)}&select=kind,amount,note,method`);
+  const pay = res.ok ? (await res.json())[0] : null;
+  if (!pay) return { skipped: "payment not found" };
+  const inv = await db(`xendit_invoices?payment_id=eq.${pid}&select=payment_channel`);
+  const chan = inv.ok ? (await inv.json())[0]?.payment_channel : null;
+  const ps = await paySummary(r.id);
+  if (!ps) return { skipped: "no payment summary" };
+  const g = guestPaymentReceivedEmail(r, { ...pay, channel: chan }, ps, c);
+  return await send({ booking: r, kind: `payment_received:${pid}`, to: String(r.guest_email).trim(), subject: g.subject, html: g.html, thread: "guest" });
+}
+
+async function onOverpaid(r: Any, payload: Any) {
+  const c = cfg();
+  const pid = String(payload.payment_id || "");
+  const res = await db(`booking_payments?booking_id=eq.${encodeURIComponent(r.id)}&method=eq.xendit&status=eq.verified&select=kind,amount,note,method,verified_at,created_at&order=created_at`);
+  const payments = res.ok ? await res.json() : [];
+  const ps = await paySummary(r.id);
+  const excess = Number(payload.excess) || (ps ? Math.max(0, ps.paid - (Number(r.total_amount) || 0)) : 0);
+  const s = staffOverpaidEmail(r, ps, excess, payments, c);
+  return await send({ booking: r, kind: `overpaid:${pid || Date.now()}`, to: c.staffEmails, subject: s.subject, html: s.html, thread: "staff" });
+}
+
 // Shared gate for the guest-only notices below: auto-email source (or staff
 // ticked "send to guest"), not a Cloudbeds-made booking, valid guest email.
 function guestGate(r: Any, c: ReturnType<typeof cfg>): { skipped: string } | null {
@@ -1909,6 +1986,8 @@ export async function handle(req: Request): Promise<Response> {
     if (payload.type === "BALANCE_DUE") out.balance = await onBalance(r, false);
     if (payload.type === "BALANCE_OVERDUE") out.balance = await onBalance(r, true);
     if (payload.type === "PAID_IN_FULL") out.paid = await onPaidInFull(r);
+    if (payload.type === "PAYMENT_RECEIVED") out.receipt = await onPaymentReceived(r, payload);
+    if (payload.type === "OVERPAID") out.overpaid = await onOverpaid(r, payload);
     if (payload.type === "PROOF_REJECTED") out.rejected = await onProofRejected(r, payload);
     if (payload.type === "UPDATE") {
       // Staff ticked "Send this booking to the guest" — the dashboard flips

@@ -440,7 +440,7 @@
           "Can't find the email? Check your Spam or Promotions folder, or call us at +63 917 792 0712.</p>";
     var payRow = canPay
       ? '<div class="pay-now-row">' +
-        (half ? '<button type="button" class="btn btn-primary" data-pay="deposit">Pay 50% now · ' + peso(Math.round(payload.total_amount * 50) / 100) + "</button>" : "") +
+        (half ? '<button type="button" class="btn btn-primary" data-pay="deposit">Pay 50% now · ' + peso(Math.ceil(payload.total_amount / 2)) + "</button>" : "") +
         '<button type="button" class="btn ' + (half ? "btn-ghost" : "btn-primary") + '" data-pay="full">Pay in full · ' + peso(payload.total_amount) + "</button>" +
         '</div><p class="pay-now-error" hidden></p>' +
         "<p>Your quotation is on its way to <strong>" + payload.guest_email + "</strong> with the same payment button. " +

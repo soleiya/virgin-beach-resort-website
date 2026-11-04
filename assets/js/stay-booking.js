@@ -587,7 +587,7 @@
       (row && row.push_failed
         ? '<p class="pay-now-error">We couldn\'t lock in your casita in our reservations system just now, so please don\'t pay yet &mdash; our team will check availability and get back to you by email, or call us at +63 917 792 0712.</p><div class="pay-now-row" style="display:none">'
         : '<div class="pay-now-row">') +
-      (half ? '<button type="button" class="btn btn-primary" data-pay="deposit">Pay 50% now · ' + peso(Math.round(total * 50) / 100) + "</button>" : "") +
+      (half ? '<button type="button" class="btn btn-primary" data-pay="deposit">Pay 50% now · ' + peso(Math.ceil(total / 2)) + "</button>" : "") +
       '<button type="button" class="btn ' + (half ? "btn-ghost" : "btn-primary") + '" data-pay="full">Pay in full' + (total != null ? " · " + peso(total) : "") + "</button>" +
       "</div>" +
       '<p class="pay-now-error" hidden></p>' +
