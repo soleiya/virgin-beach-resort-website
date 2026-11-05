@@ -305,7 +305,7 @@ def booking_form_section(default_type="day_trip"):
       Send me occasional promos and updates from Virgin Beach Resort.
     </label>
 
-    <button class="btn btn-primary" type="submit" id="submitBtn">Send Request</button>
+    <button class="btn btn-primary" type="submit" id="submitBtn">Book Now</button>
     <p class="field-hint">Pay online right after you send &mdash; card, GCash, Maya and more, through Xendit. Pay 50% or 100% within 24 hours to secure your booking (the balance is due 15 days before your visit); it's confirmed as soon as the payment goes through.</p>
   </form>
 </div>

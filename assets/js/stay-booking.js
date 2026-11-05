@@ -533,7 +533,7 @@
       return finalRef(row).then(function (r) { showSuccess(payload, r, picked); });
     }).catch(function (err) {
       submitBtn.disabled = false;
-      submitBtn.textContent = "Request Booking";
+      submitBtn.textContent = "Book Now";
       var msg = err && err.message ? err.message : "";
       if (/just booked|already booked/i.test(msg)) {
         loadAvailability();

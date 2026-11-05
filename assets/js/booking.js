@@ -347,6 +347,11 @@
   if (qType === "half_day" && halfDayOpt && halfDayOpt.parentNode) stayTypeEl.value = "half_day";
 
   stayTypeEl.addEventListener("change", refreshCabanaStep);
+  // Day trips are booked (and paid) right away; corporate outings are quoted by our events team.
+  function submitLabel() { return stayTypeEl.value === "corporate" ? "Send Request" : "Book Now"; }
+  function setSubmitLabel() { if (!submitBtn.disabled) submitBtn.textContent = submitLabel(); }
+  stayTypeEl.addEventListener("change", setSubmitLabel);
+  setSubmitLabel();
   checkInEl.addEventListener("change", function () {
     refreshHalfDay();
     refreshCabanaStep();
@@ -466,7 +471,7 @@
       '<a class="text-link" href="' + mailtoLink(payload, bill) + '">' + fallbackEmail + "</a>, " +
       "or try again.";
     submitBtn.disabled = false;
-    submitBtn.textContent = "Send Request";
+    submitBtn.textContent = submitLabel();
   }
 
   function uploadSeniorIds(files) {
@@ -563,7 +568,7 @@
           statusEl.className = "form-status form-status-error";
           statusEl.textContent = m.replace(/^Cabana not available.*$/i, "Sorry — those cabanas are no longer available on that date. Please check the numbers above and send again.");
           submitBtn.disabled = false;
-          submitBtn.textContent = "Send Request";
+          submitBtn.textContent = submitLabel();
           refreshCabanaStep();
           return;
         }
@@ -572,7 +577,7 @@
           statusEl.className = "form-status form-status-error";
           statusEl.textContent = m;
           submitBtn.disabled = false;
-          submitBtn.textContent = "Send Request";
+          submitBtn.textContent = submitLabel();
           if (/code/i.test(m)) { codeResult = null; showCodeMsg(false, m); renderBill(true); }
           return;
         }
