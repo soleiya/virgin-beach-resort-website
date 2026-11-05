@@ -167,7 +167,7 @@ def booking_form_section(default_type="day_trip"):
 <div id="bookingFormWrap">
   <form class="inquiry" id="bookingForm">
     <div>
-      <label for="checkIn" id="checkInLabel">Preferred Date</label>
+      <label for="checkIn" id="checkInLabel">Date of your visit</label>
       <input id="checkIn" type="date" required data-booking-date="visit">
     </div>
 
@@ -301,12 +301,17 @@ def booking_form_section(default_type="day_trip"):
     <div><label for="notes">Anything else we should know?</label><textarea id="notes" placeholder="Special requests, occasion, group size details, etc."></textarea></div>
 
     <label class="field-hint" style="display:flex; align-items:flex-start; gap:8px; font-size:0.85rem;">
-      <input type="checkbox" id="marketingOptIn" style="margin-top:3px;" checked>
+      <input type="checkbox" id="marketingOptIn" style="margin-top:3px;">
       Send me occasional promos and updates from Virgin Beach Resort.
     </label>
 
+    <label class="field-hint" style="display:flex; align-items:flex-start; gap:8px; font-size:0.85rem;">
+      <input type="checkbox" id="agreeTerms" style="margin-top:3px;">
+      <span>I agree to the <a class="text-link" href="../assets/docs/VBR-Reservations-Agreement.pdf" target="_blank" rel="noopener">Reservations Agreement</a> and resort rules (cancellation: free 15+ days before your visit; 50% within 14 days; 100% within 7 days or no-show).</span>
+    </label>
+    <p class="field-hint" id="agreeError" style="color:var(--rose,#9c4a3f);" hidden>Please tick the box to agree to the Reservations Agreement.</p>
     <button class="btn btn-primary" type="submit" id="submitBtn">Book Now</button>
-    <p class="field-hint">Pay online right after you send &mdash; card, GCash, Maya and more, through Xendit. Pay 50% or 100% within 24 hours to secure your booking (the balance is due 15 days before your visit); it's confirmed as soon as the payment goes through.</p>
+    <p class="field-hint">Pay online right after you book &mdash; card, GCash, Maya and more, through Xendit. Pay 50% or 100% within 24 hours to secure your booking (the balance is due 15 days before your visit); it's confirmed as soon as the payment goes through.</p>
   </form>
 </div>
 <div id="bookingStatus" class="form-status" hidden></div>

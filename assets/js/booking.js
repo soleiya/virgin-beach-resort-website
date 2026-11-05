@@ -283,8 +283,8 @@
     billSummaryEl.innerHTML =
       '<div class="bill-lines">' + (lines.join("") || '<div class="bill-row"><span>Add your party size and cabana(s) above</span><span>—</span></div>') + "</div>" +
       warning +
-      '<div class="bill-total"><span>Estimated Total</span><span>' + peso(bill.total - codeDisc) + "</span></div>" +
-      '<p class="field-hint">This is an estimate for your reference — our team confirms the final amount when arranging payment.</p>';
+      '<div class="bill-total"><span>Total</span><span>' + peso(bill.total - codeDisc) + "</span></div>" +
+      '<p class="field-hint">You\'ll pay online on the next step — 50% or the full amount.</p>';
   }
 
   [adultsEl, kids612El, kids05El, seniorCountEl, petCountEl].forEach(function (el) {
@@ -342,7 +342,7 @@
   if (qAdults >= 1 && qAdults <= 200) adultsEl.value = qAdults;
   if (qKids >= 0 && qKids <= 200) kids612El.value = qKids;
   if (qAdults || qKids) { try { renderBill(); } catch (e) {} }
-  checkInLabel.textContent = "Preferred Date";
+  checkInLabel.textContent = "Date of your visit";
   refreshHalfDay();
   if (qType === "half_day" && halfDayOpt && halfDayOpt.parentNode) stayTypeEl.value = "half_day";
 
@@ -396,7 +396,7 @@
       "New booking request from the website (booking isn't connected to the database yet):",
       "",
       "Type: " + (payload.stay_type_label || payload.stay_type),
-      "Preferred Date: " + (payload.check_in || "—"),
+      "Date of visit: " + (payload.check_in || "—"),
       "Cabanas: " + ((payload.dining_cabanas || 0) + " dining, " + (payload.lounge_cabanas || 0) + " lounge"),
       "Adults: " + payload.adults + (payload.senior_count ? " (incl. " + payload.senior_count + " senior citizen" + (payload.senior_count === 1 ? "" : "s") + ")" : ""),
       "Children (6–12): " + payload.children_6_12,
@@ -438,7 +438,7 @@
       ? " — our reservations team will follow up with your quotation and payment details at " +
         payload.guest_email + " or " + payload.guest_phone + ".</p>"
       : canPay
-        ? " — your cabana is on hold for <strong>24 hours</strong>. <strong>Pay online now to confirm it</strong> — by card, GCash, Maya and more, through our secure payment partner Xendit" +
+        ? " — your cabana is held for you for <strong>24 hours</strong>. <strong>Pay online now to confirm it</strong> — by card, GCash, Maya and more, through our secure payment partner Xendit" +
           (half ? "; 50% secures it and the balance is due 15 days before your visit" : "") + ".</p>"
         : " — we've just emailed your request details to <strong>" + payload.guest_email +
           "</strong>. Our team will get back to you with your quotation and a payment link. " +
@@ -451,7 +451,8 @@
         "<p>Your quotation is on its way to <strong>" + payload.guest_email + "</strong> with the same payment button. " +
         "Can't find it? Check Spam or Promotions, or call us at +63 917 792 0712.</p>"
       : "";
-    statusEl.innerHTML = "<h3>Request received.</h3><p>Thank you, " + firstName + body + orderLine + payRow + extra;
+    var heading = canPay ? "Almost done — pay to confirm your booking." : "Request received.";
+    statusEl.innerHTML = "<h3>" + heading + "</h3><p>Thank you, " + firstName + body + orderLine + payRow + extra;
     Array.prototype.forEach.call(statusEl.querySelectorAll("[data-pay]"), function (b) {
       b.addEventListener("click", function () {
         var err = statusEl.querySelector(".pay-now-error");
@@ -467,9 +468,9 @@
     statusEl.hidden = false;
     statusEl.className = "form-status form-status-error";
     statusEl.innerHTML =
-      "Something went wrong sending your request. Please email us directly at " +
+      "Something went wrong making your booking — nothing was charged. Please try again, or email us at " +
       '<a class="text-link" href="' + mailtoLink(payload, bill) + '">' + fallbackEmail + "</a>, " +
-      "or try again.";
+      "or call +63 917 792 0712.";
     submitBtn.disabled = false;
     submitBtn.textContent = submitLabel();
   }
@@ -526,6 +527,14 @@
       }
     }
     if (petError) petError.hidden = true;
+    // Bookings are made (and paid) right away, so the guest agrees to the Reservations Agreement first.
+    var agreeEl = form.querySelector("#agreeTerms"), agreeErr = form.querySelector("#agreeError");
+    if (agreeEl && !agreeEl.checked) {
+      if (agreeErr) agreeErr.hidden = false;
+      agreeEl.focus();
+      return;
+    }
+    if (agreeErr) agreeErr.hidden = true;
 
     var payload = buildPayload(bill);
 
@@ -538,7 +547,7 @@
     }
 
     submitBtn.disabled = true;
-    submitBtn.textContent = "Sending…";
+    submitBtn.textContent = "Booking…";
 
     var seniorFiles = seniorIdFilesEl && seniorIdFilesEl.files ? Array.prototype.slice.call(seniorIdFilesEl.files) : [];
 
@@ -566,7 +575,7 @@
         if (/cabanas? (is|are) left|Cabana not available/i.test(m)) {
           statusEl.hidden = false;
           statusEl.className = "form-status form-status-error";
-          statusEl.textContent = m.replace(/^Cabana not available.*$/i, "Sorry — those cabanas are no longer available on that date. Please check the numbers above and send again.");
+          statusEl.textContent = m.replace(/^Cabana not available.*$/i, "Sorry — those cabanas are no longer available on that date. Please check the numbers above and try again.");
           submitBtn.disabled = false;
           submitBtn.textContent = submitLabel();
           refreshCabanaStep();

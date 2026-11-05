@@ -732,7 +732,7 @@ ${signature(c)}`;
   const body = `${p(`Hi ${first},`)}
 ${p(staffMade
     ? `Thank you for choosing Virgin Beach Resort! As discussed with our reservations team, here is the quotation for your <strong>${esc(r.stay_type_label || TYPE_NAMES[r.stay_type])}</strong> on <strong>${esc(fmtDate(r.check_in))}</strong>${cabanas.length ? ` — we're holding ${cabanas.length === 1 ? "your cabana" : "your cabanas"} for you` : ""}.`
-    : `Thank you for choosing Virgin Beach Resort! We've received your <strong>${esc(r.stay_type_label || TYPE_NAMES[r.stay_type])}</strong> request for <strong>${esc(fmtDate(r.check_in))}</strong>${cabanas.length ? ` and are holding ${cabanas.length === 1 ? "your cabana" : "your cabanas"} for you` : ""}.`)}
+    : `Thank you for choosing Virgin Beach Resort! We've received your <strong>${esc(r.stay_type_label || TYPE_NAMES[r.stay_type])}</strong> booking for <strong>${esc(fmtDate(r.check_in))}</strong>${cabanas.length ? ` and are holding ${cabanas.length === 1 ? "your cabana" : "your cabanas"} for you` : ""}.`)}
 ${p(dl.date
     ? securePara(r, q.total, dl, "cabana(s)")
     : `<strong>Payment is settled upon arrival at the resort.</strong>`)}
@@ -1179,7 +1179,7 @@ export function guestQuoteEmailOvernight(r: Any, villas: Any[], q: Quote | null,
   const body = `${p(`Hi ${first},`)}
 ${p(staffMade
     ? `Thank you for choosing Virgin Beach Resort! As discussed with our reservations team, here is the quotation for your <strong>overnight stay</strong> from <strong>${esc(fmtDate(r.check_in))}</strong> to <strong>${esc(fmtDate(r.check_out))}</strong> — we're holding ${casitaWord} for you.`
-    : `Thank you for choosing Virgin Beach Resort! We've received your request for an <strong>overnight stay</strong> from <strong>${esc(fmtDate(r.check_in))}</strong> to <strong>${esc(fmtDate(r.check_out))}</strong> and are holding ${casitaWord} for you.`)}
+    : `Thank you for choosing Virgin Beach Resort! We've received your booking for an <strong>overnight stay</strong> from <strong>${esc(fmtDate(r.check_in))}</strong> to <strong>${esc(fmtDate(r.check_out))}</strong> and are holding ${casitaWord} for you.`)}
 ${p(dl.date
     ? (q ? securePara(r, q.total, dl, `casita${villas.length === 1 ? "" : "s"}`) : `<strong>Payment is required by ${esc(dl.label)}</strong> to secure the reservation.`)
     : `<strong>Payment is settled upon arrival at the resort.</strong>`)}
