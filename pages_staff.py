@@ -1248,8 +1248,13 @@ html = """<!doctype html>
 <div class="modal-backdrop" id="windowModalBackdrop">
   <div class="modal">
     <h2>Booking Window &amp; Cabanas</h2>
-    <p style="color:var(--ink-soft); font-size:0.85rem; margin:-10px 0 16px;">The last date guests can book on the website &mdash; overnight stays (last night) and day trips. Staff can still enter later bookings in the dashboard.</p>
-    <div class="modal-field"><label for="bwUntil">Guests can book up to</label><input id="bwUntil" type="date"><span class="field-hint" id="bwInfo"></span></div>
+    <p style="color:var(--ink-soft); font-size:0.85rem; margin:-10px 0 16px;">The last date guests can book on the website &mdash; day trips, and casitas (last night of the stay). Staff can still enter later bookings in the dashboard.</p>
+    <div class="modal-row">
+      <div class="modal-field"><label for="bwUntil">Day trips: guests can book up to</label><input id="bwUntil" type="date"></div>
+      <div class="modal-field"><label for="bwStayUntil">Casitas (overnight) up to</label><input id="bwStayUntil" type="date"></div>
+    </div>
+    <p class="field-hint" id="bwInfo" style="margin-top:-6px;"></p>
+    <p class="field-hint" style="margin-top:-6px;">Casitas also follow Cloudbeds: a night with no price or no rooms left in Cloudbeds can't be booked on the website. Leave the casita date blank to use the day-trip date.</p>
     <div class="modal-row">
       <div class="modal-field"><label for="bwDining">Dining cabanas per day</label><input id="bwDining" type="number" min="0" max="200"></div>
       <div class="modal-field"><label for="bwLounge">Lounge cabanas per day</label><input id="bwLounge" type="number" min="0" max="50"></div>

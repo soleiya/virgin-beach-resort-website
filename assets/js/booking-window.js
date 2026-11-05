@@ -8,21 +8,24 @@
   "use strict";
   var FALLBACK = "2026-12-31"; // used until the live setting loads (or if it can't)
   var cfg = window.SUPABASE_CONFIG || {};
-  var W = (window.VBRBookingWindow = { until: FALLBACK });
+  var W = (window.VBRBookingWindow = { until: FALLBACK, stayUntil: null });
+  // v36: casitas (data-booking-date checkin/checkout) can have their own, later
+  // window (booking_settings.villa_bookings_open_until); day trips use until.
+  function untilFor(kind) { return (kind === "checkin" || kind === "checkout") && W.stayUntil ? W.stayUntil : W.until; }
 
   function addDays(s, n) { var d = new Date(s + "T00:00:00Z"); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); }
   function fmt(s) {
     return new Date(s + "T00:00:00Z").toLocaleDateString("en-PH", { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" });
   }
-  W.message = function () { return "We're taking bookings up to " + fmt(W.until) + " for now — later dates open soon."; };
-  W.limitFor = function (kind) { return W.until ? (kind === "checkout" ? addDays(W.until, 1) : W.until) : null; };
+  W.message = function (kind) { return "We're taking bookings up to " + fmt(untilFor(kind)) + " for now — later dates open soon."; };
+  W.limitFor = function (kind) { var u = untilFor(kind); return u ? (kind === "checkout" ? addDays(u, 1) : u) : null; };
   W.tooLate = function (value, kind) { var l = W.limitFor(kind || "visit"); return !!(l && value && value > l); };
 
   function inputs() { return Array.prototype.slice.call(document.querySelectorAll("input[data-booking-date]")); }
   function noteFor(el, show) {
     var qbErr = el.closest("form") && el.closest("form").querySelector(".qb-error");
     if (qbErr) { // home page booking box has its own message line
-      if (show) { qbErr.textContent = W.message(); qbErr.hidden = false; }
+      if (show) { qbErr.textContent = W.message(el.getAttribute("data-booking-date")); qbErr.hidden = false; }
       return;
     }
     var host = el.closest(".qb-field, div") || el.parentNode;
@@ -34,7 +37,7 @@
       n.setAttribute("role", "status");
       host.parentNode.insertBefore(n, host.nextSibling);
     }
-    n.textContent = W.message();
+    n.textContent = W.message(el.getAttribute("data-booking-date"));
   }
   // returns true if the value was cleared
   function check(el) {
@@ -69,13 +72,14 @@
   else setTimeout(recheckPrefilled, 0);
 
   if (cfg.url && cfg.anonKey) {
-    fetch(cfg.url + "/rest/v1/booking_settings?select=bookings_open_until&id=eq.1", {
+    fetch(cfg.url + "/rest/v1/booking_settings?select=*&id=eq.1", {
       headers: { apikey: cfg.anonKey, Authorization: "Bearer " + cfg.anonKey },
     })
       .then(function (r) { return r.ok ? r.json() : null; })
       .then(function (rows) {
         if (!rows || !rows.length) return; // table not set up yet: keep the fallback
         W.until = rows[0].bookings_open_until || null;
+        W.stayUntil = rows[0].villa_bookings_open_until || null;
         applyMax();
         recheckPrefilled();
       })

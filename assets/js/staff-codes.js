@@ -256,6 +256,7 @@
         if (res.error) { $("bwInfo").textContent = ""; return werr(/booking_settings/.test(res.error.message) ? "Needs the database update booking-v28-discounts-and-booking-window.sql." : "Couldn't load: " + res.error.message); }
         var s = res.data || {};
         $("bwUntil").value = s.bookings_open_until || "";
+        if ($("bwStayUntil")) $("bwStayUntil").value = s.villa_bookings_open_until || "";
         $("bwDining").value = s.dining_cabanas_per_day != null ? s.dining_cabanas_per_day : 43;
         $("bwLounge").value = s.lounge_cabanas_per_day != null ? s.lounge_cabanas_per_day : 6;
         $("bwInfo").textContent = s.updated_by ? "Last changed by " + s.updated_by + " on " + D.fmtDate(String(s.updated_at).slice(0, 10)) + "." : "";
@@ -268,11 +269,15 @@
       var dn = parseInt($("bwDining").value, 10), ln = parseInt($("bwLounge").value, 10);
       if (!(dn >= 0) || !(ln >= 0)) return werr("Enter how many dining and lounge cabanas there are per day.");
       $("bwSave").disabled = true;
-      sb.from("booking_settings").update({ bookings_open_until: v, dining_cabanas_per_day: dn, lounge_cabanas_per_day: ln }).eq("id", 1).then(function (res) {
+      var upd = { bookings_open_until: v, dining_cabanas_per_day: dn, lounge_cabanas_per_day: ln };
+      if ($("bwStayUntil")) upd.villa_bookings_open_until = $("bwStayUntil").value || null;
+      sb.from("booking_settings").update(upd).eq("id", 1).then(function (res) {
         $("bwSave").disabled = false;
-        if (res.error) return werr(/dining_cabanas_per_day/.test(res.error.message) ? "Needs the database update booking-v29-cabanas-by-count.sql." : "Couldn't save: " + res.error.message);
+        if (res.error) return werr(/villa_bookings_open_until/.test(res.error.message) ? "Needs the database update booking-v36-cloudbeds-rates.sql." : /dining_cabanas_per_day/.test(res.error.message) ? "Needs the database update booking-v29-cabanas-by-count.sql." : "Couldn't save: " + res.error.message);
         if (D.setStock) D.setStock({ dining: dn, lounge: ln });
-        $("bwInfo").textContent = (v ? "Saved — guests can book up to " + D.fmtDate(v) : "Saved — no date limit") + "; " + dn + " dining / " + ln + " lounge cabanas per day.";
+        var sv = upd.villa_bookings_open_until;
+        $("bwInfo").textContent = (v ? "Saved — day trips up to " + D.fmtDate(v) : "Saved — day trips: no date limit") +
+          (sv ? ", casitas up to " + D.fmtDate(sv) : "") + "; " + dn + " dining / " + ln + " lounge cabanas per day.";
       });
     });
   })();
