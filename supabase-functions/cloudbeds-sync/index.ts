@@ -18,9 +18,9 @@
 // (postCustomItem) and discounts (postAdjustment); a total that still differs
 // is noted for staff (booking_requests.cb_folio_note).
 //   setup    link villas to Cloudbeds rooms (by name) + register webhooks.
-//   rates    { days } Cloudbeds nightly prices + open nights → cb_rates (v36);
-//            also part of every pull (60 days; ~15 months once an hour).
-//   rates_preview  dry run of the above (nothing saved).
+//   rates    { from, days } Cloudbeds nightly prices + open nights → cb_rates
+//            (v36); also part of every pull (14 nights + 30 in rotation).
+//   rates_preview  { date } what Cloudbeds says for one night (nothing saved).
 //   test     check the API key.
 // v21 (Cloudbeds first): the website sends only the quotation for these
 // villa bookings; Cloudbeds' own emails take over (status changes are pushed
@@ -236,49 +236,69 @@ async function syncBlocks(days: number) {
 
 // v36: Cloudbeds nightly prices + availability per casita type → cb_rates.
 // The website only sells nights that are on sale in Cloudbeds, at Cloudbeds'
-// price (once booking_settings.cloudbeds_rates is on). getRatePlans returns
-// every rate plan; only the base rate (no ratePlanID) is used.
-function rateDetails(r: Any): Any[] {
-  const d = r?.roomRateDetailed ?? r?.detailedRates ?? r?.roomRateDetails ?? [];
-  return Array.isArray(d) ? d : Object.values(d || {});
-}
-async function fetchRates(days: number, chunk = 30) {
-  const from = new Date(Date.now() + 8 * 3_600_000); // today in Manila
-  from.setUTCHours(0, 0, 0, 0);
-  const to = new Date(from.getTime() + days * 86_400_000);
-  const rows = new Map<string, Any>();
-  let plans = 0;
-  for (let a = from; a < to; a = new Date(a.getTime() + chunk * 86_400_000)) {
-    const b = new Date(Math.min(a.getTime() + chunk * 86_400_000, to.getTime()));
-    const res = await cb("GET", "getRatePlans", { startDate: ymd(a), endDate: ymd(b), detailedRates: "true" });
-    const list: Any[] = Array.isArray(res.data) ? res.data : [];
-    for (const r of list) {
-      if (r?.ratePlanID) continue; // derived / promo plans
-      plans++;
-      for (const d of rateDetails(r)) {
-        const date = String(d?.date || "").slice(0, 10);
-        if (!date || date < ymd(from) || date >= ymd(to)) continue;
-        const key = `${r.roomTypeID}|${date}`;
-        if (rows.has(key)) continue;
-        rows.set(key, {
-          room_type_id: String(r.roomTypeID), date,
-          rate: num(d.rate ?? d.roomRate ?? d.totalRate),
-          rooms_available: d.roomsAvailable === undefined ? null : num(d.roomsAvailable),
-          cta: d.closedToArrival === true || d.closedToArrival === "true" || d.closedToArrival === 1,
-          ctd: d.closedToDeparture === true || d.closedToDeparture === "true" || d.closedToDeparture === 1,
-          min_los: num(d.minLos),
-        });
-      }
-    }
+// price (once booking_settings.cloudbeds_rates is on). getRatePlans works like
+// a booking search (the whole range must be bookable), so it's asked one night
+// at a time: what's returned for that night is on sale; "no rate found" means
+// every casita type is closed that night. Only the base rate (no ratePlanID)
+// is used.
+const NO_RATE = /no rate found|could not accommodate/i;
+const manilaToday = () => { const d = new Date(Date.now() + 8 * 3_600_000); d.setUTCHours(0, 0, 0, 0); return d; };
+const addD = (d: Date, n: number) => new Date(d.getTime() + n * 86_400_000);
+async function fetchNight(night: Date) {
+  const rows: Any[] = [];
+  let res: Any;
+  try {
+    res = await cb("GET", "getRatePlans", { startDate: ymd(night), endDate: ymd(addD(night, 1)), adults: 1, children: 0 });
+  } catch (e) {
+    if (NO_RATE.test((e as Error).message)) return rows; // nothing on sale that night
+    throw e;
   }
-  return { from, to, rows: [...rows.values()], plans };
+  const seen = new Set<string>();
+  for (const r of (Array.isArray(res.data) ? res.data : [])) {
+    if (r?.ratePlanID) continue; // derived / promo plans
+    const t = String(r.roomTypeID);
+    if (seen.has(t)) continue;
+    seen.add(t);
+    rows.push({
+      room_type_id: t, date: ymd(night),
+      rate: num(r.roomRate ?? r.rate ?? r.totalRate),
+      rooms_available: r.roomsAvailable === undefined ? null : num(r.roomsAvailable),
+      cta: false, ctd: false, min_los: null,
+    });
+  }
+  return rows;
 }
-async function syncRates(days: number) {
-  const { from, to, rows, plans } = await fetchRates(days);
-  if (!rows.length) throw new Error(`getRatePlans returned no base-rate days (${plans} base plans) — nothing was changed`);
-  const out = await rpc("cb_apply_rates", { p_from: ymd(from), p_to: ymd(to), p: rows });
-  await stateSet(days > 90 ? "last_rates_full" : "last_rates", { at: new Date().toISOString(), days, plans, ...out });
-  return out;
+// nights [from, from + days) → cb_rates (stops early at the deadline; only the
+// nights actually checked are written)
+async function syncRatesRange(from: Date, days: number, deadline: number) {
+  const rows: Any[] = [];
+  let done = 0;
+  for (; done < days; done++) {
+    if (Date.now() > deadline) break;
+    rows.push(...await fetchNight(addD(from, done)));
+  }
+  if (!done) return { rows: 0, checked: 0 };
+  const out = await rpc("cb_apply_rates", { p_from: ymd(from), p_to: ymd(addD(from, done)), p: rows });
+  return { ...out, checked: done };
+}
+const RATE_HORIZON = 460;   // nights ahead kept in step
+const RATE_NEAR = 14;       // checked on every pull
+const RATE_STEP = 30;       // further nights checked per pull, in rotation
+async function syncRates(deadline: number) {
+  const today = manilaToday();
+  const near = await syncRatesRange(today, RATE_NEAR, deadline);
+  const st = await fetch(`${SB_URL()}/rest/v1/cb_sync_state?key=eq.rates_cursor&select=value`, {
+    headers: { apikey: SR(), Authorization: `Bearer ${SR()}` },
+  }).then((r) => r.json()).then((x) => x?.[0]?.value).catch(() => null);
+  let offset = Number(st?.offset) || RATE_NEAR;
+  if (offset < RATE_NEAR || offset >= RATE_HORIZON) offset = RATE_NEAR;
+  const step = Math.min(RATE_STEP, RATE_HORIZON - offset);
+  const far = await syncRatesRange(addD(today, offset), step, deadline);
+  const next = offset + (far.checked || 0) >= RATE_HORIZON ? RATE_NEAR : offset + (far.checked || 0);
+  await stateSet("rates_cursor", { offset: next, at: new Date().toISOString() });
+  const value = { at: new Date().toISOString(), near, far: { ...far, from_offset: offset } };
+  await stateSet("last_rates", value);
+  return value;
 }
 
 async function pull() {
@@ -315,14 +335,11 @@ async function pull() {
   const docs = await syncDocs(deadline).catch((e) => { errors.push("documents: " + (e as Error).message); return null; });
   if (docs?.errors?.length) errors.push(...docs.errors);
   if (pay?.errors?.length) errors.push(...pay.errors);
-  // Cloudbeds prices / open nights: next 60 days every run, ~15 months hourly
+  // Cloudbeds prices / open nights: the next 14 nights every run, plus 30
+  // more in rotation (all ~15 months are refreshed about every 1¼ hours)
   let rates: Any = null;
-  if (Date.now() < deadline - 20_000) {
-    const fullAt = await fetch(`${SB_URL()}/rest/v1/cb_sync_state?key=eq.last_rates_full&select=value`, {
-      headers: { apikey: SR(), Authorization: `Bearer ${SR()}` },
-    }).then((r) => r.json()).then((x) => x?.[0]?.value?.at).catch(() => null);
-    const due = !fullAt || Date.now() - new Date(fullAt).getTime() > 60 * 60_000;
-    rates = await syncRates(due ? 460 : 60).catch((e) => { errors.push("rates: " + (e as Error).message); return null; });
+  if (Date.now() < deadline - 25_000) {
+    rates = await syncRates(deadline - 5_000).catch((e) => { errors.push("rates: " + (e as Error).message); return null; });
   }
   // only move the window forward when everything in it was handled
   const value = { at: complete && totals.failed === 0 ? started.toISOString() : (st?.at || from.toISOString()), ran_at: new Date().toISOString(), ...totals, complete, blocks, rates };
@@ -972,15 +989,15 @@ export async function handle(req: Request): Promise<Response> {
       }
       case "refolio": return json(await refolio(String(body.booking_id), body.discounts === true, String(body.suffix || "")));
       case "sync_one": return json(await syncOne(String(body.reservation_id)));
-      case "rates": return json(await syncRates(Number(body.days) || 460));
+      case "rates": {
+        // { from: "YYYY-MM-DD", days } — refresh a stretch of nights now (max 100)
+        const from = body.from ? new Date(String(body.from) + "T00:00:00Z") : manilaToday();
+        return json(await syncRatesRange(from, Math.min(Number(body.days) || 30, 100), Date.now() + 100_000));
+      }
       case "rates_preview": {
-        // dry run: what Cloudbeds returns for the next few days (nothing is saved)
-        const days = Math.min(Number(body.days) || 10, 31);
-        const r = await fetchRates(days, days);
-        const raw = await cb("GET", "getRatePlans", { startDate: ymd(r.from), endDate: ymd(new Date(r.from.getTime() + 3 * 86_400_000)), detailedRates: "true" });
-        const first = (Array.isArray(raw.data) ? raw.data : [])[0] || null;
-        return json({ base_plans: r.plans, rows: r.rows.slice(0, 80), raw_keys: first ? Object.keys(first) : [],
-                      raw_detail_sample: first ? rateDetails(first).slice(0, 2) : [] });
+        // dry run: what Cloudbeds says for one night (nothing is saved)
+        const night = body.date ? new Date(String(body.date) + "T00:00:00Z") : manilaToday();
+        return json({ night: ymd(night), rows: await fetchNight(night) });
       }
       case "setup": return json(await setup());
       case "webhooks": return json(await webhooks(body.dedupe === true));

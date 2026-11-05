@@ -96,6 +96,13 @@ function env(key: string, fallback = ""): string {
 const MAILBOX = "reservations@virginbeachresort.com";
 const FROM = `Virgin Beach Resort Reservations <${MAILBOX}>`;
 const EVENTS_EMAIL = "events@virginbeachresort.com";
+// Silent copy (Bcc) of EVERY email this function sends — guest and staff —
+// for monitoring. Override with the MONITOR_EMAILS secret (comma-separated;
+// set it to "none" to stop).
+const monitorEmails = () => {
+  const v = env("MONITOR_EMAILS", "migquesada@gmail.com").trim();
+  return /^none$/i.test(v) ? [] : v.split(",").map((x) => x.trim()).filter((x) => /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(x));
+};
 const MSGID_DOMAIN = "virginbeachresort.com";
 // The public website address shown to guests (signature, "book again").
 // Working links (upload page, staff dashboard) still use SITE_URL.
@@ -1570,6 +1577,7 @@ async function send(opts: {
     await t.sendMail({
       from: FROM,
       to,
+      ...(monitorEmails().length ? { bcc: monitorEmails().join(", ") } : {}),
       replyTo: opts.replyTo || MAILBOX,
       subject: opts.subject,
       html: opts.html,
