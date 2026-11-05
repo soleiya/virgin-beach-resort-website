@@ -3,10 +3,8 @@
 /home                           /                         301
 /photos/                        /gallery/                 301
 /photos                         /gallery/                 301
-/privacy-policy/                /privacy-policy.html      301
-/privacy-policy                 /privacy-policy.html      301
-/terms-and-conditions/          /terms-and-conditions.html 301
-/terms-and-conditions           /terms-and-conditions.html 301
+/privacy-policy/                /privacy-policy           301
+/terms-and-conditions/          /terms-and-conditions     301
 /advanced-booking/              /book-stay/               301
 /advanced-booking               /book-stay/               301
 /extended-stay/                 /overnight/               301

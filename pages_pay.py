@@ -98,4 +98,4 @@ body = f"""
 <script src="../assets/js/payment-upload.js?v={asset_v('assets/js/payment-upload.js')}"></script>
 """
 
-page("pay/index.html", "Pay & Upload Documents", "Upload your payment screenshot, Senior Citizen / PWD IDs and pet vaccination cards for a Virgin Beach Resort booking using your Booking ID.", body)
+page("pay/index.html", "Pay & Upload Documents", "Pay online and upload Senior Citizen / PWD IDs and pet vaccination cards for a Virgin Beach Resort booking using your Booking ID.", body)

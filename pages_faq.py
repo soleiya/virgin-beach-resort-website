@@ -103,7 +103,7 @@ general = [
      "<p>At the moment, these rooms are not available. However, we do our best to accommodate PWD guests by offering them our most accessible "
      "rooms. Kindly inform our reservations office or front office if you are traveling with a PWD guest.</p>"),
     ("Do you have quarters for drivers and bodyguards?",
-     "<p>Quarters are available for &#8369;1,750.00 per person per night, inclusive of mattress and beddings with plated breakfast, lunch, and "
+     "<p>Quarters are available for &#8369;1,750.00 per person per night, inclusive of mattress and bedding with plated breakfast, lunch, and "
      "dinner.</p>"),
     ("Are extra person charges available?",
      "<p>Guests may only add up to 1 additional guest in our Deluxe Double Queen, Sunrise, Louver-Window, and Bamboo Casitas, regardless of age. "

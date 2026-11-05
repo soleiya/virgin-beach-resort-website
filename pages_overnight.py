@@ -184,7 +184,7 @@ overnight_body = f"""
 <section class="section-tight">
   <div class="wrap">
     <p class="prose" style="font-size:1.05rem;">Our rooms come with an understated elegance that feels like home. While the day away in one of our many
-    lounge cabanas, hammocks, swings, and lounge chairs. This serene escape is the ultimate retreat to relax and destress.</p>
+    lounge cabanas, hammocks, swings, and lounge chairs. This serene escape is the ultimate retreat to relax and de-stress.</p>
   </div>
 </section>
 

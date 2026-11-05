@@ -195,4 +195,4 @@ body = f"""
 <script src="assets/js/quickbook.js?v={asset_v('assets/js/quickbook.js')}"></script>
 """
 
-page("index.html", "Home", "A tranquil, natural beach escape in Laiya, San Juan, Batangas — a 3-hour drive from Metro Manila.", body, solid_header=False)
+page("index.html", "Private Beach Resort in Laiya, Batangas", "A tranquil, natural beach escape in Laiya, San Juan, Batangas — a 3-hour drive from Metro Manila.", body, solid_header=False)

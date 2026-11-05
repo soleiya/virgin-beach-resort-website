@@ -326,6 +326,16 @@ def booking_scripts():
 """
 
 
+SITE_ORIGIN = "https://virginbeachresort.com"
+
+
+def canonical_url(path):
+    p = path[:-len("index.html")] if path.endswith("index.html") else path
+    if p.endswith(".html"):
+        p = p[:-5]
+    return SITE_ORIGIN + "/" + p
+
+
 def head(base, title, description, current_path):
     return f"""<!doctype html>
 <html lang="en">
@@ -334,6 +344,16 @@ def head(base, title, description, current_path):
 <title>{title} · Virgin Beach Resort</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="description" content="{description}">
+<link rel="canonical" href="{canonical_url(current_path)}">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Virgin Beach Resort">
+<meta property="og:title" content="{title} · Virgin Beach Resort">
+<meta property="og:description" content="{description}">
+<meta property="og:url" content="{canonical_url(current_path)}">
+<meta property="og:image" content="{SITE_ORIGIN}/assets/images/og-cover.jpg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
 <link rel="icon" type="image/png" href="data:image/png;base64,{FAVICON_B64}">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
