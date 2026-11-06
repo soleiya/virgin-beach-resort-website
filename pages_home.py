@@ -81,7 +81,7 @@ body = f"""
         <h2>Choose your casita</h2>
       </div>
       <p class="prose" style="max-width:46ch;">Every stay includes full-board meals at The Pavilion &mdash; lunch, dinner and breakfast
-      (&#8369;2,695 per adult per night, kids 6&ndash;12 half price, 0&ndash;5 free).</p>
+      (&#8369;2,695 per adult per night, &#8369;1,347.50 per child 6&ndash;12, free for kids 0&ndash;5).</p>
     </div>
     <div class="grid-3">{casita_cards}
     </div>
