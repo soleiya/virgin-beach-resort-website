@@ -150,8 +150,9 @@ const SENIOR_DISCOUNT_RATE = 0.2;
 // RA 9994 / RA 10754 + RR 7-2010 — must match seniorPrice() in assets/js/pricing.js:
 // the senior's own share is VAT-exempt, 20% off the VAT-exclusive price, and the
 // 5% service charge (on the net) is kept. Prices include 12% VAT + 5% SC.
+// Front Office formula (Nov 2026, booking-v39): ÷ 1.17, 20% off, then + 5% service charge.
 function seniorPrice(price: number) {
-  return r2(price / 1.17 * (1 - SENIOR_DISCOUNT_RATE + 0.05));
+  return r2(price / 1.17 * (1 - SENIOR_DISCOUNT_RATE) * 1.05);
 }
 const PRICING: Record<string, Any> = {
   day_trip: { adult: 1250, child612: 825, child05: 0, pet: 750, dining: 1500, lounge: 2000 },
@@ -386,7 +387,7 @@ export function cabanaCountText(r: Any, cabanas: Any[] = []) {
 
 // What the guest still has to upload on /pay (Senior/PWD IDs, pet cards).
 export function docsNeeded(r: Any) {
-  const seniors = int(r.senior_count) > 0 && !(Array.isArray(r.senior_id_paths) && r.senior_id_paths.length);
+  const seniors = int(r.senior_count) + int(r.pwd_kid_count) > 0 && !(Array.isArray(r.senior_id_paths) && r.senior_id_paths.length);
   const pets = int(r.pet_count) > 0 && !(Array.isArray(r.pet_vaccination_paths) && r.pet_vaccination_paths.length);
   return { seniors, pets, any: seniors || pets };
 }
@@ -417,6 +418,7 @@ export function buildQuote(record: Any, cabanas: Any[]): Quote | null {
   const kids612 = int(record.children_6_12);
   const kids05 = int(record.children_0_5);
   const seniors = Math.min(int(record.senior_count), adults);
+  const pwdKids = Math.min(int(record.pwd_kid_count), kids612);
   const pets = int(record.pet_count);
   const regular = adults - seniors;
   const lines: QuoteLine[] = [];
@@ -440,7 +442,8 @@ export function buildQuote(record: Any, cabanas: Any[]): Quote | null {
     const rate = PRICING[type] || PRICING.day_trip;
     add("Adult (13 y.o. +)", rate.adult, regular);
     add("Senior Citizen / PWD (20% discount)", seniorPrice(rate.adult), seniors, true);
-    add("Child (6–12 y.o.)", rate.child612, kids612);
+    add("Child (6–12 y.o.)", rate.child612, kids612 - pwdKids);
+    add("PWD child (6–12 y.o., 20% discount)", seniorPrice(rate.child612), pwdKids, true);
     add("Child (0–5 y.o.)", 0, kids05);
     add("Pet fee", rate.pet, pets);
     const n = cabanaCounts(record, cabanas);
@@ -1900,7 +1903,7 @@ const CORS = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 const PREVIEW_FIELDS = ["source", "status", "stay_type", "stay_type_label", "guest_name", "guest_email", "guest_phone", "country",
-  "check_in", "check_out", "adults", "children_6_12", "children_0_5", "senior_count", "pet_count", "companions", "primary_is_senior",
+  "check_in", "check_out", "adults", "children_6_12", "children_0_5", "senior_count", "pwd_kid_count", "pet_count", "companions", "primary_is_senior",
   "discount_type", "discount_value", "discount_amount", "discount_reason", "total_amount", "subtotal_people", "cabana_total",
   "senior_discount", "notes", "add_ons", "online_discount", "booked_by", "email_custom", "dining_cabanas", "lounge_cabanas",
   "email_cabana_numbers"];

@@ -215,11 +215,11 @@ def booking_form_section(default_type="day_trip"):
       <div><label for="kids05">Kids (0&ndash;5)</label><input id="kids05" type="number" min="0" value="0"></div>
     </div>
 
-    <div>
-      <label for="seniorCount">How many are Senior Citizens or PWDs?</label>
-      <input id="seniorCount" type="number" min="0" value="0">
-      <p class="field-hint">Included in your Adults count above &mdash; their own share gets 20% off (valid ID required).</p>
+    <div class="row-2">
+      <div><label for="seniorCount">Senior Citizen / PWD adults</label><input id="seniorCount" type="number" min="0" value="0"></div>
+      <div><label for="pwdKidCount">PWD kids (6&ndash;12)</label><input id="pwdKidCount" type="number" min="0" value="0"></div>
     </div>
+    <p class="field-hint" style="margin-top:-6px;">Counted within your Adults and Kids above &mdash; their own entrance fee is VAT-exempt and 20% off (valid ID required). Cabanas aren&rsquo;t discounted.</p>
     <div>
       <label for="petCount">Bringing any pets?</label>
       <input id="petCount" type="number" min="0" max="2" value="0">
@@ -245,7 +245,7 @@ def booking_form_section(default_type="day_trip"):
     <div id="seniorIdWrap" hidden>
       <label for="seniorIdFiles">Senior Citizen / PWD ID photo(s)</label>
       <input id="seniorIdFiles" type="file" accept="image/*" multiple>
-      <p class="field-hint">One photo per senior citizen (or one photo with all IDs) &mdash; needed before we can apply the discount.</p>
+      <p class="field-hint">One photo per Senior Citizen or PWD (or one photo with all IDs) &mdash; needed before we can apply the discount.</p>
       <p class="field-hint" id="seniorIdError" style="color:var(--rose,#9c4a3f);" hidden>Please attach at least one Senior Citizen or PWD ID photo.</p>
     </div>
 

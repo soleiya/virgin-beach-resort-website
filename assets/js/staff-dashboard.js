@@ -1021,7 +1021,7 @@
       var tdParty = document.createElement("td");
       var kids = (r.children_6_12 || 0) + (r.children_0_5 || 0);
       var partyText = (r.adults || 0) + " adult" + (r.adults === 1 ? "" : "s") + (kids ? ", " + kids + " kid" + (kids === 1 ? "" : "s") : "");
-      if (r.senior_count) partyText += " (incl. " + r.senior_count + " senior)";
+      if (r.senior_count || r.pwd_kid_count) partyText += " (incl. " + [r.senior_count ? r.senior_count + " senior/PWD" : "", r.pwd_kid_count ? r.pwd_kid_count + " PWD kid" + (r.pwd_kid_count === 1 ? "" : "s") : ""].filter(Boolean).join(", ") + ")";
       if (r.pet_count) partyText += ", " + r.pet_count + " pet" + (r.pet_count === 1 ? "" : "s");
       if (r.extra_beds) partyText += " · " + r.extra_beds + " extra bed" + (r.extra_beds === 1 ? "" : "s");
       tdParty.textContent = partyText;
@@ -1247,7 +1247,7 @@
 
   function uploadList() {
     var items = [];
-    if (intVal("addSeniors") > 0) items.push("Senior Citizen/PWD ID(s)");
+    if (intVal("addSeniors") + intVal("addPwdKids") > 0) items.push("Senior Citizen/PWD ID(s)");
     if (intVal("addPets") > 0) items.push("pet vaccination card(s)");
     if (!items.length) return "any documents";
     return items.length === 1 ? items[0] : items.slice(0, -1).join(", ") + " and " + items[items.length - 1];
@@ -1459,7 +1459,7 @@
   var openPriceSig = null; // pricing inputs when an existing booking was opened
 
   function priceSig() {
-    return [$("addType").value, intVal("addAdults"), intVal("addKids"), intVal("addKids05"), intVal("addSeniors"), intVal("addPets"),
+    return [$("addType").value, intVal("addAdults"), intVal("addKids"), intVal("addKids05"), intVal("addSeniors"), intVal("addPwdKids"), intVal("addPets"),
       intVal("addDining"), intVal("addLounge"), discTypeEl.value, discValueEl.value, $("addTotal").value].join("|");
   }
 
@@ -1471,7 +1471,7 @@
     var type = $("addType").value;
     var bill = P.compute({
       type: type, adults: intVal("addAdults"), kids612: intVal("addKids"), kids05: intVal("addKids05"),
-      seniors: intVal("addSeniors"), pets: intVal("addPets"),
+      seniors: intVal("addSeniors"), pwdKids: intVal("addPwdKids"), pets: intVal("addPets"),
       dining: intVal("addDining"), lounge: intVal("addLounge"),
     });
     var out = { bill: bill, rated: bill.rated, discountType: null, discountValue: null, discount: 0, total: null, kept: false, error: null };
@@ -1554,7 +1554,7 @@
     if (useBtn) useBtn.addEventListener("click", function () { openPriceSig = null; renderModalBill(); });
   }
 
-  ["addAdults", "addKids", "addKids05", "addSeniors", "addPets", "addTotal", "addDiscountValue", "addDiscountReason"].forEach(function (id) {
+  ["addAdults", "addKids", "addKids05", "addSeniors", "addPwdKids", "addPets", "addTotal", "addDiscountValue", "addDiscountReason"].forEach(function (id) {
     $(id).addEventListener("input", renderModalBill);
   });
   ["addDining", "addLounge"].forEach(function (id) { $(id).addEventListener("input", renderModalMap); });
@@ -1592,6 +1592,7 @@
       discValueEl.value = r.discount_value != null ? r.discount_value : "";
       discReasonEl.value = r.discount_reason || "";
       $("addSeniors").value = r.senior_count || 0;
+      if ($("addPwdKids")) $("addPwdKids").value = r.pwd_kid_count || 0;
       $("addPets").value = r.pet_count || 0;
       $("addTotal").value = r.total_amount != null ? r.total_amount : "";
       $("addNotes").value = r.notes || "";
@@ -1659,6 +1660,7 @@
       adults: intVal("addAdults"),
       children_6_12: intVal("addKids"),
       senior_count: intVal("addSeniors"),
+      pwd_kid_count: intVal("addPwdKids"),
       pet_count: intVal("addPets"),
       children_0_5: intVal("addKids05"),
       dining_cabanas: intVal("addDining"),
@@ -1751,6 +1753,7 @@
     if (vals.pet_count > 2) return showFormError("A maximum of two pets are permitted per reservation.");
     if (!vals.guest_name) return showFormError("Guest name is required.");
     if (vals.senior_count > vals.adults) return showFormError("Senior citizens are counted within adults — senior count can't be more than adults.");
+    if ((vals.pwd_kid_count || 0) > (vals.children_6_12 || 0)) return showFormError("PWD kids are counted within Kids 6–12 — PWD kids can't be more than Kids 6–12.");
     if (assignedCount("dining") > vals.dining_cabanas || assignedCount("lounge") > vals.lounge_cabanas) {
       return showFormError("More cabana numbers are assigned than the booking has — untick some numbers or raise the Dining / Lounge count.");
     }
@@ -2409,7 +2412,7 @@
       });
     } else {
       var nb = countsOf(r);
-      var b = P.compute({ type: r.stay_type, adults: r.adults, kids612: r.children_6_12, kids05: r.children_0_5, seniors: r.senior_count, pets: r.pet_count, dining: nb.dining, lounge: nb.lounge });
+      var b = P.compute({ type: r.stay_type, adults: r.adults, kids612: r.children_6_12, kids05: r.children_0_5, seniors: r.senior_count, pwdKids: r.pwd_kid_count, pets: r.pet_count, dining: nb.dining, lounge: nb.lounge });
       if (!b.rated) {
         bdBody.innerHTML = '<div class="bill-lines">' + billRow(esc(FULL_TYPE_NAMES[r.stay_type] || r.stay_type || "Booking"), "Quoted by hand") + "</div>" + foot(null);
       } else {

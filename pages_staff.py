@@ -405,6 +405,7 @@ html = """<!doctype html>
   .modal input, .modal select, .modal textarea { width: 100%; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--sand); font-family: var(--font-body); font-size: 0.9rem; }
   .modal-row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 14px; }
   .modal-row.three { grid-template-columns: 1fr 1fr 1fr; }
+  .modal-row.four { grid-template-columns: 1fr 1fr 1fr 1fr; }
   .modal-field { margin-bottom: 14px; }
   .modal-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px; }
   .modal.modal-booking, .modal.modal-villa { max-width: 1340px; }
@@ -550,7 +551,7 @@ html = """<!doctype html>
   .peak-list { list-style: none; padding: 0; margin: 8px 0 0; max-height: 160px; overflow: auto; font-size: .82rem; }
   .peak-list li { display: flex; justify-content: space-between; gap: 8px; padding: 4px 0; border-bottom: 1px solid var(--line); }
   .peak-list button { border: 0; background: none; color: #9b2c2c; cursor: pointer; }
-  @media (max-width: 560px) { .modal-row, .modal-row.three { grid-template-columns: 1fr; } }
+  @media (max-width: 560px) { .modal-row, .modal-row.three, .modal-row.four { grid-template-columns: 1fr; } }
 </style>
 </head>
 <body>
@@ -805,15 +806,20 @@ html = """<!doctype html>
           <input id="addKids" type="number" min="0" value="0">
         </div>
       </div>
-      <div class="modal-row three">
+      <div class="modal-row four">
         <div class="modal-field" style="margin-bottom:0;">
           <label for="addKids05">Kids 0&ndash;5 <span class="modal-lock">&middot; free</span></label>
           <input id="addKids05" type="number" min="0" value="0">
         </div>
         <div class="modal-field" style="margin-bottom:0;">
-          <label for="addSeniors">Senior Citizens / PWD</label>
+          <label for="addSeniors">Senior / PWD adults</label>
           <input id="addSeniors" type="number" min="0" value="0">
           <p class="modal-hint">Counted within Adults &mdash; 20% off their own share.</p>
+        </div>
+        <div class="modal-field" style="margin-bottom:0;">
+          <label for="addPwdKids">PWD kids 6&ndash;12</label>
+          <input id="addPwdKids" type="number" min="0" value="0">
+          <p class="modal-hint">Counted within Kids 6&ndash;12 (day trips).</p>
         </div>
         <div class="modal-field" style="margin-bottom:0;">
           <label for="addPets">Pets</label>

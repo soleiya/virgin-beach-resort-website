@@ -115,11 +115,11 @@
       <div><label for="kids05">Kids (0&ndash;5)</label><input id="kids05" type="number" min="0" value="0"></div>
     </div>
 
-    <div>
-      <label for="seniorCount">How many are Senior Citizens or PWDs?</label>
-      <input id="seniorCount" type="number" min="0" value="0">
-      <p class="field-hint">Included in your Adults count above &mdash; their own share gets 20% off (valid ID required).</p>
+    <div class="row-2">
+      <div><label for="seniorCount">Senior Citizen / PWD adults</label><input id="seniorCount" type="number" min="0" value="0"></div>
+      <div><label for="pwdKidCount">PWD kids (6&ndash;12)</label><input id="pwdKidCount" type="number" min="0" value="0"></div>
     </div>
+    <p class="field-hint" style="margin-top:-6px;">Counted within your Adults and Kids above &mdash; their own entrance fee is VAT-exempt and 20% off (valid ID required). Cabanas aren&rsquo;t discounted.</p>
     <div>
       <label for="petCount">Bringing any pets?</label>
       <input id="petCount" type="number" min="0" max="2" value="0">
@@ -166,7 +166,7 @@
     <div id="seniorIdWrap" hidden>
       <label for="seniorIdFiles">Senior Citizen / PWD ID photo(s)</label>
       <input id="seniorIdFiles" type="file" accept="image/*" multiple>
-      <p class="field-hint">One photo per senior citizen (or one photo with all IDs) &mdash; needed before we can apply the discount.</p>
+      <p class="field-hint">One photo per Senior Citizen or PWD (or one photo with all IDs) &mdash; needed before we can apply the discount.</p>
       <p class="field-hint" id="seniorIdError" style="color:var(--rose,#9c4a3f);" hidden>Please attach at least one Senior Citizen or PWD ID photo.</p>
     </div>
 
@@ -395,9 +395,9 @@
 <script src="../assets/js/vendor/supabase-js-2.117.3.js"></script>
 <script src="../assets/js/booking-config.js?v=c116a3a0ae"></script>
 <script src="../assets/js/booking-window.js?v=ddc3bd31dd"></script>
-<script src="../assets/js/pricing.js?v=919002fd5d"></script>
+<script src="../assets/js/pricing.js?v=43cc9875e9"></script>
 <script src="../assets/js/xendit-pay.js?v=c8bf236172"></script>
-<script src="../assets/js/booking.js?v=11f201fc43"></script>
+<script src="../assets/js/booking.js?v=ebc9020844"></script>
 
 <footer class="site-footer">
   <div class="wrap">

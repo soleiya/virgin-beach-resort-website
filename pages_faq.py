@@ -61,7 +61,9 @@ policies = [
      "their own meals, upon presenting a valid OSCA or PWD ID. In a shared casita, the discount applies to the senior's or PWD's share of "
      "the room (the room rate divided by the number of guests). You can avail of it when booking on our website &mdash; just upload a photo "
      "of the ID &mdash; and please bring the ID at check-in. Per the law, it cannot be combined with other discounts or promotions on the "
-     "same share. We also honor SC and PWD discounts for walk-in guests who pay upon check-in.</p>"),
+     "same share. We also honor SC and PWD discounts for walk-in guests who pay upon check-in.</p>"
+     "<p>On day trips, Senior Citizens and PWDs &mdash; including PWD children 6&ndash;12 &mdash; get the same VAT exemption and 20% off "
+     "their own entrance fee (&#8369;1,250 becomes &#8369;897.44; &#8369;825 for a child becomes &#8369;592.31). Cabanas aren&rsquo;t discounted.</p>"),
     ("Do you honor VAT exemption for foreign missions?",
      "<p>We grant VAT exemption to non-residents who are affiliated with foreign embassies in the Philippines and their dependents, provided "
      "they present a photocopy of their VAT Exemption certificate and Department of Foreign Affairs (DFA) issued Identification Card upon "

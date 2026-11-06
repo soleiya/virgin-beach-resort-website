@@ -30,6 +30,7 @@
   var kids612El = form.querySelector("#kids612");
   var kids05El = form.querySelector("#kids05");
   var seniorCountEl = form.querySelector("#seniorCount");
+  var pwdKidCountEl = form.querySelector("#pwdKidCount");
   var petCountEl = form.querySelector("#petCount");
   var seniorIdWrap = document.getElementById("seniorIdWrap");
   var seniorIdFilesEl = document.getElementById("seniorIdFiles");
@@ -184,12 +185,17 @@
     var seniorsRaw = parseInt((seniorCountEl && seniorCountEl.value) || "0", 10) || 0;
     var seniors = Math.max(0, Math.min(seniorsRaw, adults));
     if (seniorCountEl && seniors !== seniorsRaw) seniorCountEl.value = seniors;
+    var kids612 = parseInt(kids612El.value || "0", 10) || 0;
+    var pwdKidsRaw = parseInt((pwdKidCountEl && pwdKidCountEl.value) || "0", 10) || 0;
+    var pwdKids = Math.max(0, Math.min(pwdKidsRaw, kids612));
+    if (pwdKidCountEl && pwdKids !== pwdKidsRaw) pwdKidCountEl.value = pwdKids;
     return P.compute({
       type: stayTypeEl.value,
       adults: adults,
       kids612: kids612El.value,
       kids05: kids05El.value,
       seniors: seniors,
+      pwdKids: pwdKids,
       pets: petCountEl && petCountEl.value,
       dining: usesCabanaMap() ? counts.dining : 0,
       lounge: usesCabanaMap() ? counts.lounge : 0,
@@ -215,9 +221,10 @@
     if (codeRow) codeRow.hidden = !usesCabanaMap();
     renderPackageNote(bill);
 
-    if (seniorIdWrap) seniorIdWrap.hidden = bill.seniors <= 0;
-    if (seniorIdFilesEl) seniorIdFilesEl.required = bill.seniors > 0;
-    if (bill.seniors <= 0 && seniorIdError) seniorIdError.hidden = true;
+    var idsNeeded = bill.seniors + (bill.pwdKids || 0);
+    if (seniorIdWrap) seniorIdWrap.hidden = idsNeeded <= 0;
+    if (seniorIdFilesEl) seniorIdFilesEl.required = idsNeeded > 0;
+    if (idsNeeded <= 0 && seniorIdError) seniorIdError.hidden = true;
 
     if (!usesCabanaMap()) {
       billSummaryEl.hidden = true;
@@ -247,14 +254,21 @@
       }
       if (bill.seniors > 0) {
         lines.push(
-          '<div class="bill-row"><span>' + bill.seniors + " senior citizen" + (bill.seniors === 1 ? "" : "s") +
-          " × " + peso(bill.seniorRate) + " <em>(20% off)</em></span><span>" + peso(bill.seniors * bill.seniorRate) + "</span></div>"
+          '<div class="bill-row"><span>' + bill.seniors + " Senior / PWD adult" + (bill.seniors === 1 ? "" : "s") +
+          " × " + peso(bill.seniorRate) + " <em>(VAT-exempt, 20% off)</em></span><span>" + peso(bill.seniors * bill.seniorRate) + "</span></div>"
         );
       }
-      if (bill.kids612 > 0) {
+      var regKids = bill.kids612 - (bill.pwdKids || 0);
+      if (regKids > 0) {
         lines.push(
-          '<div class="bill-row"><span>' + bill.kids612 + " child" + (bill.kids612 === 1 ? "" : "ren") +
-          " (6–12) × " + peso(bill.rate.child612) + "</span><span>" + peso(bill.kids612 * bill.rate.child612) + "</span></div>"
+          '<div class="bill-row"><span>' + regKids + " child" + (regKids === 1 ? "" : "ren") +
+          " (6–12) × " + peso(bill.rate.child612) + "</span><span>" + peso(regKids * bill.rate.child612) + "</span></div>"
+        );
+      }
+      if (bill.pwdKids > 0) {
+        lines.push(
+          '<div class="bill-row"><span>' + bill.pwdKids + " PWD child" + (bill.pwdKids === 1 ? "" : "ren") +
+          " (6–12) × " + peso(bill.pwdKidRate) + " <em>(VAT-exempt, 20% off)</em></span><span>" + peso(bill.pwdKids * bill.pwdKidRate) + "</span></div>"
         );
       }
       if (bill.kids05 > 0) {
@@ -287,7 +301,7 @@
       '<p class="field-hint">You\'ll pay online on the next step — 50% or the full amount.</p>';
   }
 
-  [adultsEl, kids612El, kids05El, seniorCountEl, petCountEl].forEach(function (el) {
+  [adultsEl, kids612El, kids05El, seniorCountEl, pwdKidCountEl, petCountEl].forEach(function (el) {
     if (el) el.addEventListener("input", renderBill);
   });
   function refreshPets() {
@@ -379,6 +393,7 @@
       marketing_opt_in: !!form.querySelector("#marketingOptIn").checked,
       notes: form.querySelector("#notes").value || null,
       senior_count: bill.seniors,
+      pwd_kid_count: bill.pwdKids || 0,
       pet_count: bill.pets,
       subtotal_people: usesCabanaMap() ? bill.subtotalPeople : null,
       cabana_total: usesCabanaMap() ? (bill.isPackage ? bill.extraCabanaCost : bill.cabanaTotal) : null,
@@ -504,7 +519,7 @@
     e.preventDefault();
     var bill = computeBill();
 
-    if (bill.seniors > 0) {
+    if (bill.seniors + (bill.pwdKids || 0) > 0) {
       var files = seniorIdFilesEl && seniorIdFilesEl.files ? seniorIdFilesEl.files.length : 0;
       if (!files) {
         if (seniorIdError) seniorIdError.hidden = false;
