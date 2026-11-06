@@ -274,6 +274,35 @@
   .col-guest { font-weight: 700; min-width: 130px; }
   .col-notes { min-width: 160px; color: var(--ink-soft); max-width: 220px; }
   .muted { color: var(--ink-soft); }
+
+  /* v74: the bookings list fits the screen — no sideways scrolling */
+  table.bk-table { min-width: 0; table-layout: auto; }
+  table.bk-table thead th { padding: 9px 7px; font-size: 0.64rem; letter-spacing: 0.04em; }
+  table.bk-table tbody td { padding: 8px 7px; font-size: 0.8rem; }
+  table.bk-table .g-contact, table.bk-table .note-prev { overflow-wrap: anywhere; }
+  table.bk-table .cb-link { white-space: normal; }
+  table.bk-table .col-guest { min-width: 0; max-width: 190px; }
+  table.bk-table .col-guest .g-contact { display: block; font-weight: 400; font-size: 0.72rem; color: var(--ink-soft); margin-top: 2px; }
+  table.bk-table .cabana-cell, table.bk-table .pay-cell { min-width: 0; }
+  table.bk-table .cabana-select { min-width: 0; max-width: 140px; }
+  table.bk-table .payby { white-space: normal; margin-top: 3px; }
+  table.bk-table .order-code { display: block; }
+  table.bk-table .bk-meta { display: block; font-size: 0.7rem; color: var(--ink-soft); margin-top: 2px; white-space: nowrap; }
+  table.bk-table .src-line { display: block; font-size: 0.74rem; color: var(--ink-soft); margin-top: 2px; }
+  table.bk-table .origin-badge { margin-bottom: 0; padding: 2px 7px; }
+  table.bk-table .type-badge { padding: 3px 7px; font-size: 0.68rem; white-space: normal; }
+  table.bk-table .status-badge { padding: 4px 9px; font-size: 0.7rem; white-space: normal; }
+  table.bk-table .row-actions { flex-direction: column; gap: 4px; }
+  td.col-notes2 { cursor: pointer; width: 15%; min-width: 120px; max-width: 230px; color: var(--ink-soft); font-size: 0.76rem; }
+  td.col-notes2:hover { background: var(--lagoon-tint); }
+  .note-prev { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; margin-bottom: 3px; }
+  .note-prev b { color: var(--ink); font-weight: 700; font-size: 0.68rem; text-transform: uppercase; letter-spacing: .04em; margin-right: 4px; }
+  .note-add { color: var(--lagoon-deep); font-weight: 600; font-size: 0.72rem; }
+  .pay-how { display: block; font-size: 0.72rem; color: var(--ink-soft); margin-top: 2px; }
+  #notesModal .note-guest { white-space: pre-wrap; background: var(--sand); border-radius: 10px; padding: 10px 12px; font-size: 0.88rem; margin: 0 0 16px; max-height: 40vh; overflow-y: auto; }
+  #notesModal textarea { width: 100%; min-height: 160px; font: inherit; font-size: 0.88rem; border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; background: var(--surface); color: var(--ink); }
+  #notesModal .nm-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 14px; align-items: center; }
+  #notesModal .nm-status { margin-right: auto; font-size: 0.8rem; color: var(--ink-soft); }
   td[data-editable="true"] { cursor: text; }
   td[data-editable="true"]:hover { background: var(--lagoon-tint); }
   td[data-editable="true"]:focus { outline: 2px solid var(--lagoon); outline-offset: -2px; background: var(--lagoon-tint); }
@@ -652,25 +681,21 @@
     <p class="count-line" id="countLine">Loading&hellip;</p>
 
     <div class="table-scroll">
-      <table>
+      <table class="bk-table">
         <thead>
           <tr>
-            <th class="sortable" data-sort="order_code">Booking ID<span class="sort-arrow">&#9662;</span></th>
+            <th class="sortable" data-sort="created_at" title="Sort by when the booking was entered">Booking<span class="sort-arrow">&#9662;</span></th>
             <th class="sortable" data-sort="guest_name">Guest<span class="sort-arrow">&#9662;</span></th>
-            <th>Contact</th>
             <th class="sortable col-type" data-sort="stay_type">Type<span class="sort-arrow">&#9662;</span></th>
-            <th class="sortable" data-sort="booked_by">Booked By<span class="sort-arrow">&#9662;</span></th>
             <th class="sortable" data-sort="check_in"><span id="thDate">Date</span><span class="sort-arrow">&#9662;</span></th>
             <th id="thUnits">Cabana(s)</th>
             <th class="sortable" data-sort="party">Party<span class="sort-arrow">&#9662;</span></th>
             <th class="sortable" data-sort="total_amount">Total<span class="sort-arrow">&#9662;</span></th>
             <th class="sortable" data-sort="status">Status<span class="sort-arrow">&#9662;</span></th>
             <th>Payment</th>
-            <th class="sortable" data-sort="source">Source<span class="sort-arrow">&#9662;</span></th>
-            <th>Notes</th>
-            <th>Staff Notes</th>
-            <th class="sortable" data-sort="created_at">Date Entered<span class="sort-arrow">&#9662;</span></th>
-            <th>Actions</th>
+            <th class="sortable" data-sort="source" title="Where the booking was made, and the channel the guest came through">Source<span class="sort-arrow">&#9662;</span></th>
+            <th title="Guest's message and internal staff notes — click a row's notes to read all or edit">Notes</th>
+            <th></th>
           </tr>
         </thead>
         <tbody id="bookingsBody">
@@ -1243,6 +1268,17 @@
   </div>
 </div>
 
+<div class="modal-backdrop" id="notesModalBackdrop">
+  <div class="modal" id="notesModal">
+    <h2 id="nmTitle" style="margin-bottom:14px;">Notes</h2>
+    <div id="nmGuestWrap"><p class="filter-label" style="margin:0 0 6px;font-weight:700;font-size:.75rem;text-transform:uppercase;letter-spacing:.06em;color:var(--ink-soft);">From the guest <span style="font-weight:400;text-transform:none;letter-spacing:0;">(what they wrote when booking &middot; read-only)</span></p>
+    <p class="note-guest" id="nmGuest"></p></div>
+    <label for="nmStaff" style="display:block;margin:0 0 6px;font-weight:700;font-size:.75rem;text-transform:uppercase;letter-spacing:.06em;color:var(--ink-soft);">Staff notes <span style="font-weight:400;text-transform:none;letter-spacing:0;">(internal &middot; the guest never sees these)</span></label>
+    <textarea id="nmStaff"></textarea>
+    <div class="nm-actions"><span class="nm-status" id="nmStatus"></span><button type="button" class="btn-sm ghost" id="nmCancel">Close</button><button type="button" class="btn-sm primary" id="nmSave">Save</button></div>
+  </div>
+</div>
+
 <div class="modal-backdrop" id="logModalBackdrop">
   <div class="modal modal-wide">
     <h2>Activity Log</h2>
@@ -1339,7 +1375,7 @@
 <script src="../assets/js/booking-config.js?v=c116a3a0ae"></script>
 <script src="../assets/js/cabana-map.js?v=3741396eca"></script>
 <script src="../assets/js/pricing.js?v=919002fd5d"></script>
-<script src="../assets/js/staff-dashboard.js?v=e8bde50960"></script>
+<script src="../assets/js/staff-dashboard.js?v=6e6fc16887"></script>
 <script src="../assets/js/staff-email.js?v=ac542441c2"></script>
 <script src="../assets/js/staff-villas.js?v=645505bec6"></script>
 <script src="../assets/js/staff-payments.js?v=d563661be7"></script>

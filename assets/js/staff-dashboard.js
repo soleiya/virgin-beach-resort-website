@@ -50,7 +50,7 @@
   var SOURCE_LABELS = {
     website: "Website", messenger: "Messenger", phone: "Phone", email: "Email", walk_in: "Walk-in", other: "Other",
     sheet_import: "Imported (2026 Sheet)",
-    cloudbeds: "Cloudbeds (website)", booking_com: "Booking.com", agoda: "Agoda", expo: "Expo", events: "Wedding / Events",
+    cloudbeds: "Cloudbeds booking engine", booking_com: "Booking.com", agoda: "Agoda", expo: "Expo", events: "Wedding / Events",
     corporate: "Corporate", partner: "Partner / Referral", returnee: "Returning guest", staff_stay: "Employee / friend stay",
   };
   var STATUS_ORDER = ["pending", "pending_payment", "confirmed", "declined", "completed", "expired"];
@@ -391,7 +391,7 @@
   }
   function loadBookingsPage(offset, acc) {
     var qy = sb.from("booking_requests")
-      .select("*, booking_cabanas(cabana_id), booking_villas(villa_id,provisional)");
+      .select("*, booking_cabanas(cabana_id), booking_villas(villa_id,provisional), booking_payments(method,note,status,amount)");
     var from = loadFrom();
     if (from) qy = qy.or("check_in.gte." + from + ",check_in.is.null,check_out.gte." + from);
     return qy
@@ -615,6 +615,11 @@
       d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
   }
 
+  function fmtShortDate(s) {
+    if (!s) return "";
+    var d = new Date(s), y = d.getFullYear() !== new Date().getFullYear();
+    return "entered " + d.toLocaleDateString(undefined, y ? { month: "short", day: "numeric", year: "2-digit" } : { month: "short", day: "numeric" });
+  }
   function updateField(id, field, value, el) {
     var patch = {};
     patch[field] = value;
@@ -721,6 +726,82 @@
     });
     return links;
   }
+  // ---------- Source: where the booking was made + the channel ----------
+  function sourceHtml(r) {
+    var o = originOf(r), ch = SOURCE_LABELS[r.source] || r.source || "";
+    // "Website · Guest" + "Website" says the same thing twice
+    if ((o === "site_guest" && r.source === "website") || (o === "sheet" && r.source === "sheet_import")) ch = "";
+    return originBadge(r) + (ch ? '<span class="src-line">via ' + esc(ch) + "</span>" : "") +
+      (r.cb_reservation_id ? '<span class="src-line">' + cbLinkHtml(r) + "</span>" : "") +
+      (r.cb_info && r.cb_info.ota_ref && r.cb_owned ? '<span class="src-line">ref ' + esc(r.cb_info.ota_ref) + "</span>" : "");
+  }
+
+  // ---------- Notes: guest's message + staff notes in one column ----------
+  function clip(t, n) { t = String(t || "").replace(/\s+/g, " ").trim(); return t.length > n ? t.slice(0, n - 1) + "…" : t; }
+  function renderNotesCell(td, r) {
+    var h = "";
+    if (r.notes) h += '<span class="note-prev"><b>Guest</b>' + esc(clip(r.notes, 90)) + "</span>";
+    if (r.staff_notes) h += '<span class="note-prev"><b>Staff</b>' + esc(clip(r.staff_notes, 90)) + "</span>";
+    td.innerHTML = h || '<span class="note-add">+ add note</span>';
+  }
+  var notesBackdrop = document.getElementById("notesModalBackdrop"), notesCur = null;
+  function closeNotes() { if (notesBackdrop) notesBackdrop.classList.remove("open"); notesCur = null; }
+  function openNotes(r, td) {
+    if (!notesBackdrop) return;
+    notesCur = { r: r, td: td };
+    document.getElementById("nmTitle").textContent = "Notes · " + (r.guest_name || "Booking") + (r.order_code ? " (" + r.order_code + ")" : "");
+    document.getElementById("nmGuestWrap").style.display = r.notes ? "" : "none";
+    document.getElementById("nmGuest").textContent = r.notes || "";
+    var ta = document.getElementById("nmStaff");
+    ta.value = r.staff_notes || "";
+    document.getElementById("nmStatus").textContent = "";
+    notesBackdrop.classList.add("open");
+    setTimeout(function () { ta.focus(); }, 30);
+  }
+  if (notesBackdrop) {
+    document.getElementById("nmCancel").addEventListener("click", closeNotes);
+    notesBackdrop.addEventListener("click", function (e) { if (e.target === notesBackdrop) closeNotes(); });
+    document.addEventListener("keydown", function (e) { if (e.key === "Escape" && notesCur) closeNotes(); });
+    document.getElementById("nmSave").addEventListener("click", function () {
+      if (!notesCur) return;
+      var r = notesCur.r, td = notesCur.td, val = document.getElementById("nmStaff").value.trim();
+      if (val === (r.staff_notes || "")) { closeNotes(); return; }
+      var st = document.getElementById("nmStatus"), btn = this;
+      btn.disabled = true; st.textContent = "Saving…";
+      sb.from("booking_requests").update({ staff_notes: val || null }).eq("id", r.id).then(function (res) {
+        btn.disabled = false;
+        if (res.error) { st.textContent = "Couldn't save: " + res.error.message; return; }
+        r.staff_notes = val || null;
+        renderNotesCell(td, r);
+        closeNotes();
+      });
+    });
+  }
+
+  // ---------- how it was paid (booking_payments) ----------
+  var CHANNEL_NAMES = { GCASH: "GCash", PAYMAYA: "Maya", MAYA: "Maya", GRABPAY: "GrabPay", SHOPEEPAY: "ShopeePay", QRPH: "QR Ph",
+    CREDIT_CARD: "Card", CARDS: "Card", VISA: "Card", MASTERCARD: "Card", JCB: "Card", AMEX: "Card", DEBIT_CARD: "Card",
+    APPLE_PAY: "Apple Pay", GOOGLE_PAY: "Google Pay", DD_BPI: "BPI online", BPI: "BPI online", DD_RCBC: "RCBC online", RCBC: "RCBC online",
+    DD_UBP: "UnionBank online", UBP: "UnionBank online", CEBUANA: "Cebuana", EWALLET: "e-wallet", QR_CODE: "QR Ph", DIRECT_DEBIT: "online banking" };
+  function payMethodName(p) {
+    if (p.method === "xendit") {
+      var parts = String(p.note || "").split("·").map(function (x) { return x.trim(); });
+      var ch = parts[1] && !/^invoice /.test(parts[1]) ? parts[1].toUpperCase() : "";
+      var nice = CHANNEL_NAMES[ch] || (ch ? ch.charAt(0) + ch.slice(1).toLowerCase().replace(/_/g, " ") : "");
+      return (nice ? nice + " · " : "") + "Xendit";
+    }
+    return { transfer: "Bank transfer (manual)", link: "Payment link", cash: "Cash", card: "Card at the resort", other: "Other" }[p.method] || p.method || "";
+  }
+  function payMethods(r) {
+    var seen = {}, out = [];
+    (r.booking_payments || []).forEach(function (p) {
+      if (p.status === "rejected") return;
+      var n = payMethodName(p);
+      if (n && !seen[n]) { seen[n] = true; out.push(n); }
+    });
+    return out;
+  }
+
   // Display only — payment proofs are uploaded from the ✎ edit form.
   function renderPayCell(td, r) {
     td.innerHTML = "";
@@ -732,6 +813,13 @@
       fig.className = "pay-cell-fig";
       fig.textContent = paid >= total - 0.5 && paid > 0 ? "Paid in full" : paid > 0 ? "Paid " + peso(paid) + " of " + peso(total) : "Unpaid";
       box.appendChild(fig);
+      var how = payMethods(r);
+      if (how.length) {
+        var hw = document.createElement("span");
+        hw.className = "pay-how";
+        hw.textContent = how.join(" + ");
+        box.appendChild(hw);
+      }
       if (paid > 0 && paid < total - 0.5 && r.check_in) {
         var dueD = new Date(r.check_in + "T00:00:00Z"); dueD.setUTCDate(dueD.getUTCDate() - 15);
         var dueS = dueD.toISOString().slice(0, 10), late = dueS < new Date().toISOString().slice(0, 10);
@@ -755,8 +843,28 @@
       td.appendChild(box);
       return;
     }
+    // Cloudbeds-made bookings: money is taken and recorded in Cloudbeds
+    if (r.cb_owned && r.cb_info && (r.cb_info.total != null || r.cb_info.balance != null || r.cb_info.paid != null)) {
+      var ct = r.cb_info.total != null ? Number(r.cb_info.total) : null, cbal = r.cb_info.balance != null ? Number(r.cb_info.balance) : null;
+      var cp = r.cb_info.paid != null ? Number(r.cb_info.paid) : (ct != null && cbal != null ? ct - cbal : null);
+      var f2 = document.createElement("span");
+      f2.className = "pay-cell-fig";
+      f2.textContent = ct != null && cp != null && cp >= ct - 0.5 && cp > 0 ? "Paid in full" : cp > 0 ? "Paid " + peso(cp) + (ct != null ? " of " + peso(ct) : "") : "Unpaid";
+      td.appendChild(f2);
+      var h2 = document.createElement("span");
+      h2.className = "pay-how";
+      h2.textContent = cp > 0 ? "recorded in Cloudbeds" : "collected via Cloudbeds";
+      h2.title = "This booking was made in Cloudbeds (or an OTA), so its payments are taken and recorded there. Open it in Cloudbeds to see how it was paid.";
+      td.appendChild(h2);
+      if (cbal != null && cbal > 0.5 && cp > 0) {
+        var b2 = document.createElement("span");
+        b2.className = "payby";
+        b2.textContent = "balance " + peso(cbal);
+        td.appendChild(b2);
+      }
+    }
     var links = proofLinks(r);
-    if (!links.length) { td.innerHTML = '<span class="muted">—</span>'; return; }
+    if (!links.length) { if (!td.firstChild) td.innerHTML = '<span class="muted">—</span>'; return; }
     links.forEach(function (l) {
       var a = document.createElement("a");
       a.className = "pay-link";
@@ -864,7 +972,7 @@
     if (renderShown < renderQueue.length) {
       moreRow = document.createElement("tr");
       moreRow.className = "more-row";
-      moreRow.innerHTML = '<td colspan="16"><button type="button" class="btn-sm ghost">Show more</button> <span class="muted">Showing ' +
+      moreRow.innerHTML = '<td colspan="12"><button type="button" class="btn-sm ghost">Show more</button> <span class="muted">Showing ' +
         renderShown.toLocaleString() + " of " + renderQueue.length.toLocaleString() + " · more load as you scroll</span></td>";
       moreRow.querySelector("button").addEventListener("click", function () { appendRows(ROW_BATCH * 4); });
       bookingsBody.appendChild(moreRow);
@@ -878,28 +986,22 @@
       var tr = document.createElement("tr");
 
       var tdOrder = document.createElement("td");
-      tdOrder.innerHTML = '<span class="order-code">' + (r.order_code || "—") + "</span>";
+      tdOrder.innerHTML = '<span class="order-code">' + esc(r.order_code || "—") + "</span>" +
+        '<span class="bk-meta" title="Entered ' + esc(fmtDateTime(r.created_at)) + '">' + esc(fmtShortDate(r.created_at)) + "</span>" +
+        (r.booked_by ? '<span class="bk-meta" title="Entered by staff">by ' + esc(r.booked_by) + "</span>" : "");
       tr.appendChild(tdOrder);
 
       var tdGuest = document.createElement("td");
       tdGuest.className = "col-guest";
-      tdGuest.textContent = r.guest_name || "—";
+      tdGuest.innerHTML = esc(r.guest_name || "—") +
+        (r.guest_phone ? '<span class="g-contact">' + esc(r.guest_phone) + "</span>" : "") +
+        (r.guest_email ? '<span class="g-contact">' + esc(r.guest_email) + "</span>" : "");
       tr.appendChild(tdGuest);
-
-      var tdContact = document.createElement("td");
-      tdContact.innerHTML = (r.guest_phone ? r.guest_phone : "") + (r.guest_phone && r.guest_email ? "<br>" : "") +
-        (r.guest_email ? '<span class="muted">' + r.guest_email + "</span>" : "");
-      tr.appendChild(tdContact);
 
       var tdType = document.createElement("td");
       tdType.className = "col-type";
       tdType.innerHTML = '<span class="type-badge">' + (TYPE_LABELS[r.stay_type] || r.stay_type_label || r.stay_type || "—") + "</span>";
       tr.appendChild(tdType);
-
-      var tdBookedBy = document.createElement("td");
-      tdBookedBy.className = "muted";
-      tdBookedBy.textContent = r.booked_by || "—";
-      tr.appendChild(tdBookedBy);
 
       var tdDate = document.createElement("td");
       tdDate.textContent = fmtDate(r.check_in);
@@ -938,9 +1040,7 @@
         tdTotal.title = "People: " + peso(r.subtotal_people) + (r.senior_discount ? " (incl. " + peso(r.senior_discount) + " senior discount)" : "") + " · Cabana(s): " + peso(r.cabana_total);
       }
       if (isVillaRow(r) && r.cb_info) {
-        if (r.cb_owned && r.cb_info.balance != null && Number(r.cb_info.balance) > 0.5 && r.status !== "declined") {
-          tdTotal.innerHTML += '<span class="payby">balance ' + esc(peso(r.cb_info.balance)) + "</span>";
-        } else if (!r.cb_owned && r.cb_info.total != null && r.total_amount != null && Math.abs(Number(r.cb_info.total) - Number(r.total_amount)) > 1) {
+        if (!r.cb_owned && r.cb_info.total != null && r.total_amount != null && Math.abs(Number(r.cb_info.total) - Number(r.total_amount)) > 1) {
           tdTotal.innerHTML += '<span class="payby overdue" title="Cloudbeds priced it from its own rate plan. Adjust the folio in Cloudbeds so it matches the website total.">Cloudbeds: ' + esc(peso(r.cb_info.total)) + "</span>";
         }
       }
@@ -1013,34 +1113,15 @@
       tr.appendChild(tdPay);
 
       var tdSource = document.createElement("td");
-      tdSource.innerHTML = originBadge(r) + '<br><span class="source-badge">' + (SOURCE_LABELS[r.source] || r.source || "Website") + "</span>" +
-        (r.cb_reservation_id ? "<br>" + cbLinkHtml(r) : "") +
-        (r.cb_info && r.cb_info.ota_ref && r.cb_owned ? '<span class="payby">ref ' + esc(r.cb_info.ota_ref) + "</span>" : "");
+      tdSource.innerHTML = sourceHtml(r);
       tr.appendChild(tdSource);
 
       var tdNotes = document.createElement("td");
-      tdNotes.className = "col-notes";
-      tdNotes.textContent = r.notes || "—";
+      tdNotes.className = "col-notes2";
+      tdNotes.title = "Click to read all or edit the staff notes";
+      renderNotesCell(tdNotes, r);
+      tdNotes.addEventListener("click", function () { openNotes(r, tdNotes); });
       tr.appendChild(tdNotes);
-
-      var tdStaffNotes = document.createElement("td");
-      tdStaffNotes.className = "col-notes";
-      tdStaffNotes.contentEditable = "true";
-      tdStaffNotes.setAttribute("data-editable", "true");
-      tdStaffNotes.textContent = r.staff_notes || "";
-      tdStaffNotes.addEventListener("blur", function () {
-        var val = tdStaffNotes.textContent.trim();
-        if (val !== (r.staff_notes || "")) {
-          r.staff_notes = val;
-          updateField(r.id, "staff_notes", val, tdStaffNotes);
-        }
-      });
-      tr.appendChild(tdStaffNotes);
-
-      var tdReceived = document.createElement("td");
-      tdReceived.className = "muted";
-      tdReceived.textContent = fmtDateTime(r.created_at);
-      tr.appendChild(tdReceived);
 
       var tdLog = document.createElement("td");
       var actions = document.createElement("div");
