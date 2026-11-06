@@ -565,6 +565,7 @@ form.inquiry .field-hint { font-size: 0.8rem; color: var(--ink-soft); margin-top
 .bill-row { display: flex; justify-content: space-between; gap: 16px; font-size: 0.88rem; color: var(--ink-soft); }
 .bill-row em { font-style: normal; color: var(--lagoon-deep); }
 .bill-warning { background: var(--sand-deep); border-radius: 6px; padding: 10px 14px; font-size: 0.84rem; color: var(--ink); margin-bottom: 14px; }
+.bill-warning.is-error { background: #f8e3dc; color: #8a3a2b; font-weight: 600; }
 .bill-total { display: flex; justify-content: space-between; align-items: baseline; padding-top: 14px; border-top: 1px solid var(--line); font-family: var(--font-display); font-size: 1.25rem; font-weight: 600; }
 
 /* ---------- payment proof upload ---------- */

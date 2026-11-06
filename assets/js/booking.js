@@ -218,7 +218,7 @@
     if (!billSummaryEl) return;
     if (fromCode !== true) recheckCode();
     var bill = computeBill();
-    if (bill.dining + bill.lounge > 0) { var ce = document.getElementById("cabanaError"); if (ce) ce.hidden = true; }
+    if (bill.dining + bill.lounge > 0 && bill.totalCapacity >= bill.totalGuests) { var ce = document.getElementById("cabanaError"); if (ce) ce.hidden = true; }
     if (codeRow) codeRow.hidden = !usesCabanaMap();
     renderPackageNote(bill);
 
@@ -288,9 +288,9 @@
     var warning = "";
     if (bill.cabanaCount && bill.totalCapacity < bill.totalGuests) {
       warning =
-        '<p class="bill-warning">Heads up — ' + (bill.cabanaCount === 1 ? "that cabana seats" : "those cabanas seat") +
-        " up to " + bill.totalCapacity + ", and your party is " + bill.totalGuests +
-        ". Feel free to add another cabana above, or we can help sort seating when we confirm.</p>";
+        '<p class="bill-warning is-error">' + (bill.cabanaCount === 1 ? "That cabana seats" : "Those cabanas seat") +
+        " up to " + bill.totalCapacity + ", and your party is " + bill.totalGuests + " (counting everyone, including kids)" +
+        ". Please add another cabana above — a Dining Cabana seats up to 10, a Lounge Cabana up to 4.</p>";
     }
 
     var codeDisc = codeResult ? Math.min(Number(codeResult.discount) || 0, bill.total) : 0;
@@ -523,10 +523,19 @@
     // Every day trip / half-day needs at least one cabana (Front Office rule).
     var cabErr = document.getElementById("cabanaError");
     if (usesCabanaMap() && !(bill.dining + bill.lounge > 0)) {
-      if (cabErr) { cabErr.hidden = false; cabErr.scrollIntoView({ behavior: "smooth", block: "center" }); }
+      if (cabErr) { cabErr.textContent = "Every day trip needs at least one cabana — please add a Dining or Lounge Cabana above."; cabErr.hidden = false; cabErr.scrollIntoView({ behavior: "smooth", block: "center" }); }
       return;
     }
     if (cabErr) cabErr.hidden = true;
+    // Enough cabana seats for the whole party, regardless of age (Front Office rule).
+    if (usesCabanaMap() && bill.totalCapacity < bill.totalGuests) {
+      if (cabErr) {
+        cabErr.textContent = "Your party of " + bill.totalGuests + " needs more cabana space — your cabana(s) seat up to " + bill.totalCapacity +
+          ". Please add another cabana above (Dining seats 10, Lounge seats 4).";
+        cabErr.hidden = false; cabErr.scrollIntoView({ behavior: "smooth", block: "center" });
+      }
+      return;
+    }
 
     if (bill.seniors + (bill.pwdKids || 0) > 0) {
       var files = seniorIdFilesEl && seniorIdFilesEl.files ? seniorIdFilesEl.files.length : 0;
