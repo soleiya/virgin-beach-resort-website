@@ -1,0 +1,1039 @@
+// =============================================================================
+// cloudbeds-sync — keeps the website and Cloudbeds in step (Cloudbeds is the
+// master for villas). See supabase-functions/booking-v14-cloudbeds-sync.sql.
+//
+// Called with header x-webhook-secret (the same vault secret the booking
+// emails use) and a JSON body { action, ... }:
+//   pull     every 5 min (pg_cron): reservations changed in Cloudbeds since the
+//            last run → booking_requests; then retries website bookings that
+//            haven't reached Cloudbeds yet.
+//   full     nightly: every stay checking out from yesterday on (in pages).
+//   push     { booking_id } a villa booked on the website → new Cloudbeds
+//            reservation on the same casita(s).
+//   status   { booking_id } website confirmed / cancelled it → same in Cloudbeds.
+//   payments verified website payments → Cloudbeds folio (postPayment), and
+//            their proof screenshots → the reservation's Documents
+//            (postReservationDocument).
+// A pushed booking also gets its folio lines: meals, extra beds, pets, add-ons
+// (postCustomItem) and discounts (postAdjustment); a total that still differs
+// is noted for staff (booking_requests.cb_folio_note).
+//   setup    link villas to Cloudbeds rooms (by name) + register webhooks.
+//   rates    { from, days } Cloudbeds nightly prices + open nights → cb_rates
+//            (v36); also part of every pull (14 nights + 30 in rotation).
+//   rates_preview  { date } what Cloudbeds says for one night (nothing saved).
+//   test     check the API key.
+// v21 (Cloudbeds first): the website sends only the quotation for these
+// villa bookings; Cloudbeds' own emails take over (status changes are pushed
+// with sendStatusChangeEmail). Each booking gets the Cloudbeds source for where
+// it was made ("New Website – Guest" / "– Staff", found by setup). Proofs are
+// attached to the reservation's Documents as soon as they're uploaded, so
+// Cloudbeds staff can check them; verified payments go on the folio.
+// TEST MODE (cb_sync_state.push_enabled = false, the default): nothing is
+// sent to Cloudbeds — no push, no status changes. Cloudbeds → website runs.
+// Cloudbeds webhooks (reservation/created, …) arrive with the same header and
+// a Cloudbeds event body; they're answered at once and processed after.
+//
+// Secrets (Edge Functions → Secrets): CLOUDBEDS_API_KEY (Cloudbeds →
+// Account → Apps & Marketplace → API Credentials → API key). Optional:
+// CLOUDBEDS_PROPERTY_ID (default 208402).
+// Deploy with "Verify JWT" OFF (pg_net and Cloudbeds call it without a JWT).
+// =============================================================================
+
+// deno-lint-ignore-file no-explicit-any
+type Any = any;
+
+const env = (k: string, d = "") => (globalThis as Any).Deno?.env.get(k) ?? d;
+const CB = "https://api.cloudbeds.com/api/v1.3";
+const PROPERTY = () => env("CLOUDBEDS_PROPERTY_ID", "208402");
+const SB_URL = () => env("SUPABASE_URL");
+const SR = () => env("SUPABASE_SERVICE_ROLE_KEY");
+const SELF = () => `${SB_URL()}/functions/v1/cloudbeds-sync`;
+const RESERVATION_EVENTS = [
+  "created", "status_changed", "dates_changed", "accommodation_changed",
+  "accommodation_type_changed", "accommodation_removed", "deleted",
+];
+
+// ---------------------------------------------------------------- Supabase
+export async function rpc(name: string, args: Record<string, unknown> = {}): Promise<Any> {
+  const res = await fetch(`${SB_URL()}/rest/v1/rpc/${name}`, {
+    method: "POST",
+    headers: { apikey: SR(), Authorization: `Bearer ${SR()}`, "Content-Type": "application/json" },
+    body: JSON.stringify(args),
+  });
+  const text = await res.text();
+  if (!res.ok) throw new Error(`${name}: ${res.status} ${text.slice(0, 300)}`);
+  return text ? JSON.parse(text) : null;
+}
+
+async function bookingRow(id: string): Promise<Any> {
+  const res = await fetch(`${SB_URL()}/rest/v1/booking_requests?id=eq.${encodeURIComponent(id)}&select=id,status,cb_reservation_id,cb_owned,cb_info`, {
+    headers: { apikey: SR(), Authorization: `Bearer ${SR()}` },
+  });
+  const rows = await res.json();
+  return Array.isArray(rows) ? rows[0] : null;
+}
+
+let secretCache: string | null = null;
+async function secret(): Promise<string | null> {
+  if (!secretCache) secretCache = await rpc("cb_webhook_secret");
+  return secretCache;
+}
+
+const stateSet = (key: string, value: unknown) => rpc("cb_state_set", { p_key: key, p_value: value }).catch(() => null);
+
+// ---------------------------------------------------------------- Cloudbeds
+let lastCall = 0;
+export const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+// Flatten { rooms: [{ roomTypeID: 1 }] } → rooms[0][roomTypeID]=1
+export function form(params: Record<string, unknown>): URLSearchParams {
+  const out = new URLSearchParams();
+  const add = (key: string, v: unknown) => {
+    if (v === undefined || v === null) return;
+    if (Array.isArray(v)) v.forEach((x, i) => add(`${key}[${i}]`, x));
+    else if (typeof v === "object") for (const [k, x] of Object.entries(v as Record<string, unknown>)) add(`${key}[${k}]`, x);
+    else out.append(key, String(v));
+  };
+  for (const [k, v] of Object.entries(params)) add(k, v);
+  return out;
+}
+
+export async function cb(method: "GET" | "POST" | "PUT" | "DELETE", path: string, params: Record<string, unknown> = {}): Promise<Any> {
+  const key = env("CLOUDBEDS_API_KEY");
+  if (!key) throw new Error("CLOUDBEDS_API_KEY is not set (Edge Functions → Secrets)");
+  const p = { propertyID: PROPERTY(), ...params };
+  for (let attempt = 0; ; attempt++) {
+    const wait = lastCall + 220 - Date.now(); // stay well under Cloudbeds' rate limit
+    if (wait > 0) await sleep(wait);
+    lastCall = Date.now();
+    const inQuery = method === "GET" || method === "DELETE";
+    const url = inQuery ? `${CB}/${path}?${form(p)}` : `${CB}/${path}`;
+    const res = await fetch(url, {
+      method,
+      headers: {
+        "x-api-key": key,
+        Accept: "application/json",
+        ...(inQuery ? {} : { "Content-Type": "application/x-www-form-urlencoded" }),
+      },
+      body: inQuery ? undefined : form(p),
+    });
+    if ((res.status === 429 || res.status >= 500) && attempt < 3) {
+      await sleep(1500 * (attempt + 1));
+      continue;
+    }
+    const text = await res.text();
+    let json: Any;
+    try { json = JSON.parse(text); } catch { throw new Error(`${path}: HTTP ${res.status} ${text.slice(0, 200)}`); }
+    if (!res.ok || json?.success === false) {
+      const err = new Error(`${path}: ${json?.message || "HTTP " + res.status}`);
+      (err as Any).status = res.status;
+      throw err;
+    }
+    return json;
+  }
+}
+
+// ---------------------------------------------------------------- mapping
+const num = (v: unknown) => (v === null || v === undefined || v === "" ? null : Number(v));
+const sumBy = (xs: Any[], k: string) => xs.reduce((a, x) => a + (Number(x?.[k]) || 0), 0);
+
+// Cloudbeds' reservation dates are in the property's time (Manila).
+export function manila(dt: unknown): string | null {
+  const s = String(dt || "").trim();
+  if (!s) return null;
+  if (/[zZ]|[+-]\d\d:?\d\d$/.test(s)) return s;
+  return s.replace(" ", "T") + "+08:00";
+}
+
+// getReservation data → the shape cb_apply_reservation() expects
+export function normalize(d: Any) {
+  const guests = Object.values(d.guestList || {}) as Any[];
+  const main = guests.find((g) => g?.isMainGuest) || guests[0] || {};
+  const assigned = Array.isArray(d.assigned) ? d.assigned : [];
+  const unassigned = Array.isArray(d.unassigned) ? d.unassigned : [];
+  const all = [...assigned, ...unassigned];
+  const bal = Array.isArray(d.balanceDetailed) ? d.balanceDetailed[0] : d.balanceDetailed;
+  return {
+    id: String(d.reservationID),
+    status: d.status,
+    source: d.sourceName || d.source || null,
+    guest_name: d.guestName || [main.guestFirstName, main.guestLastName].filter(Boolean).join(" ") || null,
+    guest_email: d.guestEmail || main.guestEmail || null,
+    guest_phone: main.guestCellPhone || main.guestPhone || null,
+    country: main.guestCountry || null,
+    start: d.startDate,
+    end: d.endDate,
+    adults: all.length ? sumBy(all, "adults") : num(d.adults),
+    children: all.length ? sumBy(all, "children") : num(d.children),
+    total: num(d.total),
+    balance: num(d.balance),
+    paid: num(bal?.paid),
+    created: manila(d.dateCreated),
+    modified: d.dateModified ? String(d.dateModified) : null,
+    ota_ref: d.thirdPartyIdentifier || null,
+    rooms: assigned.map((a: Any) => ({ room_id: String(a.roomID), room_name: a.roomName, room_type_id: String(a.roomTypeID), room_type_name: a.roomTypeName })),
+    unassigned: unassigned.map((u: Any) => ({ room_type_id: String(u.roomTypeID), room_type_name: u.roomTypeName })),
+  };
+}
+
+async function syncOne(id: string): Promise<Any> {
+  try {
+    const r = await cb("GET", "getReservation", { reservationID: id });
+    return await rpc("cb_apply_reservation", { p: normalize(r.data) });
+  } catch (e) {
+    const msg = String((e as Error).message || e);
+    if (/not found|does not exist|invalid reservation/i.test(msg)) {
+      return await rpc("cb_apply_reservation", { p: { id, status: "deleted" } });
+    }
+    throw e;
+  }
+}
+
+// ---------------------------------------------------------------- actions
+const fmtUtc = (d: Date) => d.toISOString().slice(0, 19).replace("T", " ");
+const ymd = (d: Date) => d.toISOString().slice(0, 10);
+
+async function listPage(params: Record<string, unknown>, page: number) {
+  return await cb("GET", "getReservations", { ...params, pageSize: 100, pageNumber: page });
+}
+
+// Go through list items, fetch + apply the ones that changed.
+async function processList(items: Any[], force: boolean, deadline: number) {
+  const ids = items.map((x) => String(x.reservationID));
+  const known: Record<string, string> = force ? {} : (await rpc("cb_known", { p_ids: ids })) || {};
+  let applied = 0, skipped = 0, failed = 0, stopped = false;
+  const errors: string[] = [];
+  for (const it of items) {
+    const id = String(it.reservationID);
+    if (!force && id in known && known[id] && known[id] === String(it.dateModified || "")) { skipped++; continue; }
+    if (Date.now() > deadline) { stopped = true; break; }
+    try { await syncOne(id); applied++; } catch (e) { failed++; errors.push(`${id}: ${(e as Error).message}`); }
+  }
+  return { applied, skipped, failed, stopped, errors: errors.slice(0, 5) };
+}
+
+// Cloudbeds room blocks for the next `days` days, in the 35-day windows the API allows
+async function syncBlocks(days: number) {
+  const from = new Date(Date.now() - 86_400_000);
+  const to = new Date(from.getTime() + days * 86_400_000);
+  const blocks = new Map<string, Any>();
+  for (let a = from; a < to; a = new Date(a.getTime() + 35 * 86_400_000)) {
+    const b = new Date(Math.min(a.getTime() + 34 * 86_400_000, to.getTime()));
+    for (let page = 1; page <= 10; page++) {
+      const res = await cb("GET", "getRoomBlocks", { startDate: ymd(a), endDate: ymd(b), pageSize: 100, pageNumber: page });
+      const list = (Array.isArray(res.data) ? res.data.flatMap((d: Any) => d.roomBlocks || []) : res.data?.roomBlocks) || [];
+      for (const k of list) {
+        blocks.set(String(k.roomBlockID), {
+          block_id: String(k.roomBlockID), type: k.roomBlockType, reason: k.roomBlockReason,
+          start: k.startDate, end: k.endDate, rooms: (k.rooms || []).map((r: Any) => String(r.roomID)),
+        });
+      }
+      if (list.length < 100) break;
+    }
+  }
+  return await rpc("cb_apply_blocks", { p_from: ymd(from), p_to: ymd(to), p: [...blocks.values()] });
+}
+
+// v36: Cloudbeds nightly prices + availability per casita type → cb_rates.
+// The website only sells nights that are on sale in Cloudbeds, at Cloudbeds'
+// price (once booking_settings.cloudbeds_rates is on). getRatePlans works like
+// a booking search (the whole range must be bookable), so it's asked one night
+// at a time: what's returned for that night is on sale; "no rate found" means
+// every casita type is closed that night. Only the base rate (no ratePlanID)
+// is used.
+const NO_RATE = /no rate found|could not accommodate/i;
+const manilaToday = () => { const d = new Date(Date.now() + 8 * 3_600_000); d.setUTCHours(0, 0, 0, 0); return d; };
+const addD = (d: Date, n: number) => new Date(d.getTime() + n * 86_400_000);
+async function fetchNight(night: Date) {
+  const rows: Any[] = [];
+  let res: Any;
+  try {
+    res = await cb("GET", "getRatePlans", { startDate: ymd(night), endDate: ymd(addD(night, 1)), adults: 1, children: 0 });
+  } catch (e) {
+    if (NO_RATE.test((e as Error).message)) return rows; // nothing on sale that night
+    throw e;
+  }
+  const seen = new Set<string>();
+  for (const r of (Array.isArray(res.data) ? res.data : [])) {
+    if (r?.ratePlanID) continue; // derived / promo plans
+    const t = String(r.roomTypeID);
+    if (seen.has(t)) continue;
+    seen.add(t);
+    rows.push({
+      room_type_id: t, date: ymd(night),
+      rate: num(r.roomRate ?? r.rate ?? r.totalRate),
+      rooms_available: r.roomsAvailable === undefined ? null : num(r.roomsAvailable),
+      cta: false, ctd: false, min_los: null,
+    });
+  }
+  return rows;
+}
+// nights [from, from + days) → cb_rates (stops early at the deadline; only the
+// nights actually checked are written)
+async function syncRatesRange(from: Date, days: number, deadline: number) {
+  const rows: Any[] = [];
+  let done = 0;
+  for (; done < days; done++) {
+    if (Date.now() > deadline) break;
+    rows.push(...await fetchNight(addD(from, done)));
+  }
+  if (!done) return { rows: 0, checked: 0 };
+  const out = await rpc("cb_apply_rates", { p_from: ymd(from), p_to: ymd(addD(from, done)), p: rows });
+  return { ...out, checked: done };
+}
+const RATE_HORIZON = 460;   // nights ahead kept in step
+const RATE_NEAR = 14;       // checked on every pull
+const RATE_STEP = 30;       // further nights checked per pull, in rotation
+async function syncRates(deadline: number) {
+  const today = manilaToday();
+  const near = await syncRatesRange(today, RATE_NEAR, deadline);
+  const st = await fetch(`${SB_URL()}/rest/v1/cb_sync_state?key=eq.rates_cursor&select=value`, {
+    headers: { apikey: SR(), Authorization: `Bearer ${SR()}` },
+  }).then((r) => r.json()).then((x) => x?.[0]?.value).catch(() => null);
+  let offset = Number(st?.offset) || RATE_NEAR;
+  if (offset < RATE_NEAR || offset >= RATE_HORIZON) offset = RATE_NEAR;
+  const step = Math.min(RATE_STEP, RATE_HORIZON - offset);
+  const far = await syncRatesRange(addD(today, offset), step, deadline);
+  const next = offset + (far.checked || 0) >= RATE_HORIZON ? RATE_NEAR : offset + (far.checked || 0);
+  await stateSet("rates_cursor", { offset: next, at: new Date().toISOString() });
+  const value = { at: new Date().toISOString(), near, far: { ...far, from_offset: offset } };
+  await stateSet("last_rates", value);
+  return value;
+}
+
+async function pull() {
+  const started = new Date();
+  const deadline = Date.now() + 110_000;
+  const stateRes = await fetch(`${SB_URL()}/rest/v1/cb_sync_state?key=eq.last_pull&select=value`, {
+    headers: { apikey: SR(), Authorization: `Bearer ${SR()}` },
+  });
+  const st = (await stateRes.json())?.[0]?.value;
+  // Overlap generously: Cloudbeds may read the time as Manila or UTC.
+  const from = st?.at ? new Date(new Date(st.at).getTime() - 30 * 60_000) : new Date(Date.now() - 2 * 86_400_000);
+  const params = { modifiedFrom: fmtUtc(from), modifiedTo: fmtUtc(new Date(Date.now() + 86_400_000)) };
+  const totals = { applied: 0, skipped: 0, failed: 0, pushed: 0, push_failed: 0 };
+  const errors: string[] = [];
+  let complete = true;
+  for (let page = 1; page <= 20; page++) {
+    const res = await listPage(params, page);
+    const items = Array.isArray(res.data) ? res.data : [];
+    const r = await processList(items, false, deadline);
+    totals.applied += r.applied; totals.skipped += r.skipped; totals.failed += r.failed; errors.push(...r.errors);
+    if (r.stopped) { complete = false; break; }
+    if (items.length < 100) break;
+  }
+  const blocks = await syncBlocks(105).catch((e) => { errors.push("room blocks: " + (e as Error).message); return null; });
+  // website bookings still waiting for Cloudbeds
+  const waiting: string[] = (await rpc("cb_pending_pushes")) || [];
+  for (const id of waiting) {
+    if (Date.now() > deadline) break;
+    const r = await push(String(id));
+    if (r?.reservation_id) totals.pushed++; else if (r?.error) { totals.push_failed++; errors.push(`push ${id}: ${r.error}`); }
+  }
+  // verified website payments not on the Cloudbeds folio yet
+  const pay = await postPayments(deadline).catch((e) => { errors.push("payments: " + (e as Error).message); return null; });
+  const docs = await syncDocs(deadline).catch((e) => { errors.push("documents: " + (e as Error).message); return null; });
+  if (docs?.errors?.length) errors.push(...docs.errors);
+  if (pay?.errors?.length) errors.push(...pay.errors);
+  // Cloudbeds prices / open nights: the next 14 nights every run, plus 30
+  // more in rotation (all ~15 months are refreshed about every 1¼ hours)
+  let rates: Any = null;
+  if (Date.now() < deadline - 25_000) {
+    rates = await syncRates(deadline - 5_000).catch((e) => { errors.push("rates: " + (e as Error).message); return null; });
+  }
+  // only move the window forward when everything in it was handled
+  const value = { at: complete && totals.failed === 0 ? started.toISOString() : (st?.at || from.toISOString()), ran_at: new Date().toISOString(), ...totals, complete, blocks, rates };
+  await stateSet("last_pull", value);
+  if (errors.length) await stateSet("last_error", { at: new Date().toISOString(), errors: errors.slice(0, 10) });
+  return value;
+}
+
+async function full(page = 1, force = true) {
+  const deadline = Date.now() + 110_000;
+  if (page === 1) await syncBlocks(400).catch(() => null);
+  const yesterday = new Date(Date.now() - 86_400_000);
+  const res = await listPage({ checkOutFrom: ymd(yesterday), checkOutTo: ymd(new Date(Date.now() + 2 * 365 * 86_400_000)) }, page);
+  const items = Array.isArray(res.data) ? res.data : [];
+  const r = await processList(items, force, deadline);
+  const more = items.length === 100 || r.stopped;
+  const next = r.stopped ? page : page + 1;
+  if (more) {
+    // continue in a fresh invocation (keeps each run short)
+    const s = await secret();
+    fetch(SELF(), {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-webhook-secret": s || "" },
+      body: JSON.stringify({ action: "full", page: next, force: r.stopped ? false : force }),
+    }).catch(() => null);
+    await sleep(500);
+  }
+  const value = { page, items: items.length, ...r, more, at: new Date().toISOString() };
+  await stateSet("last_full", value);
+  return value;
+}
+
+const ISO2: Record<string, string> = {
+  philippines: "PH", ph: "PH", "united states": "US", usa: "US", us: "US", "united kingdom": "GB", uk: "GB",
+  australia: "AU", canada: "CA", japan: "JP", korea: "KR", "south korea": "KR", china: "CN", singapore: "SG",
+  germany: "DE", france: "FR", spain: "ES", italy: "IT", netherlands: "NL", "hong kong": "HK", taiwan: "TW",
+  india: "IN", malaysia: "MY", indonesia: "ID", vietnam: "VN", thailand: "TH", "new zealand": "NZ",
+  "united arab emirates": "AE", uae: "AE", switzerland: "CH", sweden: "SE", norway: "NO", denmark: "DK",
+  ireland: "IE", russia: "RU", israel: "IL", "saudi arabia": "SA", qatar: "QA",
+};
+export function iso2(country: unknown): string {
+  const s = String(country || "").trim();
+  if (/^[A-Za-z]{2}$/.test(s)) return s.toUpperCase();
+  return ISO2[s.toLowerCase()] || "PH";
+}
+
+export function splitName(name: unknown): [string, string] {
+  const parts = String(name || "").trim().split(/\s+/).filter(Boolean);
+  if (!parts.length) return ["Guest", "Website"];
+  if (parts.length === 1) return [parts[0], "-"];
+  return [parts.slice(0, -1).join(" "), parts[parts.length - 1]];
+}
+
+// Spread n over k rooms: 5 over 2 → [3, 2]
+export function spread(n: number, k: number): number[] {
+  const base = Math.floor(n / k), extra = n % k;
+  return Array.from({ length: k }, (_, i) => base + (i < extra ? 1 : 0));
+}
+
+export function byRoomType(villas: Any[], adults: number[], kids: number[]) {
+  const order: string[] = [], n: Record<string, { rooms: number; adults: number; kids: number }> = {};
+  villas.forEach((v, i) => {
+    const t = String(v.cb_room_type_id);
+    if (!n[t]) { n[t] = { rooms: 0, adults: 0, kids: 0 }; order.push(t); }
+    n[t].rooms += 1; n[t].adults += adults[i] || 0; n[t].kids += kids[i] || 0;
+  });
+  return {
+    rooms: order.map((t) => ({ roomTypeID: t, quantity: n[t].rooms })),
+    adults: order.map((t) => ({ roomTypeID: t, quantity: n[t].adults })),
+    children: order.map((t) => ({ roomTypeID: t, quantity: n[t].kids })),
+  };
+}
+
+export function reservationParams(b: Any, sources: Any = {}) {
+  const villas: Any[] = b.villas || [];
+  const missing = villas.filter((v) => !v.cb_room_id || !v.cb_room_type_id).map((v) => v.unit_label);
+  if (missing.length) throw new Error(`Not linked to a Cloudbeds room yet: ${missing.join(", ")} (run setup)`);
+  const adults = spread(Math.max(Number(b.adults) || 1, villas.length), villas.length);
+  const kids = spread((Number(b.children_6_12) || 0) + (Number(b.children_0_5) || 0), villas.length);
+  const [first, last] = splitName(b.guest_name);
+  const email = String(b.guest_email || "").trim();
+  return {
+    startDate: b.check_in,
+    endDate: b.check_out,
+    guestFirstName: first,
+    guestLastName: last,
+    guestCountry: iso2(b.country),
+    guestZip: "0000",
+    guestEmail: /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email) ? email : "reservations@virginbeachresort.com",
+    guestPhone: b.guest_phone || undefined,
+    // One entry per ROOM TYPE (Nov 2026 fix): Cloudbeds keeps only the last
+    // entry when the same room type is listed twice, so 3 Bamboo Casitas sent
+    // as 3 separate lines became 1 room with the last line's 2 adults.
+    // Now: { Bamboo × 3 rooms, 8 adults } — the casitas are assigned below.
+    ...byRoomType(villas, adults, kids),
+    paymentMethod: "ebanking",
+    // the Cloudbeds source for where it was made (setup finds them by name);
+    // CLOUDBEDS_SOURCE_ID is the fallback
+    sourceID: sources?.[b.booking_origin === "site_staff" ? "site_staff" : "site_guest"] || env("CLOUDBEDS_SOURCE_ID") || undefined,
+    // the website already sent the quotation — no second "new booking" email
+    thirdPartyIdentifier: b.order_code || undefined,
+    sendEmailConfirmation: "false",
+  };
+}
+
+const peso = (n: unknown) => n === null || n === undefined ? "—" : "₱" + Number(n).toLocaleString("en-PH", { maximumFractionDigits: 2 });
+
+// "B.Casita 4 - 11" / "B.Casita 4" → "b.casita 4" (same rule as cb_norm in SQL)
+const cbNormName = (x: unknown) => String(x || "").trim().replace(/\s*-\s*\d+$/, "").replace(/\s+/g, " ").toLowerCase();
+
+async function push(bookingId: string): Promise<Any> {
+  const b = await rpc("cb_claim_push", { p_booking_id: bookingId });
+  if (!b) return { skipped: "not waiting to be pushed" };
+  let reservationId: string | null = null;
+  const notes: string[] = [];
+  try {
+    const created = await cb("POST", "postReservation", reservationParams(b, (await state("sources")) || {}));
+    reservationId = String(created.reservationID);
+    // put each room on the exact casita booked on the website
+    // (Cloudbeds often assigns the room itself — then there's nothing to do)
+    const fresh = (await cb("GET", "getReservation", { reservationID: reservationId })).data || {};
+    const placed: Any[] = Array.isArray(fresh.assigned) ? fresh.assigned : [];
+    let open: Any[] = Array.isArray(fresh.unassigned) ? fresh.unassigned : (Array.isArray(created.unassigned) ? created.unassigned : []);
+    for (const v of b.villas as Any[]) {
+      const already = placed.findIndex((a: Any) => String(a.roomID) === String(v.cb_room_id) || cbNormName(a.roomName) === cbNormName(v.unit_label));
+      if (already >= 0) { placed.splice(already, 1); continue; }
+      const i = open.findIndex((u: Any) => String(u.roomTypeID) === String(v.cb_room_type_id));
+      const slot = i >= 0 ? open.splice(i, 1)[0] : null;
+      try {
+        await cb("POST", "postRoomAssign", {
+          reservationID: reservationId,
+          subReservationID: slot?.subReservationID,
+          reservationRoomID: slot?.reservationRoomID,
+          newRoomID: v.cb_room_id,
+          roomTypeID: v.cb_room_type_id,
+        });
+      } catch (e) {
+        notes.push(`${v.unit_label} not assigned in Cloudbeds: ${(e as Error).message}`);
+      }
+    }
+    const wantStatus = b.status === "confirmed" ? "confirmed" : "not_confirmed";
+    if (created.status !== wantStatus) {
+      // already confirmed on the site (e.g. paid at the desk) → Cloudbeds sends its confirmation
+      await cb("PUT", "putReservation", { reservationID: reservationId, status: wantStatus, sendStatusChangeEmail: wantStatus === "confirmed" ? "true" : "false" })
+        .catch((e) => notes.push(`status: ${e.message}`));
+    }
+    // meals, extra beds, pets, add-ons and discounts → the Cloudbeds folio, so its total matches the website's
+    const folio = await postFolio(reservationId, b).catch((e) => ({ state: "partial", notes: [`folio: ${(e as Error).message}`] }));
+    await rpc("cb_folio_result", { p_booking_id: bookingId, p_state: folio.state, p_note: folio.notes.join(" · ") || null }).catch(() => null);
+    if (folio.state !== "done") notes.push(...folio.notes);
+    await cb("POST", "postReservationNote", {
+      reservationID: reservationId,
+      reservationNote: `Booked on the new website ${b.booking_origin === "site_staff" ? "by staff" + (b.booked_by ? " (" + b.booked_by + ")" : "") : "by the guest"} · Booking ID ${b.cb_ref_code ? "VBR-" + reservationId + " (temporary website code " + b.order_code + ")" : b.order_code} · ` +
+        `quoted total ${peso(b.total_amount)} incl. full-board meals (meals, extras and discounts are on this folio). The guest got the quotation from the website; ` +
+        `Cloudbeds' emails take it from here. Payment proofs uploaded on the website appear under Documents; payments verified on the website are posted here. ` +
+        `Change dates, casitas, guests or status here in Cloudbeds — the website follows.`,
+    }).catch(() => null);
+  } catch (e) {
+    const msg = String((e as Error).message || e);
+    await rpc("cb_push_result", { p_booking_id: bookingId, p_reservation_id: reservationId, p_error: msg });
+    return { booking_id: bookingId, reservation_id: reservationId, error: msg };
+  }
+  await rpc("cb_push_result", { p_booking_id: bookingId, p_reservation_id: reservationId, p_error: notes.length ? notes.join(" · ") : null });
+  await syncOne(reservationId).catch(() => null);
+  await postPayments().catch(() => null); // e.g. a proof verified before it reached Cloudbeds
+  await postDetails(bookingId).catch((e) => notes.push(`details note: ${(e as Error).message}`));
+  await syncDocs().catch(() => null); // IDs / pet cards uploaded at booking
+  return { booking_id: bookingId, reservation_id: reservationId, notes };
+}
+
+// ---------------------------------------------------------------- folio lines
+// The room is charged by Cloudbeds from its own rates (they match the website's
+// villa rates). Everything else the website priced is posted as its own folio
+// line, and discounts as adjustments; then the totals are compared.
+const r2 = (n: number) => Math.round(n * 100) / 100;
+// ---------------------------------------------------------------- folio = the quotation
+// The Cloudbeds folio mirrors the website quotation line for line:
+//   * room nights — Cloudbeds charges them from its own rates (same as ours);
+//   * every other quotation line (meals per age group, extra mattresses, pets,
+//     each add-on) → one Cloudbeds custom item with the quotation's wording,
+//     unit price and quantity. Nothing has to exist in Cloudbeds first: the
+//     item id is made from the line's wording, so a new or renamed add-on just
+//     shows up under its new name;
+//   * every discount line (Convenience 5%, Senior/PWD, staff discount) → one
+//     adjustment with the same wording, taking that amount off.
+// Prices are VAT-inclusive on the website; Cloudbeds gets the net price + the
+// 12% VAT, like its room charges (VAT-exempt lines, e.g. Senior/PWD meals,
+// without VAT).
+type FolioLine = { app: string; ref: string; name: string; unit: number; qty: number; amount: number; vat: boolean; category: string; note: string };
+type FolioDiscount = { name: string; amount: number };
+
+// short stable id from text (FNV-1a)
+export function shortHash(t: string): string {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < t.length; i++) { h ^= t.charCodeAt(i); h = Math.imul(h, 0x01000193) >>> 0; }
+  return h.toString(36);
+}
+const CATEGORY: Record<string, string> = { meal: "Meals", add_on: "Add-ons & activities", extra_bed: "Extra mattress", pet: "Pet fee" };
+
+export function folioPlan(b: Any, quote: Any): { items: FolioLine[]; discounts: FolioDiscount[] } {
+  const code = String(b.order_code || b.id);
+  const items: FolioLine[] = [], discounts: FolioDiscount[] = [];
+  const lines: Any[] = Array.isArray(quote?.lines) ? quote.lines : [];
+  for (const l of lines) {
+    const amount = r2(Number(l.amount) || 0), qty = Number(l.qty) || 1;
+    const name = String(l.desc || l.kind).trim();
+    if (l.kind === "room") continue;
+    if (amount < 0 || /discount/i.test(String(l.kind))) {
+      if (amount) discounts.push({ name, amount: r2(Math.abs(amount)) });
+      continue;
+    }
+    if (!amount) continue; // e.g. kids 0–5 eat free
+    items.push({
+      app: `vbr-${l.kind}-${l.slug || shortHash(name)}${l.slug ? "-" + shortHash(name) : ""}`,
+      ref: `${code}-${l.kind}-${shortHash(name)}`,
+      name, qty, unit: r2(amount / qty), amount, vat: !l.vat_exempt,
+      category: CATEGORY[l.kind] || "Extras", note: `Website ${code}`,
+    });
+  }
+  if (Number(b.discount_amount) > 0) discounts.push({ name: "Discount" + (b.discount_reason ? ` — ${b.discount_reason}` : ""), amount: r2(Number(b.discount_amount)) });
+  return { items, discounts };
+}
+
+// One postCustomItem body for a line: net unit price + the line's 12% VAT
+export function customItemParams(reservationId: string, l: FolioLine, refSuffix = "") {
+  const netUnit = l.vat ? r2(l.unit / 1.12) : l.unit;
+  return {
+    reservationID: reservationId,
+    referenceID: l.ref + refSuffix, // a repeat is ignored by Cloudbeds — retries can't double up
+    items: [{
+      appItemID: l.app, itemName: l.name, itemQuantity: l.qty, itemPrice: netUnit, itemCategoryName: l.category, itemNote: l.note,
+      ...(l.vat ? { itemTaxes: [{ taxName: "12% VAT", taxValue: r2(l.amount - netUnit * l.qty) }] } : {}),
+    }],
+  };
+}
+
+async function quoteFor(b: Any): Promise<Any> {
+  return b.quote || await rpc("quote_booking_overnight", { p_booking_id: b.id });
+}
+
+async function cbTotal(reservationId: string): Promise<number | null> {
+  const d = (await cb("GET", "getReservation", { reservationID: reservationId })).data || {};
+  const t = d.total ?? d.grandTotal ?? d.balanceDetailed?.grandTotal;
+  return t === undefined || t === null ? null : Number(t);
+}
+const cache: Record<string, Any> = {};
+async function state(key: string): Promise<Any> {
+  const res = await fetch(`${SB_URL()}/rest/v1/cb_sync_state?key=eq.${key}&select=value`, {
+    headers: { apikey: SR(), Authorization: `Bearer ${SR()}` },
+  });
+  return (await res.json())?.[0]?.value ?? null;
+}
+// A discount: in Cloudbeds a POSITIVE adjustment reduces the charge (posting 5
+// takes 5 off; -5 adds 5) — confirmed on the live folio of VBR-26977.
+async function postDiscount(reservationId: string, reduce: number, notes: string, _notesOut: string[] = []) {
+  if (!(Math.abs(reduce) >= 0.01)) return;
+  await cb("POST", "postAdjustment", { reservationID: reservationId, type: "rate", amount: r2(reduce), notes });
+}
+
+async function postFolio(reservationId: string, b: Any): Promise<{ state: string; notes: string[] }> {
+  const notes: string[] = [];
+  const plan = folioPlan(b, await quoteFor(b));
+  for (const l of plan.items) {
+    try {
+      await cb("POST", "postCustomItem", customItemParams(reservationId, l));
+    } catch (e) {
+      notes.push(`${l.name}: ${(e as Error).message}`);
+    }
+  }
+  for (const d of plan.discounts) {
+    try {
+      await postDiscount(reservationId, d.amount, `${d.name} · ${b.order_code}`, notes);
+    } catch (e) {
+      notes.push(`${d.name}: ${(e as Error).message}`);
+    }
+  }
+  // Compare totals; a difference is reported to staff (never auto-corrected).
+  // Cloudbeds reports the total a few seconds late after new folio lines, so
+  // re-read a few times before calling it a difference.
+  const site = Number(b.total_amount);
+  let total = await cbTotal(reservationId).catch(() => null);
+  for (let i = 0; i < 4 && total !== null && Number.isFinite(site) && Math.abs(total - site) > 1; i++) {
+    await sleep(3000);
+    total = await cbTotal(reservationId).catch(() => total);
+  }
+  if (total !== null && Number.isFinite(site) && Math.abs(total - site) > 1) {
+    notes.push(`Cloudbeds total ${peso(total)} vs website ${peso(site)} (difference ${peso(r2(site - total))}) — check the folio`);
+  }
+  return { state: notes.length ? "partial" : "done", notes };
+}
+
+// Re-post a pushed booking's folio lines (repeats are ignored by referenceID)
+// and, with discounts=true, its discounts — for a push whose folio came out
+// incomplete. { booking_id, discounts?, suffix? }
+async function refolio(bookingId: string, withDiscounts: boolean, suffix = ""): Promise<Any> {
+  const h = { apikey: SR(), Authorization: `Bearer ${SR()}` };
+  const b = (await (await fetch(`${SB_URL()}/rest/v1/booking_requests?id=eq.${encodeURIComponent(bookingId)}&select=*`, { headers: h })).json())?.[0];
+  if (!b?.cb_reservation_id || b.cb_owned) return { skipped: "not a website booking in Cloudbeds" };
+  const res = String(b.cb_reservation_id);
+  const notes: string[] = [], posted: string[] = [];
+  const plan = folioPlan(b, await quoteFor(b));
+  for (const l of plan.items) {
+    try { const r = await cb("POST", "postCustomItem", customItemParams(res, l, suffix)); posted.push(l.name + (r?.data?.notice ? " (already there)" : "")); }
+    catch (e) { notes.push(`${l.name}: ${(e as Error).message}`); }
+  }
+  if (withDiscounts) {
+    for (const d of plan.discounts) {
+      try { await postDiscount(res, d.amount, `${d.name} · ${b.order_code}`); posted.push(d.name); }
+      catch (e) { notes.push(`${d.name}: ${(e as Error).message}`); }
+    }
+  }
+  await rpc("cb_folio_result", { p_booking_id: bookingId, p_state: notes.length ? "partial" : "done", p_note: notes.join(" · ") || null }).catch(() => null);
+  await syncOne(res).catch(() => null);
+  return { reservation_id: res, posted, notes, website_total: b.total_amount, cloudbeds_total: await cbTotal(res).catch(() => null) };
+}
+
+// ---------------------------------------------------------------- proof → Cloudbeds Documents
+async function postProofDocument(reservationId: string, path: string, label: string, bucket = "payment-proofs"): Promise<void> {
+  const key = env("CLOUDBEDS_API_KEY");
+  const obj = await fetch(`${SB_URL()}/storage/v1/object/${bucket}/${path.split("/").map(encodeURIComponent).join("/")}`, {
+    headers: { apikey: SR(), Authorization: `Bearer ${SR()}` },
+  });
+  if (!obj.ok) throw new Error(`${bucket} file: HTTP ${obj.status}`);
+  const blob = await obj.blob();
+  const ext = (path.split(".").pop() || "jpg").toLowerCase();
+  const fd = new FormData();
+  fd.append("propertyID", PROPERTY());
+  fd.append("reservationID", reservationId);
+  fd.append("file", blob, `${label}.${ext}`);
+  const res = await fetch(`${CB}/postReservationDocument`, { method: "POST", headers: { "x-api-key": key, Accept: "application/json" }, body: fd });
+  const text = await res.text();
+  let json: Any = null;
+  try { json = JSON.parse(text); } catch { /* not JSON */ }
+  if (!res.ok || json?.success === false) throw new Error(`postReservationDocument: ${json?.message || "HTTP " + res.status}`);
+}
+
+// ---------------------------------------------------------------- IDs / pet cards → Documents
+// Senior / PWD IDs and pet vaccination cards uploaded on the website (at
+// booking or later) → the Cloudbeds reservation's Documents, plus a note.
+async function syncDocs(deadline = Date.now() + 50_000): Promise<Any> {
+  const list: Any[] = (await rpc("cb_pending_docs")) || [];
+  let sent = 0;
+  const errors: string[] = [];
+  for (const b of list) {
+    const done: string[] = [];
+    for (const [i, d] of ((b.docs || []) as Any[]).entries()) {
+      if (Date.now() > deadline) break;
+      try {
+        await postProofDocument(String(b.reservation_id), String(d.path), `${d.label}-${b.order_code}-${i + 1}`, String(d.bucket));
+        await rpc("cb_doc_result", { p_booking_id: b.booking_id, p_path: d.path, p_error: null });
+        done.push(d.bucket === "senior-ids" ? "Senior/PWD ID" : "pet vaccination card");
+        sent++;
+      } catch (e) {
+        const msg = String((e as Error).message || e);
+        await rpc("cb_doc_result", { p_booking_id: b.booking_id, p_path: d.path, p_error: msg });
+        errors.push(`${b.order_code} ${d.label}: ${msg}`);
+      }
+    }
+    if (done.length) {
+      const n = (k: string) => done.filter((x) => x === k).length;
+      const what = [n("Senior/PWD ID") ? `${n("Senior/PWD ID")} Senior/PWD ID photo(s)` : "", n("pet vaccination card") ? `${n("pet vaccination card")} pet vaccination card(s)` : ""].filter(Boolean).join(" and ");
+      await cb("POST", "postReservationNote", {
+        reservationID: String(b.reservation_id),
+        reservationNote: `Uploaded on the website: ${what} — see Documents. Please check them (and again at check-in).`,
+      }).catch(() => null);
+    }
+  }
+  return { waiting: list.length, sent, errors };
+}
+
+// ---------------------------------------------------------------- details → a note
+// Everything the guest / staff entered on the website that Cloudbeds has no
+// field for, as one reservation note.
+const AGE: Record<string, string> = { adult: "adult", senior: "senior / PWD", child: "child 6–12", child_6_12: "child 6–12", kid: "child 0–5", child_0_5: "child 0–5", infant: "child 0–5" };
+export function detailsNote(b: Any, addOnNames: Record<string, string> = {}): string {
+  const out: string[] = [`Website booking details · ${b.order_code} · made ${b.booking_origin === "site_staff" ? "by staff" + (b.booked_by ? " (" + b.booked_by + ")" : "") : "by the guest on the booking page"}`];
+  out.push(`Guest: ${b.guest_name || "—"} · ${b.guest_phone || "no phone"} · ${b.guest_email || "no email"}${b.country ? " · " + b.country : ""}`);
+  const party = [`${Number(b.adults) || 0} adult(s)`];
+  if (Number(b.senior_count) > 0) party.push(`${b.senior_count} of them Senior/PWD`);
+  if (Number(b.children_6_12) > 0) party.push(`${b.children_6_12} child(ren) 6–12`);
+  if (Number(b.children_0_5) > 0) party.push(`${b.children_0_5} child(ren) 0–5`);
+  out.push(`Party: ${party.join(", ")}${b.primary_is_senior ? " (main guest is Senior/PWD)" : ""}`);
+  const comp: Any[] = Array.isArray(b.companions) ? b.companions : [];
+  if (comp.length) out.push(`Other guests: ${comp.map((c) => `${c.name || "?"}${c.age_group ? " (" + (AGE[c.age_group] || c.age_group) + ")" : ""}`).join("; ")}`);
+  else if (b.guest_names) {
+    const others = String(b.guest_names).split(/\s*,\s*/).filter((n, i) => n && !(i === 0 && n === String(b.guest_name || "").trim()));
+    if (others.length) out.push(`Other guests: ${others.join(", ")}`);
+  }
+  if (Number(b.pet_count) > 0) out.push(`Pets: ${b.pet_count}${b.pet_policy_agreed_at ? " · Pet Policy agreed online" : " · Pet Policy not yet agreed"}`);
+  if (Number(b.extra_beds) > 0) out.push(`Extra floor mattress(es): ${b.extra_beds}`);
+  const ao: Any[] = Array.isArray(b.add_ons) ? b.add_ons : [];
+  if (ao.length) out.push(`Add-ons: ${ao.map((a) => `${addOnNames[a.slug] || a.slug} × ${a.qty}`).join(", ")}`);
+  if (b.notes) out.push(`Guest requests: ${String(b.notes).slice(0, 1500)}`);
+  if (b.occasion) out.push(`Occasion: ${b.occasion}`);
+  if (b.how_heard) out.push(`Heard about us: ${b.how_heard}`);
+  if (b.discount_code) out.push(`Discount code: ${b.discount_code}${Number(b.code_discount) > 0 ? " (−" + peso(b.code_discount) + ")" : ""}`);
+  if (Number(b.discount_amount) > 0) out.push(`Staff discount: ${peso(b.discount_amount)}${b.discount_reason ? " — " + b.discount_reason : ""}`);
+  if (b.marketing_opt_in) out.push("OK to receive promos by email");
+  return out.join("\n");
+}
+async function postDetails(bookingId: string): Promise<Any> {
+  const h = { apikey: SR(), Authorization: `Bearer ${SR()}` };
+  const b = (await (await fetch(`${SB_URL()}/rest/v1/booking_requests?id=eq.${encodeURIComponent(bookingId)}&select=*`, { headers: h })).json())?.[0];
+  if (!b?.cb_reservation_id || b.cb_owned) return { skipped: "not a website booking in Cloudbeds" };
+  const slugs = (Array.isArray(b.add_ons) ? b.add_ons : []).map((a: Any) => a.slug).filter(Boolean);
+  const names: Record<string, string> = {};
+  if (slugs.length) {
+    const rows: Any[] = await (await fetch(`${SB_URL()}/rest/v1/add_ons?slug=in.(${slugs.map(encodeURIComponent).join(",")})&select=slug,name`, { headers: h })).json();
+    for (const r of rows || []) names[r.slug] = r.name;
+  }
+  const note = detailsNote(b, names);
+  await cb("POST", "postReservationNote", { reservationID: String(b.cb_reservation_id), reservationNote: note });
+  await rpc("cb_details_posted", { p_booking_id: bookingId }).catch(() => null);
+  return { reservation_id: b.cb_reservation_id, note };
+}
+
+// Payment method on the website → one of the property's Cloudbeds payment
+// methods (getPaymentMethods: credit, bank_transfer, cash, Gcash, BDO, …).
+async function paymentMethods(): Promise<Any[]> {
+  if (!cache.methods) {
+    const d = (await cb("GET", "getPaymentMethods")).data || {};
+    const list = Array.isArray(d) ? d : (d.methods || []);
+    cache.methods = list.map((m: Any) => ({ code: String(m.method ?? m.code ?? m.type), name: String(m.name ?? m.method ?? "") }));
+  }
+  return cache.methods;
+}
+export function methodFor(method: unknown, list: Any[]): string {
+  const m = String(method || "transfer").toLowerCase();
+  const find = (re: RegExp) => list.find((x) => re.test(`${x.code} ${x.name}`.toLowerCase()))?.code;
+  const pick =
+    m === "cash" ? find(/cash/) :
+    m === "card" ? find(/credit|card/) :
+    m === "xendit" ? find(/xendit/) || find(/link|online|mecx|gateway/) || find(/credit|card/) :
+    m === "link" ? find(/link|online|mecx|paymongo|gateway/) || find(/credit|card/) :
+    find(/bank|transfer|ebanking/);
+  return pick || find(/bank|transfer|ebanking/) || find(/cash/) || list[0]?.code || "cash";
+}
+export const cbPaymentType = (method: unknown) => (String(method || "").toLowerCase() === "cash" ? "cash" : "bank_transfer");
+
+// Verified website payments → Cloudbeds folio (each once; retried by every pull).
+async function postPayments(deadline = Date.now() + 50_000): Promise<Any> {
+  const list: Any[] = (await rpc("cb_pending_payment_posts")) || [];
+  let posted = 0, docs = 0;
+  const errors: string[] = [];
+  for (const p of list) {
+    if (Date.now() > deadline) break;
+    if (p.need_payment) {
+      try {
+        await cb("POST", "postPayment", {
+          reservationID: String(p.reservation_id),
+          type: await paymentMethods().then((l) => methodFor(p.method, l)).catch(() => cbPaymentType(p.method)),
+          amount: Number(p.amount),
+          description: `Website payment · ${p.kind || "payment"} · ${p.order_code || ""}${p.note ? " · " + String(p.note).slice(0, 120) : ""}`,
+        });
+        await rpc("cb_payment_posted", { p_payment_id: p.payment_id, p_error: null });
+        posted++;
+      } catch (e) {
+        const msg = String((e as Error).message || e);
+        await rpc("cb_payment_posted", { p_payment_id: p.payment_id, p_error: msg });
+        errors.push(`payment ${p.payment_id}: ${msg}`);
+        continue; // attach the proof once the payment itself is on the folio
+      }
+    }
+    // the guest's (or staff's) proof screenshot → the reservation's Documents in Cloudbeds
+    if (p.need_doc && p.proof_path) {
+      try {
+        const unverified = p.status === "pending";
+        await postProofDocument(String(p.reservation_id), String(p.proof_path), `Proof of payment ${p.order_code || ""} ${p.kind || ""}${unverified ? " to verify" : ""}`.trim().replace(/\s+/g, "-"));
+        await rpc("cb_payment_doc_posted", { p_payment_id: p.payment_id, p_error: null });
+        if (unverified) {
+          // uploaded by the guest, not checked yet: tell Cloudbeds staff
+          await cb("POST", "postReservationNote", {
+            reservationID: String(p.reservation_id),
+            reservationNote: `Payment proof uploaded on the website: ${p.kind === "deposit" ? "50% down payment" : p.kind === "balance" ? "balance" : "payment"} ${peso(p.amount)} (see Documents). ` +
+              `Not counted yet — verify it in the website's Payments window (that posts it here), or post the payment in Cloudbeds.`,
+          }).catch(() => null);
+        }
+        docs++;
+      } catch (e) {
+        const msg = String((e as Error).message || e);
+        await rpc("cb_payment_doc_posted", { p_payment_id: p.payment_id, p_error: msg });
+        errors.push(`proof ${p.payment_id}: ${msg}`);
+      }
+    }
+  }
+  return { waiting: list.length, posted, docs, errors };
+}
+
+export function cbStatusFor(status: string): string | null {
+  if (status === "confirmed") return "confirmed";
+  if (status === "pending" || status === "pending_payment") return "not_confirmed";
+  if (status === "declined" || status === "expired") return "canceled";
+  return null;
+}
+
+async function pushStatus(bookingId: string) {
+  if (!(await rpc("cb_push_enabled"))) return { skipped: "test mode — website changes aren't sent to Cloudbeds" };
+  const b = await bookingRow(bookingId);
+  if (!b?.cb_reservation_id || b.cb_owned) return { skipped: "not a website booking in Cloudbeds" };
+  const want = cbStatusFor(b.status);
+  if (!want) return { skipped: "status " + b.status };
+  // already that in Cloudbeds (e.g. "Payment Under Review" is still Confirmation Pending there): nothing to send
+  if (b.cb_info?.status === want) return { skipped: "already " + want + " in Cloudbeds" };
+  try {
+    // Cloudbeds sends its own Confirmed / Cancelled email (the website only sent the quotation)
+    await cb("PUT", "putReservation", { reservationID: b.cb_reservation_id, status: want, sendStatusChangeEmail: "true" });
+  } catch (e) {
+    await stateSet("last_error", { at: new Date().toISOString(), errors: [`status ${b.cb_reservation_id} → ${want}: ${(e as Error).message}`] });
+    throw e;
+  }
+  await syncOne(b.cb_reservation_id).catch(() => null);
+  return { reservation_id: b.cb_reservation_id, status: want };
+}
+
+// Our Cloudbeds webhook subscriptions, keyed "entity/action".
+const hookKey = (w: Any) => `${w.event?.entity ?? w.object ?? ""}/${w.event?.action ?? w.action ?? ""}`.toLowerCase();
+const hookUrl = (w: Any) => String(w.subscriptionData?.endpoint ?? w.endpointUrl ?? w.endpoint ?? "");
+// getWebhooks doesn't always return the endpoint; subscriptions made with this
+// API key are ours, so an empty URL counts as ours.
+const isOurs = (w: Any) => !hookUrl(w) || hookUrl(w).includes("/functions/v1/cloudbeds-sync");
+
+// List our webhooks; with dedupe, keep one per event and delete the rest.
+async function webhooks(dedupe: boolean) {
+  const all: Any[] = (await cb("GET", "getWebhooks")).data || [];
+  const ours = all.filter(isOurs);
+  const seen = new Set<string>();
+  const removed: string[] = [];
+  if (dedupe) {
+    for (const w of ours) {
+      const k = hookKey(w);
+      if (!seen.has(k)) { seen.add(k); continue; }
+      await cb("DELETE", "deleteWebhook", { subscriptionID: w.id, propertyIDs: PROPERTY() });
+      removed.push(k);
+    }
+  }
+  return {
+    total: all.length, ours: ours.length, removed,
+    events: ours.map((w) => hookKey(w)).sort(),
+    sample: all[0] ? { keys: Object.keys(all[0]), event: all[0].event, url: hookUrl(all[0]).replace(/\?.*$/, "") } : null,
+  };
+}
+
+// The two Cloudbeds sources for website bookings ("New Website – Guest" / "– Staff").
+export function pickSources(list: Any[]) {
+  const named = list.map((x) => ({ id: String(x.sourceID ?? x.id ?? ""), name: String(x.sourceName ?? x.name ?? "") }));
+  const web = named.filter((x) => /new\s*website/i.test(x.name));
+  return {
+    site_guest: web.find((x) => /guest|customer/i.test(x.name))?.id || null,
+    site_staff: web.find((x) => /staff/i.test(x.name))?.id || null,
+    names: web.map((x) => x.name),
+  };
+}
+async function findSources() {
+  const d = (await cb("GET", "getSources", { propertyIDs: PROPERTY() })).data;
+  const list: Any[] = []; // can come nested per property: [{ propertyID, sources: [...] }]
+  const walk = (x: Any) => {
+    if (Array.isArray(x)) return x.forEach(walk);
+    if (!x || typeof x !== "object") return;
+    if (x.sourceID !== undefined || x.sourceName !== undefined) list.push(x);
+    for (const v of Object.values(x)) if (v && typeof v === "object") walk(v);
+  };
+  walk(d);
+  const picked = pickSources(list);
+  await stateSet("sources", { site_guest: picked.site_guest, site_staff: picked.site_staff });
+  return { ...picked, total: list.length };
+}
+
+async function setup() {
+  const rooms: Any[] = [];
+  for (let page = 1; page <= 10; page++) {
+    const res = await cb("GET", "getRooms", { propertyIDs: PROPERTY(), pageSize: 100, pageNumber: page });
+    const list = (res.data || []).flatMap((p: Any) => p.rooms || []);
+    rooms.push(...list);
+    if (list.length < 100) break;
+  }
+  const linked = await rpc("cb_set_rooms", {
+    p: rooms.filter((r) => !r.isVirtual).map((r) => ({ room_id: String(r.roomID), room_name: r.roomName, room_type_id: String(r.roomTypeID), room_type_name: r.roomTypeName })),
+  });
+  const s = await secret();
+  const existing: Any[] = (await cb("GET", "getWebhooks").catch(() => ({ data: [] }))).data || [];
+  const have = new Set(existing.filter(isOurs).map(hookKey));
+  const webhooks: Record<string, string> = {};
+  for (const action of RESERVATION_EVENTS) {
+    if (have.has(`reservation/${action}`)) { webhooks[action] = "already registered"; continue; }
+    try {
+      await cb("POST", "postWebhook", {
+        object: "reservation", action, endpointUrl: SELF(),
+        authHeaderName: "x-webhook-secret", authHeaderValue: s,
+      });
+      webhooks[action] = "registered";
+    } catch (e) {
+      webhooks[action] = "error: " + (e as Error).message;
+    }
+  }
+  for (const action of ["created", "removed", "details_changed"]) {
+    if (have.has(`roomblock/${action}`)) { webhooks["roomblock/" + action] = "already registered"; continue; }
+    try {
+      await cb("POST", "postWebhook", { object: "roomblock", action, endpointUrl: SELF(), authHeaderName: "x-webhook-secret", authHeaderValue: s });
+      webhooks["roomblock/" + action] = "registered";
+    } catch (e) {
+      webhooks["roomblock/" + action] = "error: " + (e as Error).message;
+    }
+  }
+  const blocks = await syncBlocks(400).catch((e) => ({ error: (e as Error).message }));
+  const sources = await findSources().catch((e) => ({ error: (e as Error).message }));
+  const methods = await paymentMethods().catch((e) => ({ error: (e as Error).message }));
+  const value = { at: new Date().toISOString(), rooms: rooms.length, linked, webhooks, blocks, sources, methods };
+  await stateSet("setup", value);
+  return value;
+}
+
+// ---------------------------------------------------------------- handler
+const json = (body: unknown, status = 200) =>
+  new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
+
+function background(p: Promise<unknown>) {
+  const done = p.catch(async (e) => {
+    console.error(e);
+    await stateSet("last_error", { at: new Date().toISOString(), errors: [String((e as Error)?.message || e)] });
+  });
+  const rt = (globalThis as Any).EdgeRuntime;
+  if (rt?.waitUntil) rt.waitUntil(done);
+  return done;
+}
+
+export async function handle(req: Request): Promise<Response> {
+  if (req.method !== "POST") return new Response("Method not allowed", { status: 405 });
+  const given = req.headers.get("x-webhook-secret") || "";
+  const s = await secret().catch(() => null);
+  if (!s || given !== s) return new Response("Unauthorized", { status: 401 });
+
+  let body: Any = {};
+  try { body = await req.json(); } catch { /* empty */ }
+
+  // Cloudbeds webhook: answer within 2 seconds, work afterwards
+  const event = String(body?.event || "");
+  if (!body?.action && event.startsWith("reservation/")) {
+    const id = String(body.reservationID ?? body.reservationId ?? "");
+    if (id) background(syncOne(id));
+    return json({ ok: true });
+  }
+  if (!body?.action && /^room_?block\//i.test(event)) {
+    background(syncBlocks(400));
+    return json({ ok: true });
+  }
+
+  try {
+    switch (body.action) {
+      case "pull": return json(await pull());
+      case "full": background(full(Number(body.page) || 1, body.force !== false)); return json({ started: true });
+      case "push": return json(await push(String(body.booking_id)));
+      case "status": return json(await pushStatus(String(body.booking_id)));
+      case "payments": return json(await postPayments());
+      case "docs": return json(await syncDocs());
+      case "details": return json(await postDetails(String(body.booking_id)));
+      case "folio_preview": {
+        // dry run: exactly what a push / refolio would post for this booking (nothing is sent)
+        const h = { apikey: SR(), Authorization: `Bearer ${SR()}` };
+        const b = (await (await fetch(`${SB_URL()}/rest/v1/booking_requests?id=eq.${encodeURIComponent(String(body.booking_id))}&select=*`, { headers: h })).json())?.[0];
+        if (!b) return json({ error: "booking not found" }, 404);
+        const plan = folioPlan(b, await quoteFor(b));
+        return json({ items: plan.items.map((l) => customItemParams(String(b.cb_reservation_id || "RES"), l).items[0]), discounts: plan.discounts, website_total: b.total_amount });
+      }
+      case "refolio": return json(await refolio(String(body.booking_id), body.discounts === true, String(body.suffix || "")));
+      case "sync_one": return json(await syncOne(String(body.reservation_id)));
+      case "rates": {
+        // { from: "YYYY-MM-DD", days } — refresh a stretch of nights now (max 100)
+        const from = body.from ? new Date(String(body.from) + "T00:00:00Z") : manilaToday();
+        return json(await syncRatesRange(from, Math.min(Number(body.days) || 30, 100), Date.now() + 100_000));
+      }
+      case "rates_preview": {
+        // dry run: what Cloudbeds says for one night (nothing is saved)
+        const night = body.date ? new Date(String(body.date) + "T00:00:00Z") : manilaToday();
+        return json({ night: ymd(night), rows: await fetchNight(night) });
+      }
+      case "setup": return json(await setup());
+      case "webhooks": return json(await webhooks(body.dedupe === true));
+      case "fields": {
+        // field names (no values) Cloudbeds returns for one reservation — for diagnostics
+        const r = await cb("GET", "getReservation", { reservationID: String(body.reservation_id) });
+        const d = r.data || {};
+        return json({ keys: Object.keys(d), ids: Object.fromEntries(Object.entries(d).filter(([k, v]) => /id$/i.test(k) && typeof v !== "object")) });
+      }
+      case "test": {
+        const r = await cb("GET", "getRooms", { propertyIDs: PROPERTY(), pageSize: 1 });
+        return json({ ok: true, rooms_total: r.total ?? null });
+      }
+      default: return json({ error: "unknown action" }, 400);
+    }
+  } catch (e) {
+    const msg = String((e as Error)?.message || e);
+    await stateSet("last_error", { at: new Date().toISOString(), action: body.action, errors: [msg] });
+    return json({ error: msg }, 500);
+  }
+}
+
+if ((globalThis as Any).Deno?.serve) (globalThis as Any).Deno.serve(handle);
