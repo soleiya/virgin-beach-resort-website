@@ -305,6 +305,7 @@ html = """<!doctype html>
   .sum-seg { display: inline-flex; background: var(--surface); border: 1px solid var(--line); border-radius: 999px; padding: 3px; }
   .sum-seg button { border: 0; background: none; color: var(--ink-soft); font: 700 .85rem var(--font-body); padding: 7px 16px; border-radius: 999px; cursor: pointer; }
   .sum-seg button.on { background: var(--lagoon); color: #fff; }
+  .sum-kind button.on { background: var(--ink); color: var(--surface); }
   .sum-range { font-family: var(--font-display); font-size: 1.2rem; font-weight: 600; margin: 0; flex: 1 1 auto; }
   .sum-nav { display: inline-flex; gap: 6px; }
   .sum-nav button { border: 1px solid var(--line); background: var(--surface); color: var(--ink); border-radius: 999px; min-width: 36px; height: 36px; padding: 0 12px; font: 700 .9rem var(--font-body); cursor: pointer; }

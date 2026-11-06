@@ -11,7 +11,7 @@
   var esc = D.esc, V = function () { return window.VBRVillas; };
   var dashScreen = document.getElementById("dashScreen");
   var KEY = "vbr.sumMode";
-  var mode = "day", anchor = todayStr(), shown = false;
+  var mode = "day", anchor = todayStr(), shown = false, kind = "all"; // kind: all | daytrip | villas
 
   function store(k, v) { try { if (v === undefined) return localStorage.getItem(k); localStorage.setItem(k, v); } catch (e) { return null; } }
   function todayStr() { return new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Manila" }); }
@@ -21,11 +21,13 @@
   function fmt(s, o) { o.timeZone = "UTC"; return d(s).toLocaleDateString("en-PH", o); }
   function plural(n, a, b) { return n + " " + (n === 1 ? a : (b || a + "s")); }
   var m = store(KEY); if (m === "week" || m === "month") mode = m;
+  var kd = store("vbr.sumKind"); if (kd === "daytrip" || kd === "villas") kind = kd;
 
   var el = document.createElement("section");
   el.id = "sumView";
   el.innerHTML =
-    '<div class="sum-ctl"><div class="sum-seg"><button type="button" data-m="day">Day</button><button type="button" data-m="week">Week</button><button type="button" data-m="month">Month</button></div>' +
+    '<div class="sum-ctl"><div class="sum-seg sum-kind"><button type="button" data-k="all">All</button><button type="button" data-k="daytrip">Day Trips</button><button type="button" data-k="villas">Villas</button></div>' +
+    '<div class="sum-seg"><button type="button" data-m="day">Day</button><button type="button" data-m="week">Week</button><button type="button" data-m="month">Month</button></div>' +
     '<h2 class="sum-range" id="sumRange"></h2>' +
     '<div class="sum-nav"><button type="button" data-step="-1" aria-label="Previous">&lsaquo;</button><button type="button" data-step="0">Today</button><button type="button" data-step="1" aria-label="Next">&rsaquo;</button></div></div>' +
     '<div class="sum-tiles" id="sumTiles"></div><div id="sumList"></div>' +
@@ -35,6 +37,8 @@
   el.addEventListener("click", function (e) {
     var b = e.target.closest("[data-m]");
     if (b) { mode = b.getAttribute("data-m"); store(KEY, mode); render(); return; }
+    var kb = e.target.closest("[data-k]");
+    if (kb) { kind = kb.getAttribute("data-k"); store("vbr.sumKind", kind); render(); return; }
     var s = e.target.closest("[data-step]");
     if (s) { step(+s.getAttribute("data-step")); return; }
     var c = e.target.closest(".sum-card[data-id]");
@@ -131,7 +135,10 @@
     var r = range();
     document.getElementById("sumRange").textContent = rangeLabel(r);
     Array.prototype.forEach.call(el.querySelectorAll("[data-m]"), function (b) { b.classList.toggle("on", b.getAttribute("data-m") === mode); });
-    var rows = (D.rows() || []).filter(live);
+    Array.prototype.forEach.call(el.querySelectorAll("[data-k]"), function (b) { b.classList.toggle("on", b.getAttribute("data-k") === kind); });
+    var rows = (D.rows() || []).filter(live).filter(function (x) {
+      return kind === "all" || (kind === "villas" ? x.stay_type === "overnight" : x.stay_type !== "overnight");
+    });
     var days = [];
     for (var s = r.from; s <= r.to; s = addDays(s, 1)) days.push(s);
 
@@ -161,18 +168,20 @@
       if (stay.length && mode === "day") h += '<div class="sum-grp">Staying over</div>' + stay.map(function (x) { return card(x, "night " + (Math.round((d(s) - d(x.check_in)) / 864e5) + 1) + " of " + nights(x)); }).join("");
       else if (stay.length) h += '<div class="sum-grp">Staying over: ' + esc(stay.map(function (x) { return x.guest_name; }).join(", ")) + "</div>";
       if (dt.length) h += '<div class="sum-grp">Day trips</div>' + dt.map(function (x) { return card(x); }).join("");
-      if (!arr.length && !stay.length && !dt.length) h += '<div class="sum-empty">No bookings on this day.</div>';
+      if (!arr.length && !stay.length && !dt.length) h += '<div class="sum-empty">No ' + (kind === "villas" ? "villa bookings" : kind === "daytrip" ? "day trips" : "bookings") + " on this day.</div>";
       html += h + "</div>";
     });
-    document.getElementById("sumTiles").innerHTML = [
-      ["Day-trip guests", dayGuests, plural(cabs, "cabana")],
-      ["Overnight arrivals", arrGuests, "guests"],
-      ["Overnight stays", inhouseNights, mode === "day" ? "in-house tonight" : "stay-nights"],
-      ["Bookings", bookings, "arriving"],
-    ].map(function (k) { return '<div class="sum-tile"><span>' + k[0] + "</span><b>" + k[1] + "</b><em>" + k[2] + "</em></div>"; }).join("");
+    var tiles = [];
+    if (kind !== "villas") tiles.push(["Day-trip guests", dayGuests, plural(cabs, "cabana")]);
+    if (kind !== "daytrip") tiles.push(["Overnight arrivals", arrGuests, "guests"], ["Overnight stays", inhouseNights, mode === "day" ? "in-house tonight" : "stay-nights"]);
+    tiles.push(["Bookings", bookings, "arriving"]);
+    var tilesEl = document.getElementById("sumTiles");
+    tilesEl.style.gridTemplateColumns = window.innerWidth > 700 ? "repeat(" + tiles.length + ", 1fr)" : "";
+    tilesEl.innerHTML = tiles.map(function (k) { return '<div class="sum-tile"><span>' + k[0] + "</span><b>" + k[1] + "</b><em>" + k[2] + "</em></div>"; }).join("");
     var list = document.getElementById("sumList");
     list.className = mode === "month" ? "compact" : "";
-    list.innerHTML = html || '<div class="sum-empty">No bookings this ' + mode + ".</div>";
+    var what = kind === "villas" ? "villa bookings" : kind === "daytrip" ? "day trips" : "bookings";
+    list.innerHTML = html || '<div class="sum-empty">No ' + what + " this " + mode + ".</div>";
   }
 
   // re-draw when the dashboard reloads its bookings
