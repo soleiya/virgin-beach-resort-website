@@ -11,12 +11,12 @@ from build import page, PET_POLICY_ITEMS, COUNTRIES, CASITAS, CASITA_RATES, asse
 
 VILLA_IMG = {s: f"casitas/{s}-01.jpg" for s, _ in CASITAS}
 VILLA_BEDS = {
-    "deluxe-king-casita": "King bed · bathtub · outdoor shower · 52 m²",
-    "double-queen-casita": "2 queen beds · bathtub · outdoor shower · 52 m²",
-    "sunrise-casita": "2 queen beds · glass sliding doors · 35 m²",
-    "louver-window-casita": "2 queen beds · wooden jalousies · 35 m²",
-    "bamboo-king-casita": "King bed · air-conditioned · bamboo build · 30 m²",
-    "bamboo-casita": "2 queen beds · air-conditioned · bamboo build · 30 m²",
+    "deluxe-king-casita": "King bed · bathtub · outdoor shower · private garden · ~107 m²",
+    "double-queen-casita": "2 queen beds · bathtub · outdoor shower · private garden · ~118 m²",
+    "sunrise-casita": "2 queen beds · glass sliding doors · 42 m²",
+    "louver-window-casita": "2 queen beds · wooden jalousies · 42 m²",
+    "bamboo-king-casita": "King bed · air-conditioned · bamboo build · 31 m²",
+    "bamboo-casita": "2 queen beds · air-conditioned · bamboo build · 31 m²",
 }
 
 country_options = "\n".join(

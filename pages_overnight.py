@@ -46,6 +46,63 @@ BASE_GUESTS = {
 }
 MEAL_ADULT, MEAL_CHILD = 2695, "1,347.50"
 
+# Architect's typical floor plans (Nov 2026). Areas in m².
+FLOOR_PLANS = {
+    "deluxe-king-casita": ("deluxe-king-casita-floor-plan.jpg",
+        [("Bedroom", 34.09), ("Toilet &amp; bath", 10.03), ("Outdoor shower", 5.28), ("Porch", 18.18)], 43.00, None),
+    "double-queen-casita": ("double-queen-casita-floor-plan.jpg",
+        [("Bedroom", 34.09), ("Toilet &amp; bath", 10.03), ("Outdoor shower", 5.28), ("Porch", 18.10)], 53.00, None),
+    "sunrise-casita": ("sunrise-casita-floor-plan.jpg",
+        [("Bedroom", 24.51), ("Toilet &amp; bath", 7.59), ("Porch", 9.90)], None, None),
+    "louver-window-casita": ("louver-window-casita-floor-plan.jpg",
+        [("Bedroom", 23.30), ("Toilet &amp; bath", 7.80), ("Porch", 11.23)], None, None),
+    "bamboo-king-casita": ("bamboo-casita-floor-plan.jpg",
+        [("Bedroom", 18.87), ("Toilet &amp; bath", 3.72), ("Porch", 8.38)], None,
+        "Shown with the Bamboo Casita&rsquo;s two beds &mdash; the Bamboo King Casita has one king bed in the same space."),
+    "bamboo-casita": ("bamboo-casita-floor-plan.jpg",
+        [("Bedroom", 18.87), ("Toilet &amp; bath", 3.72), ("Porch", 8.38)], None, None),
+}
+
+
+def plan_area(slug):
+    return round(sum(a for _, a in FLOOR_PLANS[slug][1]))
+
+
+# Deluxe: the architect's totals and the area list don't quite agree, so we
+# quote the average of the figures given, rounded, as approximate.
+APPROX_TOTAL = {"deluxe-king-casita": 107, "double-queen-casita": 118}
+
+
+def size_text(slug):
+    if slug in APPROX_TOTAL:
+        return f"~{APPROX_TOTAL[slug]} m&sup2; incl. private garden"
+    return f"{plan_area(slug)} m&sup2;"
+
+
+def floor_plan_html(slug, name):
+    img, rows, garden, note = FLOOR_PLANS[slug]
+    total = sum(a for _, a in rows)
+    trs = "".join(f'<tr><td>{k}</td><td class="num">{a:.2f} m&sup2;</td></tr>' for k, a in rows)
+    if garden:
+        trs += f'<tr><td>Private garden</td><td class="num">{garden:.2f} m&sup2;</td></tr>'
+    if slug in APPROX_TOTAL:
+        trs += f'<tr class="fp-total"><td>Total, incl. garden</td><td class="num">approx. {APPROX_TOTAL[slug]} m&sup2;</td></tr>'
+    else:
+        trs += f'<tr class="fp-total"><td>Total</td><td class="num">{total:.2f} m&sup2;</td></tr>'
+    note_html = f'<p class="fp-note">{note}</p>' if note else ""
+    return f"""
+    <div class="floor-plan mt-lg">
+      <div class="fp-media" data-lightbox><a href="../../assets/images/casitas/{img}"><img src="../../assets/images/casitas/{img}" alt="{name} floor plan" loading="lazy"></a></div>
+      <div class="fp-text">
+        <span class="eyebrow">Floor plan</span>
+        <h2>The layout</h2>
+        <table class="rate-table fp-table"><tbody>{trs}</tbody></table>
+        {note_html}
+        <p class="fp-note">Typical plan &mdash; furniture placement and finishes may vary slightly from casita to casita. Tap the plan to enlarge.</p>
+      </div>
+    </div>"""
+
+
 
 def stay_cost_box(slug):
     """Room rate + the mandatory full-board meals, so guests see the real nightly cost up front."""
@@ -104,7 +161,7 @@ def casita_page(slug, name, tagline, description, occupancy, beds, size, rate, f
           <li><span class="k">Beds</span><span class="v">{beds}</span></li>
           <li><span class="k">Weekend Rate</span><span class="v">&#8369;{CASITA_RATES[slug][1]} / night</span></li>
           <li><span class="k">Weekday Rate</span><span class="v">&#8369;{CASITA_RATES[slug][0]} / night</span></li>
-          <li><span class="k">Size</span><span class="v">{size}</span></li>
+          <li><span class="k">Size</span><span class="v">{size_text(slug)}</span></li>
         </ul>
         <div class="feature-tags">{feature_tags}</div>
         {stay_cost_box(slug)}
@@ -118,6 +175,7 @@ def casita_page(slug, name, tagline, description, occupancy, beds, size, rate, f
 
     <div class="casita-gallery mt-lg" data-lightbox>{gallery_html}
     </div>
+{floor_plan_html(slug, name)}
 
     {FINE_PRINT}
   </div>
@@ -146,8 +204,8 @@ RATES = {
 }
 IMG = RELATED_IMG
 BLURB = {
-    "deluxe-king-casita": "Perfect for couples out for a romantic getaway — sublime wooden furniture, a bathtub, and a private outdoor shower.",
-    "double-queen-casita": "A quaint elegance for a small group or family, with a subtle modern touch.",
+    "deluxe-king-casita": "Perfect for couples out for a romantic getaway — a private garden, sublime wooden furniture, a bathtub, and a private outdoor shower.",
+    "double-queen-casita": "A quaint elegance for a small group or family, with its own private garden and a subtle modern touch.",
     "sunrise-casita": "Sliding glass doors in front make this casita suited for early risers who can't wait to get to the beach.",
     "louver-window-casita": "A wooden door and wooden jalousies provide a cozier ambiance for late risers.",
     "bamboo-king-casita": "Canopied, air-conditioned and inspired by traditional Filipino architecture, with wide sliding doors toward the sea.",
@@ -157,7 +215,8 @@ BLURB = {
 rows = ""
 cards = ""
 for slug, name in CASITAS:
-    size, occ = RATES[slug]
+    occ = RATES[slug][1]
+    size = size_text(slug).replace(" incl. private garden", " <small>incl. garden</small>")
     wd, we = CASITA_RATES[slug]
     rows += f"""<tr><td>{name}</td><td class="num">{size}</td><td class="num">{occ}</td><td class="num">&#8369;{we}</td><td class="num">&#8369;{wd}</td></tr>"""
     cards += f'''
@@ -216,9 +275,9 @@ page("overnight/index.html", "Overnight", "Oceanfront casitas at Virgin Beach Re
 casita_page(
     "deluxe-king-casita", "Deluxe King Casita",
     "Spend your most intimate moments in only the finest of accommodations.",
-    "Our Deluxe King Casita is perfect for couples out for a romantic getaway. This lovely casita stuns on the inside with sublime wooden furniture and features a bathtub and private outdoor shower.",
+    "Our Deluxe King Casita is perfect for couples out for a romantic getaway. This lovely casita stuns on the inside with sublime wooden furniture and features a bathtub and private outdoor shower &mdash; and it sits in its own private garden, with a stone path leading up to the patio.",
     "2 Persons", "King-sized Bed", "52 m&sup2;", "18,525",
-    ["Private Outdoor Shower", "Elevated Patio with sofa", "Daybed", "Bathtub", "Air-conditioning", "Satellite TV",
+    ["Private Garden", "Private Outdoor Shower", "Elevated Patio with sofa", "Daybed", "Bathtub", "Air-conditioning", "Satellite TV",
      "Writing Desk", "In-room Safe", "Mini-bar &amp; Refrigerator", "Complimentary Coffee and Tea", "Power Outlets (220v)",
      "Extra Person may be Added, Charges Apply"],
     gallery("deluxe-king-casita"),
@@ -227,9 +286,9 @@ casita_page(
 casita_page(
     "double-queen-casita", "Deluxe Double Queen Casita",
     "Experience a quiet indulgence in our Deluxe Double Queen Casita.",
-    "Perfect for a small group or family, our spacious Deluxe Double Queen Casita exudes a quaint elegance. Designed with a subtle modern touch, this room proves to be both functional and stylish in its simplicity.",
+    "Perfect for a small group or family, our spacious Deluxe Double Queen Casita exudes a quaint elegance. Designed with a subtle modern touch, this room proves to be both functional and stylish in its simplicity &mdash; and it comes with its own private garden, the largest of all our casitas.",
     "4 Persons", "2 Queen-sized Beds", "52 m&sup2;", "18,525",
-    ["Private Outdoor Shower", "Elevated Patio with sofa", "Bathtub", "Air-conditioning", "Satellite TV",
+    ["Private Garden", "Private Outdoor Shower", "Elevated Patio with sofa", "Bathtub", "Air-conditioning", "Satellite TV",
      "Writing Desk", "In-room Safe", "Mini-bar &amp; Refrigerator", "Complimentary Coffee and Tea", "Power Outlets (220v)",
      "Extra Person may be Added, Charges Apply"],
     gallery("double-queen-casita"),

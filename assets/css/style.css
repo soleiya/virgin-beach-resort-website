@@ -844,3 +844,12 @@ form.inquiry .field-hint { font-size: 0.8rem; color: var(--ink-soft); margin-top
 .pay-now-row { display: flex; flex-wrap: wrap; gap: 10px; margin: 14px 0 6px; }
 .pay-now-error { color: #9b2c1f; background: #fbe7e2; border-radius: 8px; padding: 8px 12px; font-size: 0.92rem; }
 #payOnline { margin: 6px 0 18px; }
+
+/* casita floor plans */
+.floor-plan { display: grid; grid-template-columns: minmax(0, 360px) 1fr; gap: 36px; align-items: start; border-top: 1px solid var(--line); padding-top: 36px; }
+.floor-plan .fp-media a { display: block; border-radius: 12px; overflow: hidden; background: #f3e6cc; cursor: zoom-in; }
+.floor-plan .fp-media img { width: 100%; height: auto; display: block; }
+.floor-plan .fp-table { max-width: 420px; margin-top: 14px; }
+.floor-plan .fp-table .fp-total td { font-weight: 700; border-top: 2px solid var(--line); }
+.floor-plan .fp-note { font-size: 0.85rem; color: var(--ink-soft); margin-top: 12px; max-width: 46ch; }
+@media (max-width: 760px) { .floor-plan { grid-template-columns: 1fr; } .floor-plan .fp-media { max-width: 360px; } }
