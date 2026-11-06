@@ -297,6 +297,47 @@ html = """<!doctype html>
   .col-notes { min-width: 160px; color: var(--ink-soft); max-width: 220px; }
   .muted { color: var(--ink-soft); }
 
+  /* Summary view (staff-summary.js) */
+  #sumView { display: none; }
+  body.sumv #sumView { display: block; max-width: 1100px; margin: 0 auto; padding: 0; }
+  body.sumv #dashScreen > :not(#sumView) { display: none !important; }
+  .sum-ctl { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-bottom: 14px; }
+  .sum-seg { display: inline-flex; background: var(--surface); border: 1px solid var(--line); border-radius: 999px; padding: 3px; }
+  .sum-seg button { border: 0; background: none; color: var(--ink-soft); font: 700 .85rem var(--font-body); padding: 7px 16px; border-radius: 999px; cursor: pointer; }
+  .sum-seg button.on { background: var(--lagoon); color: #fff; }
+  .sum-range { font-family: var(--font-display); font-size: 1.2rem; font-weight: 600; margin: 0; flex: 1 1 auto; }
+  .sum-nav { display: inline-flex; gap: 6px; }
+  .sum-nav button { border: 1px solid var(--line); background: var(--surface); color: var(--ink); border-radius: 999px; min-width: 36px; height: 36px; padding: 0 12px; font: 700 .9rem var(--font-body); cursor: pointer; }
+  .sum-tiles { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 16px; }
+  .sum-tile { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; }
+  .sum-tile span { display: block; font-size: .64rem; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-soft); }
+  .sum-tile b { display: block; font-size: 1.35rem; }
+  .sum-tile em { font-style: normal; font-size: .74rem; color: var(--ink-soft); }
+  .sum-day { margin-bottom: 18px; }
+  .sum-dh { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; border-bottom: 2px solid var(--line); padding: 4px 2px; margin-bottom: 8px; }
+  .sum-dh h3 { font-family: var(--font-display); font-weight: 600; font-size: 1.05rem; margin: 0; }
+  .sum-dh span { font-size: .78rem; color: var(--ink-soft); font-weight: 600; }
+  .sum-grp { font-size: .68rem; font-weight: 800; letter-spacing: .07em; text-transform: uppercase; color: var(--ink-soft); margin: 10px 2px 6px; }
+  .sum-card { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; margin-bottom: 8px; cursor: pointer; }
+  .sum-card:hover { border-color: var(--lagoon); }
+  .sum-l1 { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+  .sum-l1 b { font-size: .98rem; }
+  .sum-code { font-size: .72rem; color: var(--ink-soft); font-weight: 700; }
+  .sum-pill { font-size: .68rem; font-weight: 800; border-radius: 999px; padding: 2px 8px; background: var(--sand-deep); color: var(--ink-soft); }
+  .sum-pill.ok { background: var(--lagoon-tint); color: var(--lagoon-deep); }
+  .sum-pill.wait { background: #f6e6cf; color: #94591c; }
+  .sum-pill.in { background: #e3e9f6; color: #34508a; }
+  .sum-l2 { font-size: .84rem; margin-top: 3px; }
+  .sum-l3 { font-size: .8rem; color: var(--ink-soft); margin-top: 2px; }
+  .sum-chips { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 7px; }
+  .sum-chips span { font-size: .74rem; font-weight: 600; background: var(--sand); border: 1px solid var(--line); border-radius: 7px; padding: 2px 8px; }
+  .sum-chips span.k { background: var(--lagoon-tint); border-color: transparent; color: var(--lagoon-deep); }
+  .sum-chips span.warn { background: #f6e6cf; border-color: transparent; color: #94591c; }
+  .sum-empty { text-align: center; color: var(--ink-soft); padding: 30px 10px; background: var(--surface); border: 1px dashed var(--line); border-radius: 14px; }
+  .sum-foot { font-size: .76rem; color: var(--ink-soft); text-align: center; margin-top: 18px; }
+  #sumList.compact .sum-l3, #sumList.compact .sum-chips span:not(.k):not(.warn) { display: none; }
+  #sumList.compact .sum-card { padding: 8px 10px; }
+  @media (max-width: 700px) { .sum-tiles { grid-template-columns: 1fr 1fr; } .sum-range { flex-basis: 100%; order: -1; } }
   /* v74: the bookings list fits the screen — no sideways scrolling */
   table.bk-table { min-width: 0; table-layout: auto; }
   table.bk-table thead th { padding: 9px 7px; font-size: 0.64rem; letter-spacing: 0.04em; }
@@ -1411,6 +1452,7 @@ html = """<!doctype html>
 <script src="../assets/js/staff-website.js?v=__V_WEB__"></script>
 <script src="../assets/js/staff-codes.js?v=__V_CODES__"></script>
 <script src="../assets/js/staff-daycal.js?v=__V_DCAL__"></script>
+<script src="../assets/js/staff-summary.js?v=__V_SUMJS__"></script>
 <script src="../assets/js/staff-cloudbeds.js?v=__V_CBJS__"></script>
 <script src="../assets/js/staff-cloudbeds-pages.js?v=__V_CBPAGES__"></script>
 </body>
@@ -1431,6 +1473,7 @@ html = (html.replace("__V_CSS__", v("assets/css/style.css"))
             .replace("__V_MAIL__", v("assets/js/staff-email.js"))
             .replace("__V_CBCSS__", v("assets/css/staff-cloudbeds.css"))
             .replace("__V_CBJS__", v("assets/js/staff-cloudbeds.js"))
+            .replace("__V_SUMJS__", v("assets/js/staff-summary.js"))
             .replace("__V_CBPAGES__", v("assets/js/staff-cloudbeds-pages.js")))
 
 os.makedirs(os.path.join(ROOT, "staff"), exist_ok=True)
