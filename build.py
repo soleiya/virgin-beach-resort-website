@@ -207,6 +207,7 @@ def booking_form_section(default_type="day_trip"):
         </div>
       </div>
       <div id="cabanaMapStatus" class="cabana-map-status" hidden></div>
+      <p class="field-hint" id="cabanaError" style="color:var(--rose,#9c4a3f);font-weight:600;" hidden>Every day trip needs at least one cabana &mdash; please add a Dining or Lounge Cabana above.</p>
     </div>
 
     <div class="row-2" style="grid-template-columns:1fr 1fr 1fr;">

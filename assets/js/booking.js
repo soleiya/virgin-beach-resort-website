@@ -218,6 +218,7 @@
     if (!billSummaryEl) return;
     if (fromCode !== true) recheckCode();
     var bill = computeBill();
+    if (bill.dining + bill.lounge > 0) { var ce = document.getElementById("cabanaError"); if (ce) ce.hidden = true; }
     if (codeRow) codeRow.hidden = !usesCabanaMap();
     renderPackageNote(bill);
 
@@ -518,6 +519,14 @@
   form.addEventListener("submit", function (e) {
     e.preventDefault();
     var bill = computeBill();
+
+    // Every day trip / half-day needs at least one cabana (Front Office rule).
+    var cabErr = document.getElementById("cabanaError");
+    if (usesCabanaMap() && !(bill.dining + bill.lounge > 0)) {
+      if (cabErr) { cabErr.hidden = false; cabErr.scrollIntoView({ behavior: "smooth", block: "center" }); }
+      return;
+    }
+    if (cabErr) cabErr.hidden = true;
 
     if (bill.seniors + (bill.pwdKids || 0) > 0) {
       var files = seniorIdFilesEl && seniorIdFilesEl.files ? seniorIdFilesEl.files.length : 0;
