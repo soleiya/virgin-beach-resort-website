@@ -64,12 +64,11 @@ body = f"""
 <section class="section-tight how-book">
   <div class="wrap">
     <span class="eyebrow">How booking works</span>
-    <h2>Book in a few minutes &mdash; that&rsquo;s it</h2>
-    <ol class="steps-4">
-      <li><b>Pick your dates</b><span>Choose your casita, or how many cabanas you need &mdash; you see the price right away.</span></li>
-      <li><b>Get your quotation</b><span>You see it right away, and it arrives by email with a secure payment link.</span></li>
-      <li><b>Pay online</b><span>Pay 50% or 100% within 24 hours &mdash; card, GCash, Maya and more, through Xendit. Paid 50%? The balance is due 15 days before arrival.</span></li>
-      <li><b>You&rsquo;re booked</b><span>Your confirmation is emailed as soon as the payment goes through. See you at the beach!</span></li>
+    <h2>Book in minutes</h2>
+    <ol class="steps-4 steps-3">
+      <li><b>Pick your date</b><span>Choose a casita or your cabanas &mdash; the price shows right away.</span></li>
+      <li><b>Pay online</b><span>Pay 50% or the full amount by GCash, Maya, card and more.</span></li>
+      <li><b>You&rsquo;re booked</b><span>Your confirmation lands in your inbox. See you at the beach!</span></li>
     </ol>
   </div>
 </section>

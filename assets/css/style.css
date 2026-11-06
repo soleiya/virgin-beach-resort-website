@@ -782,6 +782,8 @@ form.inquiry .field-hint { font-size: 0.8rem; color: var(--ink-soft); margin-top
 .steps-4 span { display: block; font-size: 0.92rem; color: var(--ink-soft); line-height: 1.5; }
 @media (max-width: 900px) { .steps-4 { grid-template-columns: 1fr 1fr; } }
 @media (max-width: 520px) { .steps-4 { grid-template-columns: 1fr; } }
+.steps-4.steps-3 { grid-template-columns: repeat(3, 1fr); }
+@media (max-width: 760px) { .steps-4.steps-3 { grid-template-columns: 1fr; } }
 
 /* ---------- pay page: find your booking ---------- */
 .pay-step-head { display: flex; align-items: center; gap: 10px; margin: 8px 0 -4px; }
