@@ -297,6 +297,29 @@ html = """<!doctype html>
   .col-notes { min-width: 160px; color: var(--ink-soft); max-width: 220px; }
   .muted { color: var(--ink-soft); }
 
+  /* Find a booking (staff-find.js) */
+  #findBar { position: relative; margin: 2px 0 16px; }
+  .find-box { display: flex; align-items: center; gap: 10px; background: var(--surface); border: 2px solid var(--line); border-radius: 14px; padding: 4px 14px; box-shadow: 0 1px 3px rgba(0,0,0,.05); }
+  .find-box:focus-within { border-color: var(--lagoon); box-shadow: 0 0 0 4px var(--lagoon-tint); }
+  .find-ico { font-size: 1.25rem; color: var(--ink-soft); transform: rotate(-45deg); display: inline-block; }
+  #findInput { flex: 1; border: 0; outline: 0; background: transparent; font: 600 1rem var(--font-body); color: var(--ink); padding: 11px 0; min-width: 0; }
+  .find-box kbd { font: 700 .72rem var(--font-body); color: var(--ink-soft); border: 1px solid var(--line); border-radius: 6px; padding: 2px 7px; background: var(--sand); }
+  .find-results { position: absolute; left: 0; right: 0; top: calc(100% + 6px); z-index: 60; background: var(--surface); border: 1px solid var(--line); border-radius: 14px; box-shadow: 0 12px 32px rgba(0,0,0,.14); max-height: 60vh; overflow-y: auto; padding: 6px; }
+  .find-hit { display: flex; align-items: center; gap: 12px; width: 100%; text-align: left; border: 0; background: none; border-radius: 10px; padding: 9px 10px; cursor: pointer; font: inherit; color: var(--ink); }
+  .find-hit.on, .find-hit:hover { background: var(--lagoon-tint); }
+  .find-hit.off { opacity: .55; }
+  .fh-kind { flex: 0 0 auto; font-size: .68rem; font-weight: 800; border-radius: 999px; padding: 3px 9px; }
+  .fh-kind.d { background: #fbefd3; color: #8a5a12; }
+  .fh-kind.v { background: #e3e9f6; color: #34508a; }
+  .fh-main { flex: 1; min-width: 0; }
+  .fh-main b { font-size: .95rem; }
+  .fh-main small { color: var(--ink-soft); font-weight: 700; font-size: .74rem; }
+  .fh-sub { display: block; font-size: .8rem; color: var(--ink-soft); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .fh-st { flex: 0 0 auto; font-size: .74rem; font-weight: 700; color: var(--ink-soft); }
+  .find-none, .find-more { padding: 12px; font-size: .85rem; color: var(--ink-soft); text-align: center; }
+  #villaCalBtn { display: none !important; }
+  body.cbv #findBar { display: none; }
+  @media (max-width: 600px) { .find-box kbd { display: none; } .fh-st { display: none; } }
   /* Summary view (staff-summary.js) */
   #sumView { display: none; }
   body.sumv #sumView { display: block; max-width: 1100px; margin: 0 auto; padding: 0; }
@@ -1454,6 +1477,7 @@ html = """<!doctype html>
 <script src="../assets/js/staff-codes.js?v=__V_CODES__"></script>
 <script src="../assets/js/staff-daycal.js?v=__V_DCAL__"></script>
 <script src="../assets/js/staff-summary.js?v=__V_SUMJS__"></script>
+<script src="../assets/js/staff-find.js?v=__V_FINDJS__"></script>
 <script src="../assets/js/staff-cloudbeds.js?v=__V_CBJS__"></script>
 <script src="../assets/js/staff-cloudbeds-pages.js?v=__V_CBPAGES__"></script>
 </body>
@@ -1475,6 +1499,7 @@ html = (html.replace("__V_CSS__", v("assets/css/style.css"))
             .replace("__V_CBCSS__", v("assets/css/staff-cloudbeds.css"))
             .replace("__V_CBJS__", v("assets/js/staff-cloudbeds.js"))
             .replace("__V_SUMJS__", v("assets/js/staff-summary.js"))
+            .replace("__V_FINDJS__", v("assets/js/staff-find.js"))
             .replace("__V_CBPAGES__", v("assets/js/staff-cloudbeds-pages.js")))
 
 os.makedirs(os.path.join(ROOT, "staff"), exist_ok=True)
