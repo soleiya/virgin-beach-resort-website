@@ -1523,6 +1523,7 @@
   }
 
   function renderModalBill() {
+    if (window.VBRRenderPartyLine) window.VBRRenderPartyLine();
     if (!billEl) return;
     var pr = modalPricing(), b = pr.bill;
     var rated = b.rated;
@@ -1553,6 +1554,62 @@
     var useBtn = $("useCalcTotal");
     if (useBtn) useBtn.addEventListener("click", function () { openPriceSig = null; renderModalBill(); });
   }
+
+  // ---- party box: −/+ steppers, Senior/PWD kept within Adults (PWD kids within Kids 6–12) ----
+  function setInt(id, v) { $(id).value = Math.max(0, v); }
+  function syncParty(changed) {
+    var a = intVal("addAdults"), sr = intVal("addSeniors"), k = intVal("addKids"), pk = intVal("addPwdKids");
+    // Senior/PWD are counted within Adults: raising seniors past adults adds adults; lowering adults trims seniors
+    if (sr > a) { if (changed === "addSeniors") setInt("addAdults", sr); else setInt("addSeniors", a); }
+    if (pk > k) { if (changed === "addPwdKids") setInt("addKids", pk); else setInt("addPwdKids", k); }
+    renderPartyLine();
+  }
+  function plural(n, one, many) { return n + " " + (n === 1 ? one : many); }
+  function renderPartyLine() {
+    var el = $("addPartyLine"); if (!el) return;
+    var a = intVal("addAdults"), sr = intVal("addSeniors"), k = intVal("addKids"), pk = intVal("addPwdKids"), b = intVal("addKids05");
+    var total = a + k + b, bits = [];
+    if (a) bits.push(plural(a, "adult", "adults") + (sr ? sr === a ? (a === 1 ? " — Senior/PWD" : " — all Senior/PWD") : " (" + sr + " Senior/PWD, " + (a - sr) + " regular)" : ""));
+    if (k) bits.push(plural(k, "kid 6–12", "kids 6–12") + (pk ? " (" + pk + " PWD)" : ""));
+    if (b) bits.push(plural(b, "kid 0–5", "kids 0–5") + " (free)");
+    var ids = sr + pk;
+    el.innerHTML = total ? "<b>" + plural(total, "guest", "guests") + "</b> · " + esc(bits.join(" · ")) +
+      (ids ? ' <span class="sr-tag">' + plural(ids, "Senior/PWD ID", "Senior/PWD IDs") + " needed · discount on their meals</span>" : "")
+      : "Add at least 1 guest.";
+    $("addParty").querySelectorAll(".stepper").forEach(function (w) {
+      var i = w.querySelector("input"), v = parseInt(i.value || "0", 10) || 0;
+      w.firstChild.disabled = v <= (+i.min || 0);
+      w.lastChild.disabled = i.max !== "" && v >= +i.max;
+    });
+  }
+  window.VBRRenderPartyLine = renderPartyLine;
+  document.querySelectorAll("#addParty input[data-stepper]").forEach(function (inp) {
+    var w = document.createElement("div"); w.className = "stepper";
+    inp.parentNode.insertBefore(w, inp);
+    var minus = document.createElement("button"), plus = document.createElement("button");
+    minus.type = plus.type = "button"; minus.textContent = "−"; plus.textContent = "+";
+    minus.setAttribute("aria-label", "Less"); plus.setAttribute("aria-label", "More");
+    w.appendChild(minus); w.appendChild(inp); w.appendChild(plus);
+    function bump(d) {
+      var v = (parseInt(inp.value || "0", 10) || 0) + d;
+      if (v < (+inp.min || 0)) return;
+      if (inp.max !== "" && v > +inp.max) return;
+      inp.value = v;
+      inp.dispatchEvent(new Event("input", { bubbles: true }));
+    }
+    minus.addEventListener("click", function () { bump(-1); });
+    plus.addEventListener("click", function () { bump(1); });
+  });
+  ["addAdults", "addSeniors", "addKids", "addPwdKids", "addKids05", "addPets"].forEach(function (id) {
+    $(id).addEventListener("input", function () { syncParty(id); }, true);
+  });
+  $("addParty").querySelectorAll("[data-sr]").forEach(function (b) {
+    b.addEventListener("click", function () {
+      if (b.getAttribute("data-sr") === "all") { if (!intVal("addAdults")) setInt("addAdults", 1); setInt("addSeniors", intVal("addAdults")); }
+      else setInt("addSeniors", 0);
+      $("addSeniors").dispatchEvent(new Event("input", { bubbles: true }));
+    });
+  });
 
   ["addAdults", "addKids", "addKids05", "addSeniors", "addPwdKids", "addPets", "addTotal", "addDiscountValue", "addDiscountReason"].forEach(function (id) {
     $(id).addEventListener("input", renderModalBill);

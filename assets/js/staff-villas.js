@@ -266,20 +266,35 @@
     var el = $("vGuests");
     el.innerHTML = "";
     var head = document.createElement("div");
-    head.className = "vg-row";
-    head.innerHTML = '<span class="vg-n">1</span><input type="text" readonly tabindex="-1" value="' + esc($("vName").value || "Primary guest") + '"><input type="text" readonly tabindex="-1" value="' + ($("vPrimarySenior").checked ? "Senior / PWD" : "Adult (13+)") + '"><span></span>';
+    var pSr = $("vPrimarySenior").checked;
+    head.className = "vg-row" + (pSr ? " vg-senior" : "");
+    head.innerHTML = '<span class="vg-n">1</span><input type="text" readonly tabindex="-1" value="' + esc($("vName").value || "Primary guest") + '">' +
+      '<select class="vg-type" title="Primary guest type"><option value="adult"' + (pSr ? "" : " selected") + '>Adult (13+)</option><option value="senior"' + (pSr ? " selected" : "") + '>Senior / PWD</option></select><span></span>';
+    head.querySelector("select").addEventListener("change", function (e) { $("vPrimarySenior").checked = e.target.value === "senior"; renderGuests(); requestQuote(); });
     el.appendChild(head);
     guests.forEach(function (g, i) {
       var row = document.createElement("div");
-      row.className = "vg-row" + (g.name.trim() ? "" : " vg-missing");
+      row.className = "vg-row" + (g.name.trim() ? "" : " vg-missing") + (g.age_group === "senior" ? " vg-senior" : "");
       row.innerHTML = '<span class="vg-n">' + (i + 2) + '</span><input type="text" placeholder="Full name (ask the guest)" value="' + esc(g.name) + '"><select>' +
         AGE.map(function (a) { return '<option value="' + a[0] + '"' + (a[0] === g.age_group ? " selected" : "") + ">" + a[1] + "</option>"; }).join("") +
         '</select><button type="button" title="Remove">×</button>';
       row.querySelector("input").addEventListener("input", function (e) { g.name = e.target.value; row.classList.toggle("vg-missing", !g.name.trim()); });
-      row.querySelector("select").addEventListener("change", function (e) { g.age_group = e.target.value; requestQuote(); });
+      row.querySelector("select").addEventListener("change", function (e) { g.age_group = e.target.value; renderGuests(); requestQuote(); });
       row.querySelector("button").addEventListener("click", function () { guests.splice(i, 1); renderGuests(); requestQuote(); });
       el.appendChild(row);
     });
+    if (cbLock === "all") Array.prototype.forEach.call(el.querySelectorAll("select, button"), function (x) { x.disabled = true; x.setAttribute("data-cblocked", "1"); });
+    renderVPartyLine();
+  }
+  function renderVPartyLine() {
+    var pl = $("vPartyLine"); if (!pl) return;
+    var c = counts(), total = c.adults + c.k612 + c.k05, bits = [];
+    function n(x, one, many) { return x + " " + (x === 1 ? one : many); }
+    bits.push(n(c.adults, "adult", "adults") + (c.seniors ? c.seniors === c.adults ? (c.adults === 1 ? " — Senior/PWD" : " — all Senior/PWD") : " (" + c.seniors + " Senior/PWD, " + (c.adults - c.seniors) + " regular)" : ""));
+    if (c.k612) bits.push(n(c.k612, "kid 6–12", "kids 6–12"));
+    if (c.k05) bits.push(n(c.k05, "kid 0–5", "kids 0–5") + " (free)");
+    pl.innerHTML = "<b>" + n(total, "guest", "guests") + "</b> · " + esc(bits.join(" · ")) +
+      (c.seniors ? ' <span class="sr-tag">' + n(c.seniors, "Senior/PWD ID", "Senior/PWD IDs") + " needed</span>" : "");
   }
   $("vAddGuest").addEventListener("click", function () { guests.push({ name: "", age_group: "adult" }); renderGuests(); requestQuote(); var ins = $("vGuests").querySelectorAll("input:not([readonly])"); if (ins.length) ins[ins.length - 1].focus(); });
   $("vPrimarySenior").addEventListener("change", function () { renderGuests(); requestQuote(); });

@@ -513,6 +513,27 @@ html = """<!doctype html>
   .modal-row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 14px; }
   .modal-row.three { grid-template-columns: 1fr 1fr 1fr; }
   .modal-row.four { grid-template-columns: 1fr 1fr 1fr 1fr; }
+  .party-box { border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; margin: 14px 0 4px; background: var(--surface); }
+  .party-head { font-size: .78rem; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--ink-soft); margin-bottom: 8px; }
+  .party-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+  .party-cell > label, .party-sub > label { display: block; font-size: .85rem; font-weight: 600; margin-bottom: 4px; }
+  .party-sub { margin-top: 8px; padding: 8px; border-radius: 10px; background: #fbf4e4; border: 1px dashed #d9b86c; }
+  .party-sub > label { font-size: .78rem; color: #7a5a17; }
+  .party-quick { display: flex; gap: 6px; margin-top: 6px; }
+  .chip-btn { border: 1px solid #d9b86c; background: #fff; color: #7a5a17; border-radius: 999px; font-size: .72rem; padding: 2px 10px; cursor: pointer; }
+  .chip-btn:hover { background: #f5e7c4; }
+  .stepper { display: flex; align-items: stretch; max-width: 150px; }
+  .stepper input { text-align: center; border-radius: 0 !important; min-width: 0; -moz-appearance: textfield; }
+  .stepper input::-webkit-outer-spin-button, .stepper input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+  .stepper button { width: 34px; flex: none; border: 1px solid var(--line); background: #f4f1ea; font-size: 1.05rem; cursor: pointer; line-height: 1; }
+  .stepper button:first-child { border-radius: 8px 0 0 8px; border-right: 0; }
+  .stepper button:last-child { border-radius: 0 8px 8px 0; border-left: 0; }
+  .stepper button:disabled { opacity: .35; cursor: default; }
+  .party-line { margin: 10px 0 0; font-size: .85rem; color: var(--ink-soft); }
+  .party-line b { color: var(--ink); }
+  .party-line .sr-tag, .vg-row .sr-tag { display: inline-block; background: #f5e7c4; color: #7a5a17; border-radius: 999px; padding: 1px 8px; font-size: .75rem; font-weight: 700; }
+  .vg-row.vg-senior select, .vg-row.vg-senior .vg-type { border-color: #d9b86c; background: #fbf4e4; color: #7a5a17; font-weight: 600; }
+  @media (max-width: 760px) { .party-grid { grid-template-columns: 1fr 1fr; } }
   .modal-field { margin-bottom: 14px; }
   .modal-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px; }
   .modal.modal-booking, .modal.modal-villa { max-width: 1340px; }
@@ -904,34 +925,37 @@ html = """<!doctype html>
           <label for="addDate">Preferred Date</label>
           <input id="addDate" type="date">
         </div>
-        <div class="modal-field" style="margin-bottom:0;">
-          <label for="addAdults">Adults</label>
-          <input id="addAdults" type="number" min="0" value="1">
-        </div>
-        <div class="modal-field" style="margin-bottom:0;">
-          <label for="addKids">Kids 6&ndash;12</label>
-          <input id="addKids" type="number" min="0" value="0">
-        </div>
       </div>
-      <div class="modal-row four">
-        <div class="modal-field" style="margin-bottom:0;">
-          <label for="addKids05">Kids 0&ndash;5 <span class="modal-lock">&middot; free</span></label>
-          <input id="addKids05" type="number" min="0" value="0">
+      <div class="party-box" id="addParty">
+        <div class="party-head">Who&rsquo;s coming</div>
+        <div class="party-grid">
+          <div class="party-cell">
+            <label for="addAdults">Adults <span class="muted">13+</span></label>
+            <input id="addAdults" type="number" min="0" value="1" data-stepper>
+            <div class="party-sub">
+              <label for="addSeniors">&#8627; Senior / PWD</label>
+              <input id="addSeniors" type="number" min="0" value="0" data-stepper>
+              <div class="party-quick"><button type="button" class="chip-btn" data-sr="all">All</button><button type="button" class="chip-btn" data-sr="none">None</button></div>
+            </div>
+          </div>
+          <div class="party-cell">
+            <label for="addKids">Kids <span class="muted">6&ndash;12</span></label>
+            <input id="addKids" type="number" min="0" value="0" data-stepper>
+            <div class="party-sub">
+              <label for="addPwdKids">&#8627; PWD</label>
+              <input id="addPwdKids" type="number" min="0" value="0" data-stepper>
+            </div>
+          </div>
+          <div class="party-cell">
+            <label for="addKids05">Kids <span class="muted">0&ndash;5 &middot; free</span></label>
+            <input id="addKids05" type="number" min="0" value="0" data-stepper>
+          </div>
+          <div class="party-cell">
+            <label for="addPets">Pets</label>
+            <input id="addPets" type="number" min="0" max="2" value="0" data-stepper>
+          </div>
         </div>
-        <div class="modal-field" style="margin-bottom:0;">
-          <label for="addSeniors">Senior / PWD adults</label>
-          <input id="addSeniors" type="number" min="0" value="0">
-          <p class="modal-hint">Counted within Adults &mdash; 20% off their own share.</p>
-        </div>
-        <div class="modal-field" style="margin-bottom:0;">
-          <label for="addPwdKids">PWD kids 6&ndash;12</label>
-          <input id="addPwdKids" type="number" min="0" value="0">
-          <p class="modal-hint">Counted within Kids 6&ndash;12 (day trips).</p>
-        </div>
-        <div class="modal-field" style="margin-bottom:0;">
-          <label for="addPets">Pets</label>
-          <input id="addPets" type="number" min="0" max="2" value="0">
-        </div>
+        <p class="party-line" id="addPartyLine"></p>
       </div>
       <div class="modal-row three" id="addCabanaCounts">
         <div class="modal-field" style="margin-bottom:0;">
@@ -1076,9 +1100,11 @@ html = """<!doctype html>
       </div>
 
       <h3 class="modal-subhead">Guests <span class="modal-lock">&middot; every guest is charged the meal package per night</span></h3>
-      <label class="modal-check"><input type="checkbox" id="vPrimarySenior"> Primary guest is a Senior Citizen / PWD</label>
-      <div id="vGuests" style="margin-top:8px;"></div>
+      <input type="checkbox" id="vPrimarySenior" hidden>
+      <p class="modal-hint" style="margin:0 0 8px;">Set each guest&rsquo;s type &mdash; pick <b>Senior / PWD</b> for anyone with a Senior Citizen or PWD ID (including the primary guest).</p>
+      <div id="vGuests"></div>
       <button type="button" class="btn-sm ghost" id="vAddGuest">+ Add companion</button>
+      <p class="party-line" id="vPartyLine"></p>
       <div class="cap-line" id="vCap" hidden></div>
       <div class="modal-row three" style="margin-top:14px;">
         <div class="modal-field" style="margin-bottom:0;"><label for="vPets">Pets</label><input id="vPets" type="number" min="0" max="2" value="0"></div>
