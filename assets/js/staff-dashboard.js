@@ -811,7 +811,10 @@
       var box = document.createElement("div");
       var fig = document.createElement("span");
       fig.className = "pay-cell-fig";
-      fig.textContent = paid >= total - 0.5 && paid > 0 ? "Paid in full" : paid > 0 ? "Paid " + peso(paid) + " of " + peso(total) : "Unpaid";
+      // sheet bookings: the 2026 sheet tracked payment by status, not by amount
+      var sheetPaid = r.source === "sheet_import" && paid <= 0 && (r.status === "confirmed" || r.status === "completed");
+      fig.textContent = sheetPaid ? "Paid (as seen in Sheet)" : paid >= total - 0.5 && paid > 0 ? "Paid in full" : paid > 0 ? "Paid " + peso(paid) + " of " + peso(total) : "Unpaid";
+      if (sheetPaid) fig.title = "Marked paid / confirmed in the 2026 Day Trip sheet. The amount and method weren't recorded on the website — check the sheet or bank records for details.";
       box.appendChild(fig);
       var how = payMethods(r);
       if (how.length) {
