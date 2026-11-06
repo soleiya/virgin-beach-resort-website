@@ -941,10 +941,7 @@ html = """<!doctype html>
           <div class="party-cell">
             <label for="addKids">Kids <span class="muted">6&ndash;12</span></label>
             <input id="addKids" type="number" min="0" value="0" data-stepper>
-            <div class="party-sub">
-              <label for="addPwdKids">&#8627; PWD</label>
-              <input id="addPwdKids" type="number" min="0" value="0" data-stepper>
-            </div>
+            <input id="addPwdKids" type="hidden" value="0">
           </div>
           <div class="party-cell">
             <label for="addKids05">Kids <span class="muted">0&ndash;5 &middot; free</span></label>
