@@ -76,6 +76,8 @@
     if (cbLock === "all") {
       Array.prototype.forEach.call(form.querySelectorAll("input, select, textarea, button"), function (el) {
         if (el.id === "vStaffNotes" || el.id === "vCancel" || el.id === "vSave" || el.id === "vLogBtn" || el.closest(".mail-panel")) return;
+        // companions' names can still be corrected here (not their age group — that's pricing, done in Cloudbeds)
+        if (el.closest("#vGuests") && el.tagName === "INPUT" && !el.readOnly) return;
         lockEl(el);
       });
       lockEl($("vNotify"));
@@ -89,7 +91,7 @@
         ? "<b>Booked in Cloudbeds.</b> Change dates, casitas, guests, price or status in Cloudbeds — this page updates within a few minutes. Here you can add staff notes." + link
         : "<b>Booked on the website · now in Cloudbeds (#" + esc(r.cb_reservation_id || "") + ").</b> Cloudbeds is the master from here: change dates, casitas, guests, status or cancel in Cloudbeds — this page follows within a few minutes. Record payments with <b>Payments</b>; verified payments are added to the Cloudbeds folio. The guest got the quotation from the website — Cloudbeds sends the emails from here." + link;
     }
-    saveBtn.textContent = cbLock === "all" ? "Save Staff Notes" : saveBtn.textContent;
+    saveBtn.textContent = cbLock === "all" ? "Save Notes & Names" : saveBtn.textContent;
   }
 
   function showErr(m) { errEl.textContent = m; errEl.style.display = "block"; saveBtn.disabled = false; }
@@ -461,7 +463,14 @@
     errEl.style.display = "none";
     if (cbLock === "all") {
       saveBtn.disabled = true;
-      sb.from("booking_requests").update({ staff_notes: $("vStaffNotes").value }).eq("id", editing.id).then(function (u) {
+      var upd = { staff_notes: $("vStaffNotes").value };
+      var before = JSON.stringify((editing.companions || []).map(function (c) { return c.name || ""; }));
+      var comps = guests.map(function (g) { return { name: g.name.trim(), age_group: g.age_group }; });
+      if (JSON.stringify(comps.map(function (c) { return c.name; })) !== before) {
+        upd.companions = comps;
+        upd.guest_names = [editing.guest_name].concat(comps.map(function (g) { return g.name || "(name to follow)"; })).join(", ");
+      }
+      sb.from("booking_requests").update(upd).eq("id", editing.id).then(function (u) {
         saveBtn.disabled = false;
         if (u.error) return showErr("Couldn't save: " + u.error.message);
         close();
