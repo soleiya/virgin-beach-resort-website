@@ -12,6 +12,8 @@
   function start(sb, orderCode, email, kind, btn, onError) {
     if (!sb) { onError("Online payment isn't available right now — please email reservations@virginbeachresort.com."); return; }
     var label = btn ? btn.innerHTML : "";
+    var type = window.VBRPayType || (/book-stay/.test(location.pathname) ? "villa" : /\/book\/|day-packages/.test(location.pathname) ? "daytrip" : null);
+    try { if (window.VBRTrack) window.VBRTrack("pay_click", { kind: kind, type: type }, orderCode); } catch (e) {}
     if (btn) { btn.disabled = true; btn.textContent = "Opening secure payment…"; }
     sb.functions.invoke("xendit-pay", { body: { action: "create", order_code: orderCode, email: email, kind: kind } })
       .then(function (res) {
@@ -25,6 +27,7 @@
       })
       .catch(function (e) {
         if (btn) { btn.disabled = false; btn.innerHTML = label; }
+        try { if (window.VBRTrack) window.VBRTrack("pay_error", { reason: String((e && e.message) || "could not open payment").slice(0, 120), type: type }, orderCode); } catch (x) {}
         onError((e && e.message) || "The payment page couldn't be opened just now — please try again in a moment.");
       });
   }

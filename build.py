@@ -365,6 +365,7 @@ def head(base, title, description, current_path):
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400..600;1,9..144,400..600&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="{base}assets/css/style.css?v={asset_v('assets/css/style.css')}">
+<script src="{base}assets/js/track.js?v={asset_v('assets/js/track.js')}"></script>
 </head>
 """
 

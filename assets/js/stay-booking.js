@@ -15,6 +15,13 @@
 (function () {
   var form = document.getElementById("stayForm");
   if (!form) return;
+  // analytics (assets/js/track.js) — anonymous funnel steps
+  var T = function (kind, data, code) { try { if (window.VBRTrack) window.VBRTrack(kind, data, code); } catch (e) {} };
+  var T1 = function (kind, data) { try { if (window.VBRTrack) window.VBRTrack.once(kind, data); } catch (e) {} };
+  T("st_view");
+  form.addEventListener("focusin", function (e) {
+    if (e.target && /guestName|guestEmail|guestPhone/.test(e.target.id || "")) T1("st_form");
+  });
 
   var cfg = window.SUPABASE_CONFIG || {};
   var sb = cfg.url && window.supabase ? window.supabase.createClient(cfg.url, cfg.anonKey) : null;
@@ -82,6 +89,9 @@
   }
   checkInEl.addEventListener("change", onDates);
   checkOutEl.addEventListener("change", onDates);
+  var datesTracked = function () { if (checkInEl.value && checkOutEl.value && checkOutEl.value > checkInEl.value) T1("st_dates", { check_in: checkInEl.value, nights: nights() }); };
+  checkInEl.addEventListener("change", datesTracked);
+  checkOutEl.addEventListener("change", datesTracked);
 
   // ---------------------------------------------------------------- casitas
   var typeCards = {};
@@ -100,6 +110,7 @@
   function setCount(t, n) {
     var max = datesReady() ? freeUnitsOfType(t).length : 0;
     counts[t] = Math.max(0, Math.min(n, max));
+    if (counts[t] > 0) T1("st_casita", { type: t });
     renderTypes();
     renderCapacity();
     requestQuote();
@@ -496,7 +507,8 @@
     formError.hidden = true;
     if (!sb) return showError("Online booking isn't available right now — please email reservations@virginbeachresort.com.");
     var problem = validate();
-    if (problem) return showError(esc(problem[0]), problem[1]);
+    T("st_submit", { casitas: pickedVillas().length, guests: party().total, nights: nights() });
+    if (problem) { T("st_blocked", { reason: String(problem[0]).replace(/\s*\(.*$/, "").slice(0, 100) }); return showError(esc(problem[0]), problem[1]); }
 
     submitBtn.disabled = true;
     submitBtn.textContent = "Sending…";
@@ -530,11 +542,16 @@
     }).then(function (res) {
       if (res.error) throw res.error;
       var row = Array.isArray(res.data) ? res.data[0] : res.data;
-      return finalRef(row).then(function (r) { showSuccess(payload, r, picked); });
+      return finalRef(row).then(function (r) {
+        T("st_booked", { casitas: picked.length, types: picked.map(function (v) { return v.room_type; }), guests: p.total, nights: nights(),
+          seniors: p.seniors, pets: pets(), total: r && r.total != null ? Number(r.total) : null, code: payload.discount_code }, r && (r.order_code || r.code));
+        showSuccess(payload, r, picked);
+      });
     }).catch(function (err) {
       submitBtn.disabled = false;
       submitBtn.textContent = "Book Now";
       var msg = err && err.message ? err.message : "";
+      T("st_error", { reason: String(msg).slice(0, 120) || "unknown" });
       if (/just booked|already booked/i.test(msg)) {
         loadAvailability();
         return showError(esc(msg));

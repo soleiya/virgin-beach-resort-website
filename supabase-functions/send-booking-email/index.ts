@@ -96,8 +96,9 @@ function env(key: string, fallback = ""): string {
 const MAILBOX = "reservations@virginbeachresort.com";
 const FROM = `Virgin Beach Resort Reservations <${MAILBOX}>`;
 const EVENTS_EMAIL = "events@virginbeachresort.com";
-// Silent copy (Bcc) of EVERY email this function sends — guest and staff —
-// for monitoring. Override with the MONITOR_EMAILS secret (comma-separated;
+// Silent copy (Bcc) of every STAFF email this function sends (new booking
+// alert with "Needs attention", proofs, overdue balances…) for monitoring —
+// guest emails are not copied. Override with the MONITOR_EMAILS secret (comma-separated;
 // set it to "none" to stop).
 const monitorEmails = () => {
   const v = env("MONITOR_EMAILS", "migquesada@gmail.com").trim();
@@ -668,6 +669,14 @@ export function guestSubject(r: Any, c: ReturnType<typeof cfg>) {
   const type = r.stay_type === "corporate" ? "Corporate Outing" : r.stay_type === "half_day" ? "Half-Day Trip" : "Day Trip";
   return `${c.testMode ? "[TEST] " : ""}Virgin Beach Resort ${type} — ${r.order_code || "Booking"} (${fmtDate(r.check_in, "short").replace(/^\w+, /, "")})`;
 }
+// "⚠ 2 to check · " in front of the subject, and a one-line summary as the
+// inbox preview, whenever a new-booking alert has "Needs attention" items.
+const plainFlag = (h: string) => h.replace(/<[^>]+>/g, "").replace(/&mdash;/g, "—").replace(/&amp;/g, "&").replace(/\s+/g, " ").trim();
+export function attentionPrefix(flags: string[]) { return flags.length ? `⚠ ${flags.length} to check · ` : ""; }
+export function attentionSummary(flags: string[]) {
+  if (!flags.length) return "";
+  return "Needs attention: " + flags.map((f) => plainFlag(f).replace(/\.\s.*$/, "").slice(0, 90)).join(" · ");
+}
 export function staffSubject(r: Any, c: ReturnType<typeof cfg>) {
   const kind = r.stay_type === "corporate" ? "Corporate Inquiry" : isOvernight(r) ? "Overnight Booking" : "Day Trip Booking";
   return `${c.testMode ? "[TEST] " : ""}New ${kind} from ${r.guest_name || "Guest"} — ${r.order_code || ""} (${fmtDate(r.check_in, "short").replace(/^\w+, /, "")})`;
@@ -795,7 +804,7 @@ function staffSentLine(r: Any, mode: "confirmed" | "none", guestSent: { ok: bool
     : `<strong style="color:${C.red};">The guest has NOT received an email.</strong>`;
 }
 
-export function staffNewEmail(r: Any, cabanas: Any[], q: Quote | null, c: ReturnType<typeof cfg>, guestSent: { ok: boolean; error?: string }, now = new Date()) {
+export function staffNewEmail(r: Any, cabanas: Any[], q: Quote | null, c: ReturnType<typeof cfg>, guestSent: { ok: boolean; error?: string; monitor?: string }, now = new Date()) {
   if (isOvernight(r)) return staffNewEmailOvernight(r, cabanas, q, c, guestSent, now);
   const d = daysUntil(r.check_in, now);
   const dl = paymentDeadline(r, c.deadlineHours);
@@ -804,10 +813,10 @@ export function staffNewEmail(r: Any, cabanas: Any[], q: Quote | null, c: Return
     flags.push(`<li style="margin:0 0 6px;color:${tone === "red" ? C.red : C.warn};">${t}</li>`);
 
   const mode = staffSentMode(r);
-  if (!guestSent.ok && mode !== "none") flag(`<strong>Guest email FAILED to send</strong> (${esc(guestSent.error || "unknown error")}). Send the ${mode === "confirmed" ? "confirmation" : "quotation"} manually.`, "red");
+  if (!guestSent.ok && !guestSent.monitor && mode !== "none") flag(`<strong>Guest email FAILED to send</strong> (${esc(guestSent.error || "unknown error")}). Send the ${mode === "confirmed" ? "confirmation" : "quotation"} manually.`, "red");
   const needDocs = docsNeeded(r);
   if (needDocs.any) flag(`Guest still has to upload ${[needDocs.seniors ? "Senior/PWD ID(s)" : "", needDocs.pets ? "pet vaccination card(s)" : ""].filter(Boolean).join(" and ")} — the quotation email links to the upload page.`);
-  if (q?.mismatch) flag(`${isStaffMade(r) ? "The dashboard saved" : "Website showed the guest"} <strong>${peso(q.websiteTotal)}</strong>, but the rate sheet${Number(r.discount_amount) > 0 ? " (less the discount)" : ""} gives <strong>${peso(q.total)}</strong> (the amount emailed). Double-check before accepting payment.`, "red");
+  if (q?.mismatch && !r.cb_owned) flag(`${isStaffMade(r) ? "The dashboard saved" : "Website showed the guest"} <strong>${peso(q.websiteTotal)}</strong>, but the rate sheet${Number(r.discount_amount) > 0 ? " (less the discount)" : ""} gives <strong>${peso(q.total)}</strong> (the amount emailed). Double-check before accepting payment.`, "red");
   if (d !== null && d <= 1) flag(`Trip is <strong>${d <= 0 ? "today" : "tomorrow"}</strong> — past the usual payment cut-off. Call the guest now: either accept with a same-day payment deadline, or send the walk-in reply.`, "red");
   else if (d !== null && d <= 7) flag(`Trip is <strong>${d <= 0 ? "today or past" : `in ${plural(d, "day")}`}</strong> — inside the 7-day non-refundable window. Follow up by phone.`, "red");
   else if (d !== null && d <= 14) flag(`Trip is in ${plural(d, "day")} — inside the 14-day (50% forfeit) window.`);
@@ -831,8 +840,8 @@ export function staffNewEmail(r: Any, cabanas: Any[], q: Quote | null, c: Return
     ["Amount due", q ? esc(peso(q.total)) : "Quote needed"],
     ["Status", esc(statusLabel(r))],
   ])}
-${isStaffMade(r) ? p(`Added in the staff dashboard${r.booked_by ? ` by <strong>${esc(r.booked_by)}</strong>` : ""} (${esc(label(r.source))})${mode === "confirmed" ? " as an already-Confirmed booking — the guest was sent the confirmation email, not a quotation." : mode === "none" ? "." : " and sent to the guest as a quotation."}`) : ""}
-${p(mode !== "quote" ? staffSentLine(r, mode, guestSent, now) : guestSent.ok
+${isStaffMade(r) && !guestSent.monitor ? p(`Added in the staff dashboard${r.booked_by ? ` by <strong>${esc(r.booked_by)}</strong>` : ""} (${esc(label(r.source))})${mode === "confirmed" ? " as an already-Confirmed booking — the guest was sent the confirmation email, not a quotation." : mode === "none" ? "." : " and sent to the guest as a quotation."}`) : ""}
+${guestSent.monitor ? p(guestSent.monitor) : p(mode !== "quote" ? staffSentLine(r, mode, guestSent, now) : guestSent.ok
     ? `Quotation${q ? " + bank details" : ""} sent to <strong>${esc(r.guest_email)}</strong> at ${esc(fmtDateTime(now))}. It's in the <strong>Sent</strong> folder — the guest's replies will land in that same thread.${q ? ` Pay-by date given: <strong>${esc(dl.label)}</strong>.` : ""}`
     : `<strong style="color:${C.red};">The guest has NOT received an email.</strong>`)}
 ${flags.length ? `${h2("Needs attention")}<ul style="margin:0;padding-left:20px;font-size:14px;">${flags.join("")}</ul>` : ""}
@@ -858,8 +867,8 @@ ${h2("Follow-up checklist")}
 ${button(dash, "Open in staff dashboard")}${button(gmail, "Find guest thread in Gmail")}`;
 
   return {
-    subject: staffSubject(r, c),
-    html: shell({ preheader: `${r.guest_name} · ${fmtDate(r.check_in, "short")} · ${q ? peso(q.total) : "quote needed"}`, body, c, internal: true }),
+    subject: attentionPrefix(flags) + staffSubject(r, c),
+    html: shell({ preheader: attentionSummary(flags) || `${r.guest_name} · ${fmtDate(r.check_in, "short")} · ${q ? peso(q.total) : "quote needed"}`, body, c, internal: true }),
   };
 }
 
@@ -1217,23 +1226,23 @@ ${signature(c)}`;
   };
 }
 
-export function staffNewEmailOvernight(r: Any, villas: Any[], q: Quote | null, c: ReturnType<typeof cfg>, guestSent: { ok: boolean; error?: string }, now = new Date()) {
+export function staffNewEmailOvernight(r: Any, villas: Any[], q: Quote | null, c: ReturnType<typeof cfg>, guestSent: { ok: boolean; error?: string; monitor?: string }, now = new Date()) {
   const d = daysUntil(r.check_in, now);
   const dl = paymentDeadline(r, c.deadlineHours);
   const flags: string[] = [];
   const flag = (t: string, tone: "warn" | "red" = "warn") =>
     flags.push(`<li style="margin:0 0 6px;color:${tone === "red" ? C.red : C.warn};">${t}</li>`);
   const mode = staffSentMode(r);
-  if (!guestSent.ok && mode !== "none") flag(`<strong>Guest email FAILED to send</strong> (${esc(guestSent.error || "unknown error")}). Send the ${mode === "confirmed" ? "confirmation" : "quotation"} manually.`, "red");
-  if (q?.mismatch) flag(`${isStaffMade(r) ? "The dashboard saved" : "Website showed the guest"} <strong>${peso(q.websiteTotal)}</strong>, but the rate sheet${Number(r.discount_amount) > 0 ? " (less the discount)" : ""} gives <strong>${peso(q.total)}</strong> (the amount emailed). Double-check before accepting payment.`, "red");
-  if (!villas.length) flag("No casita assigned — assign one in the dashboard before taking payment.", "red");
+  if (!guestSent.ok && !guestSent.monitor && mode !== "none") flag(`<strong>Guest email FAILED to send</strong> (${esc(guestSent.error || "unknown error")}). Send the ${mode === "confirmed" ? "confirmation" : "quotation"} manually.`, "red");
+  if (q?.mismatch && !r.cb_owned) flag(`${isStaffMade(r) ? "The dashboard saved" : "Website showed the guest"} <strong>${peso(q.websiteTotal)}</strong>, but the rate sheet${Number(r.discount_amount) > 0 ? " (less the discount)" : ""} gives <strong>${peso(q.total)}</strong> (the amount emailed). Double-check before accepting payment.`, "red");
+  if (!villas.length) flag(r.cb_owned ? "No casita assigned yet — assign one in Cloudbeds." : "No casita assigned — assign one in the dashboard before taking payment.", "red");
   if (d !== null && d <= 1) flag(`Arrival is <strong>${d <= 0 ? "today" : "tomorrow"}</strong> — call the guest now to arrange payment.`, "red");
   else if (d !== null && d <= 7) flag(`Arrival is in ${plural(d, "day")} — inside the 7-day non-refundable window. Follow up by phone.`, "red");
   else if (d !== null && d <= 14) flag(`Arrival is in ${plural(d, "day")} — inside the 14-day (50% forfeit) window.`);
-  if (!rosterComplete(r)) flag("Guest list is incomplete — ask the guest for every companion's full name and age (meals are per person).");
+  if (!r.cb_owned && !rosterComplete(r)) flag("Guest list is incomplete — ask the guest for every companion's full name and age (meals are per person).");
   if (int(r.extra_beds)) flag(`${plural(int(r.extra_beds), "extra floor mattress", "extra floor mattresses")} needed — tell Housekeeping.`);
   const needDocs = docsNeeded(r);
-  if (needDocs.any) flag(`Guest still has to upload ${[needDocs.seniors ? "Senior/PWD ID(s)" : "", needDocs.pets ? "pet vaccination card(s)" : ""].filter(Boolean).join(" and ")}.`);
+  if (needDocs.any && !r.cb_owned) flag(`Guest still has to upload ${[needDocs.seniors ? "Senior/PWD ID(s)" : "", needDocs.pets ? "pet vaccination card(s)" : ""].filter(Boolean).join(" and ")}.`);
   if (int(r.senior_count)) flag(`${plural(int(r.senior_count), "senior citizen/PWD", "senior citizens/PWDs")} — ${Array.isArray(r.senior_id_paths) && r.senior_id_paths.length ? plural(r.senior_id_paths.length, "ID photo") + " uploaded" : "no ID photo yet"}. Verify at check-in.`);
   if (int(r.pet_count)) flag(`${plural(int(r.pet_count), "pet")} — ${Array.isArray(r.pet_vaccination_paths) && r.pet_vaccination_paths.length ? "vaccination card(s) uploaded" : "NO vaccination card yet"}${r.pet_policy_agreed_at ? ", Pet Policy agreed online" : ""}.`);
   if (r.occasion) flag(`Occasion: <strong>${esc(label(r.occasion))}</strong> — consider a welcome touch.`);
@@ -1247,8 +1256,8 @@ export function staffNewEmailOvernight(r: Any, villas: Any[], q: Quote | null, c
     ["Stay", esc(`${fmtDate(r.check_in, "short").replace(/^\w+, /, "")} · ${plural(nightsOf(r), "night")}`)],
     ["Status", esc(statusLabel(r))],
   ])}
-${isStaffMade(r) ? p(`Added in the staff dashboard${r.booked_by ? ` by <strong>${esc(r.booked_by)}</strong>` : ""} (${esc(label(r.source))})${mode === "confirmed" ? " as an already-Confirmed booking — the guest was sent the confirmation email, not a quotation." : mode === "none" ? "." : " and sent to the guest as a quotation."}`) : ""}
-${p(mode !== "quote" ? staffSentLine(r, mode, guestSent, now) : guestSent.ok
+${isStaffMade(r) && !guestSent.monitor ? p(`Added in the staff dashboard${r.booked_by ? ` by <strong>${esc(r.booked_by)}</strong>` : ""} (${esc(label(r.source))})${mode === "confirmed" ? " as an already-Confirmed booking — the guest was sent the confirmation email, not a quotation." : mode === "none" ? "." : " and sent to the guest as a quotation."}`) : ""}
+${guestSent.monitor ? p(guestSent.monitor) : p(mode !== "quote" ? staffSentLine(r, mode, guestSent, now) : guestSent.ok
     ? `Quotation + bank details sent to <strong>${esc(r.guest_email)}</strong> at ${esc(fmtDateTime(now))}. It's in the <strong>Sent</strong> folder — the guest's replies will land in that same thread. Pay-by date given: <strong>${esc(dl.label)}</strong>.`
     : `<strong style="color:${C.red};">The guest has NOT received an email.</strong>`)}
 ${flags.length ? `${h2("Needs attention")}<ul style="margin:0;padding-left:20px;font-size:14px;">${flags.join("")}</ul>` : ""}
@@ -1274,8 +1283,8 @@ ${h2("Follow-up checklist")}
 </ol>
 ${button(dash, "Open in staff dashboard")}${button(gmail, "Find guest thread in Gmail")}`;
   return {
-    subject: staffSubject(r, c),
-    html: shell({ preheader: `${r.guest_name} · ${stayRange(r)} · ${q ? peso(q.total) : "quote needed"}`, body, c, internal: true }),
+    subject: attentionPrefix(flags) + staffSubject(r, c),
+    html: shell({ preheader: attentionSummary(flags) || `${r.guest_name} · ${stayRange(r)} · ${q ? peso(q.total) : "quote needed"}`, body, c, internal: true }),
   };
 }
 
@@ -1566,6 +1575,18 @@ function htmlToText(html: string) {
     .replace(/[ \t]+/g, " ").replace(/\n\s*\n\s*\n+/g, "\n\n").trim();
 }
 
+// Links back to our website in GUEST emails carry utm_* tags, so the site's
+// own analytics (site_events) can tell which email brought the guest back.
+export function tagLinks(html: string, kind: string) {
+  const campaign = encodeURIComponent(kind.split(":")[0]);
+  return html.replace(/href="(https:\/\/(?:www\.)?virginbeachresort\.com[^"]*)"/g, (_m, url: string) => {
+    if (/[?&]utm_/.test(url)) return `href="${url}"`;
+    const [base, hash] = url.split("#");
+    const sep = base.includes("?") ? "&amp;" : "?";
+    return `href="${base}${sep}utm_source=booking_email&amp;utm_medium=email&amp;utm_campaign=${campaign}${hash !== undefined ? "#" + hash : ""}"`;
+  });
+}
+
 async function send(opts: {
   booking: Any; kind: string; to: string | string[]; subject: string; html: string;
   thread: "guest" | "staff"; first?: boolean; replyTo?: string; attachments?: Any[];
@@ -1580,11 +1601,13 @@ async function send(opts: {
     await t.sendMail({
       from: FROM,
       to,
-      ...(monitorEmails().length ? { bcc: monitorEmails().join(", ") } : {}),
+      // monitor copy: staff alerts only (new booking, proofs, overdue…), not the guest's copy
+      ...(opts.thread === "staff" && monitorEmails().filter((m) => !to.includes(m)).length
+        ? { bcc: monitorEmails().filter((m) => !to.includes(m)).join(", ") } : {}),
       replyTo: opts.replyTo || MAILBOX,
       subject: opts.subject,
-      html: opts.html,
-      text: htmlToText(opts.html),
+      html: opts.thread === "guest" ? tagLinks(opts.html, opts.kind) : opts.html,
+      text: htmlToText(opts.thread === "guest" ? tagLinks(opts.html, opts.kind) : opts.html),
       messageId,
       ...(opts.first ? {} : { inReplyTo: root, references: [root] }),
       attachments: opts.attachments || [],
@@ -1655,7 +1678,7 @@ async function waitForCloudbeds(r: Any): Promise<Any> {
 
 async function onInsert(r0: Any) {
   const c = cfg();
-  if (!autoEmail(r0, c)) return { skipped: "source " + r0.source };
+  if (!autoEmail(r0, c)) return await onInsertMonitor(r0, c);
   const r = await waitForCloudbeds(r0);
   const cabanas = await loadUnits(r);
   const q = await quoteFor(r, cabanas);
@@ -1681,6 +1704,27 @@ async function onInsert(r0: Any) {
   const to = r.stay_type === "corporate" ? [...c.staffEmails, EVENTS_EMAIL] : c.staffEmails;
   const staff = await send({ booking: r, kind: "staff_new", to, subject: s.subject, html: s.html, thread: "staff", first: true });
   return mode === "confirmed" ? { confirmed, staff } : { guest, staff };
+}
+
+// Every other NEW booking — made in Cloudbeds (OTAs, walk-ins) or added by
+// staff without emailing the guest — still gets the same staff alert, sent
+// only to the monitor address(es). Sheet imports and old/past stays (e.g. a
+// Cloudbeds re-sync) are left out so a bulk load never floods the inbox.
+async function onInsertMonitor(r: Any, c: ReturnType<typeof cfg>) {
+  const to = monitorEmails();
+  if (!to.length) return { skipped: "no monitor address" };
+  if (r.source === "sheet_import") return { skipped: "sheet import" };
+  const made = new Date(r.created_at || Date.now()).getTime();
+  if (Date.now() - made > 48 * 3600e3) return { skipped: "older booking (sync)" };
+  const today = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Manila" });
+  if ((r.check_out || r.check_in || today) < today) return { skipped: "past stay" };
+  const cabanas = await loadUnits(r);
+  const q = await quoteFor(r, cabanas);
+  const where = r.cb_owned
+    ? `Made in <strong>Cloudbeds</strong>${r.cb_info?.source || r.source ? ` (${esc(String(r.cb_info?.source || label(r.source)))})` : ""} — Cloudbeds emails the guest; nothing was sent from the website.`
+    : `Added in the staff dashboard${r.booked_by ? ` by <strong>${esc(r.booked_by)}</strong>` : ""} (${esc(label(r.source))}) — not emailed to the guest (handled by staff).`;
+  const s = staffNewEmail(r, cabanas, q, c, { ok: true, monitor: where });
+  return await send({ booking: r, kind: "staff_new_monitor", to, subject: s.subject, html: s.html, thread: "staff", first: true });
 }
 
 // Staff-added bookings (phone, Messenger, email, walk-in) are handled by hand

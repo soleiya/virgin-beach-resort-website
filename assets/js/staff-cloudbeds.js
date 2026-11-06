@@ -87,7 +87,7 @@
   menu.id = "cbMenu";
   var NAV = [
     ["dashboard", "home", "Dashboard"], ["calendar", "cal", "Calendar"], ["reservations", "bed", "Reservations"], ["daytrips", "sun", "Day Trips"], null,
-    ["#plannerBtn", "map", "Cabana Map"], ["#logBtn", "log", "Activity Log"], ["#teamBtn", "team", "Team Activity"], ["#webBtn", "globe", "Website Bookings"], ["#codesBtn", "tag", "Discount Codes"], ["#exportBtn", "dl", "Export CSV"], null,
+    ["#plannerBtn", "map", "Cabana Map"], ["#insightsBtn", "globe", "Insights"], ["#logBtn", "log", "Activity Log"], ["#teamBtn", "team", "Team Activity"], ["#webBtn", "globe", "Website Bookings"], ["#codesBtn", "tag", "Discount Codes"], ["#exportBtn", "dl", "Export CSV"], null,
     ["#logoutBtn", "out", "Sign out"],
   ];
   menu.innerHTML = NAV.map(function (n) {

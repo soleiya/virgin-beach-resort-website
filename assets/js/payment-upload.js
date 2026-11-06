@@ -73,9 +73,18 @@
 
   // ------------------------------------------------------------- summary
   // Returns true when the booking can still take uploads.
+  var payTracked = false;
   function renderSummary() {
     var n = needs;
     if (!n) return false;
+    window.VBRPayType = n.stay_type === "overnight" ? "villa" : "daytrip";
+    if (!payTracked && window.VBRTrack) {
+      payTracked = true;
+      try {
+        window.VBRTrack("pay_view", { type: window.VBRPayType }, n.order_code);
+        if (backFromXendit) window.VBRTrack(backFromXendit === "ok" ? "pay_return_ok" : "pay_return_fail", { type: window.VBRPayType }, n.order_code);
+      } catch (e) {}
+    }
     var m = money(), p = m.p;
     var when = n.stay_type === "overnight" && n.check_out ? fmtDay(n.check_in) + " → " + fmtDay(n.check_out) : fmtDay(n.check_in);
     var html = '<div class="pl-head"><b>' + (n.first_name ? "Hi " + esc(n.first_name) + " — " : "") + esc(n.order_code) + "</b>" +
@@ -356,6 +365,7 @@
         if (payFile && kind === "deposit" && p.balance_due) {
           after = "<p>The remaining <strong>" + peso(m.total - paying) + "</strong> is due by <strong>" + esc(fmtDay(p.balance_due)) + "</strong> &mdash; upload it here the same way.</p>";
         }
+        try { if (window.VBRTrack) window.VBRTrack("pay_uploaded", { what: did, kind: payFile ? kind : null, amount: payFile ? paying : null, type: window.VBRPayType || null }, orderCode.toUpperCase()); } catch (e) {}
         showResult(
           "<h3>Thank you!</h3><p>We've received your " + andList(did) + " for booking <strong>" + esc(orderCode.toUpperCase()) + "</strong>" +
             (payFile ? (paying > 0 ? " (" + peso(paying) + ")" : " &mdash; added to your payment of " + peso(m.verifying || m.claimed) + " that we're already checking") : "") + "." +

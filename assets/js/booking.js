@@ -25,6 +25,13 @@
 
   var stayTypeEl = form.querySelector("#stayType");
   var checkInEl = form.querySelector("#checkIn");
+  // analytics (assets/js/track.js) — anonymous funnel steps
+  var T = function (kind, data, code) { try { if (window.VBRTrack) window.VBRTrack(kind, data, code); } catch (e) {} };
+  var T1 = function (kind, data) { try { if (window.VBRTrack) window.VBRTrack.once(kind, data); } catch (e) {} };
+  T("dt_view", { type: (form.querySelector("#stayType") || {}).value || null });
+  form.addEventListener("focusin", function (e) {
+    if (e.target && /guestName|guestEmail|guestPhone|guestNames/.test(e.target.id || "")) T1("dt_form");
+  });
   var checkInLabel = form.querySelector("#checkInLabel");
   var adultsEl = form.querySelector("#adults");
   var kids612El = form.querySelector("#kids612");
@@ -82,6 +89,7 @@
   function maxFor(k) { return left ? left[k] : 20; }
   function setCount(k, n) {
     counts[k] = Math.max(0, Math.min(n, maxFor(k), 20));
+    if (counts[k] > 0) T1("dt_cabana", { kind: k });
     renderCabanaCards();
     renderBill();
   }
@@ -368,6 +376,7 @@
   stayTypeEl.addEventListener("change", setSubmitLabel);
   setSubmitLabel();
   checkInEl.addEventListener("change", function () {
+    if (checkInEl.value) T1("dt_date", { date: checkInEl.value, days_ahead: Math.round((new Date(checkInEl.value + "T00:00:00Z") - new Date(todayManila() + "T00:00:00Z")) / 864e5) });
     refreshHalfDay();
     refreshCabanaStep();
   });
@@ -519,11 +528,14 @@
   form.addEventListener("submit", function (e) {
     e.preventDefault();
     var bill = computeBill();
+    T("dt_submit", { type: stayTypeEl.value, guests: bill.totalGuests, dining: bill.dining, lounge: bill.lounge });
+    var blocked = function (reason) { T("dt_blocked", { reason: reason }); };
 
     // Every day trip / half-day needs at least one cabana (Front Office rule).
     var cabErr = document.getElementById("cabanaError");
     if (usesCabanaMap() && !(bill.dining + bill.lounge > 0)) {
       if (cabErr) { cabErr.textContent = "Every day trip needs at least one cabana — please add a Dining or Lounge Cabana above."; cabErr.hidden = false; cabErr.scrollIntoView({ behavior: "smooth", block: "center" }); }
+      blocked("no cabana chosen");
       return;
     }
     if (cabErr) cabErr.hidden = true;
@@ -534,6 +546,7 @@
           ". Please add another cabana above (Dining seats 10, Lounge seats 4).";
         cabErr.hidden = false; cabErr.scrollIntoView({ behavior: "smooth", block: "center" });
       }
+      blocked("not enough cabana seats");
       return;
     }
 
@@ -542,6 +555,7 @@
       if (!files) {
         if (seniorIdError) seniorIdError.hidden = false;
         seniorIdFilesEl && seniorIdFilesEl.focus();
+        blocked("senior/PWD ID missing");
         return;
       }
     }
@@ -556,6 +570,7 @@
       if (msg) {
         if (petError) { petError.textContent = msg; petError.hidden = false; }
         (petFiles ? petPolicyAgreeEl : petVaxFilesEl).focus();
+        blocked("pet: " + msg);
         return;
       }
     }
@@ -565,6 +580,7 @@
     if (agreeEl && !agreeEl.checked) {
       if (agreeErr) agreeErr.hidden = false;
       agreeEl.focus();
+      blocked("agreement not ticked");
       return;
     }
     if (agreeErr) agreeErr.hidden = true;
@@ -599,12 +615,15 @@
         if (res.error) throw res.error;
         var rows = res.data;
         var row = Array.isArray(rows) ? rows[0] : rows;
+        T("dt_booked", { type: payload.stay_type, guests: bill.totalGuests, total: payload.total_amount, dining: bill.dining, lounge: bill.lounge,
+          seniors: bill.seniors, pets: bill.pets, code: payload.discount_code || null }, row && row.order_code);
         showSuccess(payload, false, row && row.order_code);
       })
       .catch(function (err) {
         // Cabanas can sell out between loading the page and sending — say so
         // plainly and refresh availability instead of "something went wrong".
         var m = err && err.message ? String(err.message) : "";
+        T("dt_error", { reason: m.slice(0, 120) || "unknown" });
         if (/cabanas? (is|are) left|Cabana not available/i.test(m)) {
           statusEl.hidden = false;
           statusEl.className = "form-status form-status-error";

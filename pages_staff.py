@@ -297,6 +297,48 @@ html = """<!doctype html>
   .col-notes { min-width: 160px; color: var(--ink-soft); max-width: 220px; }
   .muted { color: var(--ink-soft); }
 
+  /* Insights (staff-insights.js) */
+  .modal.ins-modal { max-width: 1240px; }
+  .ins-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+  .ins-head h2 { margin: 0; }
+  .ins-ctl { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin: 14px 0 6px; }
+  .ins-ctl label { font-size: .78rem; font-weight: 700; color: var(--ink-soft); display: inline-flex; gap: 6px; align-items: center; }
+  .ins-ctl input[type=date] { border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px; background: var(--surface); color: var(--ink); font: inherit; font-size: .84rem; }
+  .ins-chips { display: inline-flex; flex-wrap: wrap; gap: 4px; background: var(--sand-deep); border-radius: 999px; padding: 3px; }
+  .ins-chips button { border: 0; background: none; border-radius: 999px; padding: 6px 12px; font: 700 .78rem var(--font-body); color: var(--ink-soft); cursor: pointer; }
+  .ins-chips button.on { background: var(--surface); color: var(--ink); box-shadow: 0 1px 2px rgba(0,0,0,.12); }
+  .ins-note { font-size: .76rem; color: var(--ink-soft); margin: 0 0 12px; }
+  .ins-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; margin-bottom: 16px; }
+  .ins-tiles.small { grid-template-columns: repeat(4, 1fr); margin-bottom: 10px; }
+  .ins-tile { border: 1px solid var(--line); border-radius: 12px; background: var(--surface); padding: 10px 12px; }
+  .ins-tile span { display: block; font-size: .64rem; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-soft); }
+  .ins-tile b { display: block; font-size: 1.3rem; }
+  .ins-tile em { font-style: normal; font-size: .74rem; color: var(--ink-soft); }
+  .ins-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  @media (max-width: 860px) { .ins-grid { grid-template-columns: 1fr; } .ins-tiles.small { grid-template-columns: 1fr 1fr; } }
+  .ins-sec { border: 1px solid var(--line); border-radius: 14px; background: var(--surface); padding: 14px 16px; margin-bottom: 14px; min-width: 0; }
+  .ins-sec h3 { font-family: var(--font-display); font-weight: 600; font-size: 1.02rem; margin: 0 0 8px; }
+  .ins-hint { font-size: .76rem; color: var(--ink-soft); margin: -4px 0 10px; }
+  .ins-bars, .ins-funnel { display: flex; flex-direction: column; gap: 6px; }
+  .ins-bar, .ins-fstep { display: grid; grid-template-columns: minmax(0, 40%) 1fr auto; gap: 8px; align-items: center; font-size: .8rem; }
+  .ins-bar .l, .ins-fstep .l { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .ins-bar .t, .ins-fstep .t { background: var(--sand); border-radius: 6px; height: 14px; overflow: hidden; }
+  .ins-bar .t i, .ins-fstep .t i { display: block; height: 100%; background: var(--lagoon); border-radius: 6px; }
+  .ins-bar .v, .ins-fstep .v { font-weight: 700; white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .ins-bar small, .ins-fstep small { color: var(--ink-soft); font-weight: 600; }
+  .ins-fstep small.drop { color: #b4513f; }
+  .ins-days { display: flex; align-items: flex-end; gap: 3px; height: 130px; padding-top: 6px; }
+  .ins-day { flex: 1; position: relative; height: 100%; display: flex; align-items: flex-end; gap: 1px; min-width: 0; }
+  .ins-day i { flex: 1; border-radius: 3px 3px 0 0; min-height: 1px; }
+  .ins-day i.v, .ins-legend i.v { background: var(--lagoon); }
+  .ins-day i.b, .ins-legend i.b { background: #e0a245; }
+  .ins-day span { position: absolute; bottom: -16px; left: 0; right: 0; text-align: center; font-size: .58rem; color: var(--ink-soft); }
+  .ins-legend { font-size: .74rem; color: var(--ink-soft); margin: 22px 0 0; }
+  .ins-legend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin: 0 4px 0 10px; vertical-align: -1px; }
+  .ins-table { width: 100%; border-collapse: collapse; font-size: .8rem; min-width: 0 !important; }
+  .ins-table th, .ins-table td { text-align: left; padding: 6px 6px; border-bottom: 1px solid var(--line); }
+  .ins-table .num { text-align: right; }
+
   /* Find a booking (staff-find.js) */
   #findBar { position: relative; margin: 2px 0 16px; }
   .find-box { display: flex; align-items: center; gap: 10px; background: var(--surface); border: 2px solid var(--line); border-radius: 14px; padding: 4px 14px; box-shadow: 0 1px 3px rgba(0,0,0,.05); }
@@ -1478,6 +1520,8 @@ html = """<!doctype html>
 <script src="../assets/js/staff-daycal.js?v=__V_DCAL__"></script>
 <script src="../assets/js/staff-summary.js?v=__V_SUMJS__"></script>
 <script src="../assets/js/staff-find.js?v=__V_FINDJS__"></script>
+<script src="../assets/js/staff-insights.js?v=__V_INSJS__"></script>
+<script src="../assets/js/staff-track.js?v=__V_TRKJS__"></script>
 <script src="../assets/js/staff-cloudbeds.js?v=__V_CBJS__"></script>
 <script src="../assets/js/staff-cloudbeds-pages.js?v=__V_CBPAGES__"></script>
 </body>
@@ -1500,6 +1544,8 @@ html = (html.replace("__V_CSS__", v("assets/css/style.css"))
             .replace("__V_CBJS__", v("assets/js/staff-cloudbeds.js"))
             .replace("__V_SUMJS__", v("assets/js/staff-summary.js"))
             .replace("__V_FINDJS__", v("assets/js/staff-find.js"))
+            .replace("__V_INSJS__", v("assets/js/staff-insights.js"))
+            .replace("__V_TRKJS__", v("assets/js/staff-track.js"))
             .replace("__V_CBPAGES__", v("assets/js/staff-cloudbeds-pages.js")))
 
 os.makedirs(os.path.join(ROOT, "staff"), exist_ok=True)

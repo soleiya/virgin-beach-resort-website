@@ -16,7 +16,7 @@ def legal_page(path, title):
     page(path, title, f"{title} for Virgin Beach Resort.", body)
 
 
-PRIVACY_UPDATED = "November 5, 2026"
+PRIVACY_UPDATED = "November 6, 2026"
 
 PRIVACY_BODY = f"""
 <style>.legal h3{{margin-top:34px}} .legal li{{color:inherit;margin-bottom:6px}} .legal ul{{color:var(--ink-soft, inherit)}}</style>
@@ -65,10 +65,13 @@ PRIVACY_BODY = f"""
     <p>If you booked through an online travel site, that site's own privacy policy also applies.
     We may also share information when the law requires it.</p>
 
-    <h3>Cookies</h3>
-    <p>Our website does not use advertising or tracking cookies. Your browser may remember a few small settings, such as
-    whether you last looked at day trips or overnight stays, to make the site easier to use. The website's host also keeps
-    standard technical logs (such as IP address and browser type) to keep the site secure.</p>
+    <h3>Cookies and visit statistics</h3>
+    <p>Our website does not use advertising or tracking cookies, and we don't use outside analytics services. To improve the
+    site, we keep simple visit statistics in our own system: which pages are viewed, how visitors found us (for example, a
+    search engine or one of our emails), the type of device, and how far people get when booking. These use a random ID stored
+    in your browser &mdash; not your name, email or phone number. If your browser is set to &ldquo;Do Not Track&rdquo;, we don't
+    record your visit. Your browser may also remember a few small settings to make the site easier to use, and the website's
+    host keeps standard technical logs (such as IP address and browser type) to keep the site secure.</p>
 
     <h3>How long we keep it</h3>
     <p>We keep booking records for as long as needed to serve you and to meet our legal and tax requirements.
