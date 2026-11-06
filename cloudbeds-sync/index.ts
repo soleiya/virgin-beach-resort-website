@@ -399,17 +399,17 @@ export function spread(n: number, k: number): number[] {
   return Array.from({ length: k }, (_, i) => base + (i < extra ? 1 : 0));
 }
 
-export function byRoomType(villas: Any[], adults: number[], kids: number[]) {
-  const order: string[] = [], n: Record<string, { rooms: number; adults: number; kids: number }> = {};
-  villas.forEach((v, i) => {
-    const t = String(v.cb_room_type_id);
-    if (!n[t]) { n[t] = { rooms: 0, adults: 0, kids: 0 }; order.push(t); }
-    n[t].rooms += 1; n[t].adults += adults[i] || 0; n[t].kids += kids[i] || 0;
-  });
+// One entry per CASITA, pinned with its Cloudbeds roomID (Nov 6 2026 fix).
+//  - Without roomID, Cloudbeds keeps only the last line per room type, so
+//    3 Bamboo Casitas became 1 room (Harriet, VBR-1054377468919).
+//  - Grouped by type ({Bamboo × 3, 10 adults}) Cloudbeds checks the 10 adults
+//    against ONE room's limit (4) and refuses (Avelina, VBR-27343).
+// With roomID each casita is its own room with its own guests.
+export function byRoom(villas: Any[], adults: number[], kids: number[]) {
   return {
-    rooms: order.map((t) => ({ roomTypeID: t, quantity: n[t].rooms })),
-    adults: order.map((t) => ({ roomTypeID: t, quantity: n[t].adults })),
-    children: order.map((t) => ({ roomTypeID: t, quantity: n[t].kids })),
+    rooms: villas.map((v) => ({ roomTypeID: String(v.cb_room_type_id), roomID: String(v.cb_room_id), quantity: 1 })),
+    adults: villas.map((v, i) => ({ roomTypeID: String(v.cb_room_type_id), roomID: String(v.cb_room_id), quantity: adults[i] || 0 })),
+    children: villas.map((v, i) => ({ roomTypeID: String(v.cb_room_type_id), roomID: String(v.cb_room_id), quantity: kids[i] || 0 })),
   };
 }
 
@@ -430,11 +430,8 @@ export function reservationParams(b: Any, sources: Any = {}) {
     guestZip: "0000",
     guestEmail: /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email) ? email : "reservations@virginbeachresort.com",
     guestPhone: b.guest_phone || undefined,
-    // One entry per ROOM TYPE (Nov 2026 fix): Cloudbeds keeps only the last
-    // entry when the same room type is listed twice, so 3 Bamboo Casitas sent
-    // as 3 separate lines became 1 room with the last line's 2 adults.
-    // Now: { Bamboo × 3 rooms, 8 adults } — the casitas are assigned below.
-    ...byRoomType(villas, adults, kids),
+    // one entry per casita, pinned to its Cloudbeds room (see byRoom)
+    ...byRoom(villas, adults, kids),
     paymentMethod: "ebanking",
     // the Cloudbeds source for where it was made (setup finds them by name);
     // CLOUDBEDS_SOURCE_ID is the fallback
@@ -480,6 +477,14 @@ async function push(bookingId: string): Promise<Any> {
         notes.push(`${v.unit_label} not assigned in Cloudbeds: ${(e as Error).message}`);
       }
     }
+    // safety net: Cloudbeds must have one room per casita booked on the website
+    try {
+      const chk = (await cb("GET", "getReservation", { reservationID: reservationId })).data || {};
+      const made = (Array.isArray(chk.assigned) ? chk.assigned.length : 0) + (Array.isArray(chk.unassigned) ? chk.unassigned.length : 0);
+      if (made && made < (b.villas as Any[]).length) {
+        notes.push(`Only ${made} of ${(b.villas as Any[]).length} casitas were created in Cloudbeds — add the missing casita(s) in Cloudbeds by hand`);
+      }
+    } catch (_) { /* informational only */ }
     const wantStatus = b.status === "confirmed" ? "confirmed" : "not_confirmed";
     if (created.status !== wantStatus) {
       // already confirmed on the site (e.g. paid at the desk) → Cloudbeds sends its confirmation
@@ -494,7 +499,7 @@ async function push(bookingId: string): Promise<Any> {
       reservationID: reservationId,
       reservationNote: `Booked on the new website ${b.booking_origin === "site_staff" ? "by staff" + (b.booked_by ? " (" + b.booked_by + ")" : "") : "by the guest"} · Booking ID ${b.cb_ref_code ? "VBR-" + reservationId + " (temporary website code " + b.order_code + ")" : b.order_code} · ` +
         `quoted total ${peso(b.total_amount)} incl. full-board meals (meals, extras and discounts are on this folio). The guest got the quotation from the website; ` +
-        `Cloudbeds' emails take it from here. Payment proofs uploaded on the website appear under Documents; payments verified on the website are posted here. ` +
+        `Cloudbeds' emails take it from here. Online payments (card / GCash / Maya etc. via Xendit) are posted to the Folio automatically with their Xendit reference — there is no screenshot for these. Bank-transfer screenshots uploaded on the website appear under Documents and are posted to the Folio once verified. ` +
         `Change dates, casitas, guests or status here in Cloudbeds — the website follows.`,
     }).catch(() => null);
   } catch (e) {
