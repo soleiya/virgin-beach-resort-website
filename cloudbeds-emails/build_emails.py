@@ -121,7 +121,7 @@ GOOD_TO_KNOW = ul([
     "<strong>Tourism Ecological Fee:</strong> ₱50.00 per visitor, collected by the Municipality of San Juan at its booth at Km 3, Buhay na Sapa, San Juan (or at our Front Office).",
     "<strong>Outside food &amp; drinks</strong> are not allowed, except chips, biscuits and bottled water. Corkage applies to specific beverages.",
     "<strong>Pets</strong> are welcome (max. two) with their vaccination card and our Pet Policy — ₱750 per pet, per night.",
-    "<strong>Drivers, nannies &amp; bodyguards:</strong> ₱1,000 per night for quarters plus ₱750 per night for meals — please let us know in advance.",
+    "<strong>Drivers, nannies &amp; bodyguards:</strong> ₱1,000 per night for quarters plus ₱825 per night for meals — please let us know in advance.",
 ])
 
 GETTING_HERE = (h2("Getting here") +

@@ -158,7 +158,7 @@ TERMS_BODY = f"""
     <h3>6. Extra guests, staff and pets</h3>
     <ul>
       <li>Casitas with two queen beds can take one extra guest on a floor mattress for &#8369;1,500 per night, plus meals. Maximum five guests per casita, regardless of age.</li>
-      <li>Drivers, bodyguards and nannies: &#8369;1,000 per night for accommodation plus &#8369;750 per night for meals; &#8369;250 per meal on day trips. A standby area is provided during the day.</li>
+      <li>Drivers, bodyguards and nannies: &#8369;1,000 per night for accommodation plus &#8369;825 per night for meals; &#8369;250 per meal on day trips. A standby area is provided during the day.</li>
       <li>Up to two pets per booking, at &#8369;750 per pet per night. You&rsquo;ll be asked to sign our Pet Policy Agreement.</li>
       <li>Outside suppliers (for events) need a signed gate pass and property pass, and pay a &#8369;5,000 corkage fee, plus &#8369;5,000 per food and beverage supplier or booth.</li>
     </ul>
