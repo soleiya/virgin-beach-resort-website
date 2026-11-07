@@ -588,6 +588,15 @@ html = """<!doctype html>
   .row-actions { display: flex; gap: 6px; }
   .status-badge.readonly { cursor: default; }
   .modal-pay-existing { font-size: 0.85rem; margin-bottom: 8px; }
+  .pay-recv { display: grid; gap: 6px; margin-bottom: 8px; }
+  .pay-sum { font-size: .88rem; }
+  .pay-row { display: grid; grid-template-columns: 20px 1fr; gap: 6px; padding: 7px 9px; border-radius: 9px; border: 1px solid var(--line); background: var(--surface); font-size: .84rem; line-height: 1.4; }
+  .pay-row.ok { border-color: #b9dccf; background: #eef7f3; } .pay-row.ok .pay-ico { color: #1f6e5a; font-weight: 700; }
+  .pay-row.wait { border-color: #e6cf9e; background: #fbf4e4; } .pay-row.link { border-style: dashed; }
+  .pay-tag { display: inline-block; font-size: .72rem; font-weight: 700; color: #1f6e5a; background: #d7ede5; border-radius: 999px; padding: 0 8px; margin-left: 4px; }
+  .pay-proofs a { color: var(--lagoon-deep); margin-right: 12px; font-size: .84rem; }
+  .pay-add-label { display: block; margin-top: 10px; font-size: .82rem; }
+
   .modal-pay-existing a { color: var(--lagoon-deep); margin-right: 12px; }
   .modal-hint { font-size: 0.78rem; color: var(--ink-soft); margin: 6px 0 0; }
   .modal .modal-check { display: flex; align-items: center; gap: 8px; text-transform: none; letter-spacing: 0; font-size: 0.88rem; font-weight: 600; color: var(--ink); margin: 6px 0 4px; cursor: pointer; }
@@ -1035,8 +1044,9 @@ html = """<!doctype html>
         <textarea id="addNotes" rows="3" placeholder="Anything from the conversation worth keeping"></textarea>
       </div>
       <div class="modal-field" id="addPaymentField">
-        <label for="addPayFile">Payment Proof</label>
+        <label>Payments</label>
         <div id="addPayExisting" class="modal-pay-existing"></div>
+        <label for="addPayFile" class="pay-add-label">Add a payment proof <span class="muted">(GCash / bank-transfer screenshot)</span></label>
         <input id="addPayFile" type="file" accept="image/*,application/pdf">
         <select id="addPayPortion" style="margin-top:8px;"><option value="full">This proof is for the full payment</option><option value="deposit">This proof is for the 50% down payment</option><option value="balance">This proof is for the remaining balance</option></select>
         <p class="modal-hint">Saving records the payment as verified (it appears under Payments and, for villas, on the Cloudbeds folio) and confirms a pending booking.</p>

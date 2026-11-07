@@ -1315,23 +1315,64 @@
     if (dtMail) dtMail.refresh();
   }
 
+  // Payment section of the edit form: every payment already received (Xendit
+  // online payments are recorded automatically with their channel + invoice),
+  // any open Xendit payment link, then the uploaded proofs / IDs.
+  var KIND_NAMES = { deposit: "50% down payment", full: "full payment", balance: "balance", other: "payment" };
   function renderPayExisting(r) {
     payExistingEl.innerHTML = "";
     var links = r ? proofLinks(r) : [];
-    if (!links.length) { payExistingEl.innerHTML = '<span class="muted">No payment proof uploaded yet.</span>'; return; }
+    var payBox = document.createElement("div"); payBox.className = "pay-recv";
+    payExistingEl.appendChild(payBox);
+    var proofBox = document.createElement("div"); proofBox.className = "pay-proofs";
+    payExistingEl.appendChild(proofBox);
     links.forEach(function (l) {
       var a = document.createElement("a");
-      a.href = "#";
-      a.textContent = l.text;
+      a.href = "#"; a.textContent = l.text;
       a.addEventListener("click", function (e) { e.preventDefault(); openSignedUrl(l.bucket, l.path); });
-      payExistingEl.appendChild(a);
+      proofBox.appendChild(a);
     });
-    if (r.payment_uploaded_at) {
-      var when = document.createElement("span");
-      when.className = "muted";
+    if (r && r.payment_uploaded_at) {
+      var when = document.createElement("span"); when.className = "muted";
       when.textContent = "uploaded " + fmtDateTime(r.payment_uploaded_at);
-      payExistingEl.appendChild(when);
+      proofBox.appendChild(when);
     }
+    if (!r || !r.id) { payBox.innerHTML = '<span class="muted">No payments yet.</span>'; return; }
+    payBox.innerHTML = '<span class="muted">Checking payments…</span>';
+    var forId = r.id;
+    Promise.all([
+      sb.from("booking_payments").select("*").eq("booking_id", r.id).order("created_at"),
+      sb.from("xendit_invoices").select("kind,amount,status,invoice_url,expires_at,created_at").eq("booking_id", r.id).order("created_at", { ascending: false }),
+    ]).then(function (res) {
+      if (!editingRow || editingRow.id !== forId) return;
+      var pays = (res[0].data || []).filter(function (p) { return p.status !== "rejected"; });
+      var open = (res[1].data || []).filter(function (x) { return x.status === "PENDING" && (!x.expires_at || new Date(x.expires_at) > new Date()); });
+      var html = "";
+      pays.forEach(function (p) {
+        var inv = (String(p.note || "").match(/invoice ([\w-]+)/) || [])[1];
+        var isX = p.method === "xendit";
+        html += '<div class="pay-row' + (p.status === "verified" ? " ok" : " wait") + '">' +
+          '<span class="pay-ico">' + (p.status === "verified" ? "✓" : "…") + "</span>" +
+          "<span><b>" + esc(peso(p.amount)) + "</b> · " + esc(KIND_NAMES[p.kind] || "payment") + " · " + esc(payMethodName(p) || p.method) +
+          (isX ? ' <span class="pay-tag">paid online · no screenshot needed</span>' : "") +
+          '<br><span class="muted">' + esc(fmtDateTime(p.verified_at || p.created_at)) +
+          (p.status === "verified" ? " · verified" + (p.verified_by && !isX ? " by " + esc(p.verified_by) : "") : " · waiting to be checked") +
+          (inv ? " · Xendit invoice " + esc(inv) : "") + (p.test ? " · TEST MODE" : "") + "</span>" +
+          (p.proof_path ? ' <a href="#" data-proof="' + esc(p.proof_path) + '">View proof</a>' : "") + "</span></div>";
+      });
+      open.forEach(function (x) {
+        html += '<div class="pay-row link"><span class="pay-ico">⇢</span><span>Payment link open: <b>' + esc(peso(x.amount)) + "</b> · " +
+          esc(KIND_NAMES[x.kind] || "payment") + ' <span class="muted">· expires ' + esc(fmtDateTime(x.expires_at)) + "</span></span></div>";
+      });
+      var total = Number(r.total_amount) || 0, paid = Number(r.amount_paid) || 0;
+      if (pays.length || open.length) {
+        html = '<div class="pay-sum">Paid <b>' + esc(peso(paid)) + "</b>" + (total ? " of " + esc(peso(total)) + (paid >= total - 0.5 ? " — fully paid" : " — balance " + esc(peso(total - paid))) : "") + "</div>" + html;
+      } else html = '<span class="muted">No payments yet — no online payment and no proof uploaded.</span>';
+      payBox.innerHTML = html;
+      Array.prototype.forEach.call(payBox.querySelectorAll("a[data-proof]"), function (a) {
+        a.addEventListener("click", function (e) { e.preventDefault(); openSignedUrl("payment-proofs", a.getAttribute("data-proof")); });
+      });
+    }, function () { payBox.innerHTML = '<span class="muted">Couldn\'t load payments.</span>'; });
   }
 
   // "Email to the guest" panel (staff-email.js): template + editable opening
