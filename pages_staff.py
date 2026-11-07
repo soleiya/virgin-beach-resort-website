@@ -971,6 +971,7 @@ html = """<!doctype html>
           <p class="modal-hint" id="addCabanaLeft" style="margin-top:8px;">Pick a date</p>
         </div>
       </div>
+      <label class="modal-check" id="addNoCabanaWrap" style="margin:-4px 0 10px;"><input type="checkbox" id="addNoCabana"> Entrance only &mdash; no cabana (rare; say why in the notes)</label>
       <div class="modal-field">
         <label>Cabana no. <span class="muted">(internal use only &mdash; for our records of who sat where; optional, assign any time)</span></label>
         <p class="modal-map-status" id="addMapStatus">Pick a date to see which cabanas are free that day.</p>

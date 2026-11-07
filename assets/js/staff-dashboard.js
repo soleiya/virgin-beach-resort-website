@@ -1566,6 +1566,8 @@
   }
   function plural(n, one, many) { return n + " " + (n === 1 ? one : many); }
   function renderPartyLine() {
+    var nc = $("addNoCabanaWrap"), cc = $("addCabanaCounts");
+    if (nc && cc) nc.style.display = cc.style.display === "none" || !/^(day_trip|half_day)$/.test($("addType").value) ? "none" : "";
     var el = $("addPartyLine"); if (!el) return;
     var a = intVal("addAdults"), sr = intVal("addSeniors"), k = intVal("addKids"), pk = intVal("addPwdKids"), b = intVal("addKids05");
     var total = a + k + b, bits = [];
@@ -1810,6 +1812,21 @@
     if (vals.pet_count > 2) return showFormError("A maximum of two pets are permitted per reservation.");
     if (!vals.guest_name) return showFormError("Guest name is required.");
     if (vals.senior_count > vals.adults) return showFormError("Senior citizens are counted within adults — senior count can't be more than adults.");
+    // Day trips need a cabana with a seat for everyone (Dining seats 10, Lounge 4) — same rule as online bookings.
+    // Checked on new bookings, and on edits that change the party or the cabanas.
+    if (vals.stay_type === "day_trip" || vals.stay_type === "half_day") {
+      var party = (vals.adults || 0) + (vals.children_6_12 || 0) + (vals.children_0_5 || 0);
+      var seats = (vals.dining_cabanas || 0) * 10 + (vals.lounge_cabanas || 0) * 4;
+      var er = editingRow, touched = !er || er.adults !== vals.adults || er.children_6_12 !== vals.children_6_12 || er.children_0_5 !== vals.children_0_5 ||
+        (er.dining_cabanas || 0) !== (vals.dining_cabanas || 0) || (er.lounge_cabanas || 0) !== (vals.lounge_cabanas || 0) || er.stay_type !== vals.stay_type;
+      var noCab = $("addNoCabana") && $("addNoCabana").checked;
+      if (touched && !noCab && party > 0 && seats < party) {
+        return showFormError(seats === 0
+          ? "Add a cabana — day trips need one (Dining seats 10, Lounge seats 4). Tick “Entrance only” if this guest really has none."
+          : "Not enough cabana seats: " + party + " guests but " + seats + " seats (Dining 10, Lounge 4 each). Add a cabana, or tick “Entrance only”.");
+      }
+      if (noCab && seats === 0 && !String(vals.staff_notes || vals.notes || "").trim()) return showFormError("Entrance only — please say why in the notes.");
+    }
     if ((vals.pwd_kid_count || 0) > (vals.children_6_12 || 0)) return showFormError("PWD kids are counted within Kids 6–12 — PWD kids can't be more than Kids 6–12.");
     if (assignedCount("dining") > vals.dining_cabanas || assignedCount("lounge") > vals.lounge_cabanas) {
       return showFormError("More cabana numbers are assigned than the booking has — untick some numbers or raise the Dining / Lounge count.");
