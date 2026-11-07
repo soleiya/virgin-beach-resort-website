@@ -1094,7 +1094,18 @@
         var dl = paymentDeadlines(r);
         var pb = document.createElement("span");
         pb.className = "payby";
-        if (!dl) pb.textContent = "pay on arrival";
+        if (r.stay_type !== "overnight") {
+          // v47: day trips are kept until 5 PM on the trip day
+          var close5 = r.check_in ? new Date(r.check_in + "T17:00:00+08:00").getTime() : null;
+          pb.textContent = !dl ? "pay on arrival" : Date.now() >= dl.final ? "unpaid — held until 5 PM trip day" : "pay by " + fmtDateTime(new Date(dl.final).toISOString());
+          if (close5 && Date.now() >= close5 - 9 * 3600e3) pb.classList.add("overdue");
+          pb.title = "Day trips stay booked until 5:00 PM on the trip day. Guests get a reminder, then an 8 AM \"expecting you\" email; if still unpaid at 5 PM the booking closes and the guest is emailed.";
+        } else if (r.check_in && r.created_at && (new Date(r.check_in + "T00:00:00+08:00") - new Date(new Date(r.created_at).toLocaleDateString("en-CA", { timeZone: "Asia/Manila" }) + "T00:00:00+08:00")) / 86400000 < 15) {
+          // v48: villas booked within 14 days — full payment, reminder at 24 h, staff cancel manually
+          pb.textContent = dl && Date.now() < dl.final ? "full payment by " + fmtDateTime(new Date(dl.final).toISOString()) : "unpaid — staff to follow up";
+          if (!dl || Date.now() >= dl.final) pb.classList.add("overdue");
+          pb.title = "Booked within 14 days of arrival: full payment required. The guest gets a reminder 24 hours after booking; it is not cancelled automatically — use “Cancel booking — not paid” in the booking if needed.";
+        } else if (!dl) pb.textContent = "pay on arrival";
         else {
           var nowMs = Date.now();
           pb.textContent = nowMs >= dl.final ? "past deadline — expiring" : "pay by " + fmtDateTime(new Date(dl.final).toISOString());
@@ -1320,6 +1331,7 @@
   var MAIL_KINDS = {
     guest_quote: "Booking received / quotation", guest_confirmed: "Booking confirmed", guest_changed: "Changes to the reservation",
     guest_cancelled: "Booking cancelled", guest_expired: "Cancelled — payment not received", pay_reminder: "Payment reminder (before the deadline)",
+    arrival_notice: "Trip day — expecting you (8 AM)", full_pay_reminder: "Full payment reminder (villa, within 14 days)",
     proof_guest: "Payment proof received", proof_rejected: "Payment proof not verified", payment_received: "Payment receipt",
     paid_in_full: "Fully paid", balance_due: "Balance reminder", balance_overdue_guest: "Balance overdue",
     staff_new: "Staff alert — new booking", staff_new_monitor: "Staff alert — new booking", proof_staff: "Staff alert — proof to verify",

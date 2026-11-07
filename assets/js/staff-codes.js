@@ -243,6 +243,14 @@
     });
   })();
 
+  // ---------------------------------------------------------------- payment rules (read-only)
+  var rb = $("rulesModalBackdrop");
+  if (rb && $("rulesBtn")) {
+    $("rulesBtn").addEventListener("click", function () { rb.classList.add("open"); });
+    $("rulesClose").addEventListener("click", function () { rb.classList.remove("open"); });
+    rb.addEventListener("click", function (e) { if (e.target === rb) rb.classList.remove("open"); });
+  }
+
   // ---------------------------------------------------------------- booking window
   var wb = $("windowModalBackdrop");
   if (wb && $("windowBtn")) (function () {
@@ -264,6 +272,7 @@
           $("bwRemind").value = String(s.pay_reminder_hours != null ? s.pay_reminder_hours : 6);
           $("bwRemindDt").value = String(s.daytrip_reminder_hours != null ? s.daytrip_reminder_hours : 4);
           $("bwDtBalance").checked = s.daytrip_balance_cancel !== false;
+          if ($("bwDtArrival")) { $("bwDtArrival").checked = s.daytrip_arrival_notice !== false; $("bwDtArrival").disabled = s.daytrip_arrival_notice === undefined; }
           $("bwRemindDt").disabled = $("bwDtBalance").disabled = s.daytrip_reminder_hours === undefined;
           $("bwExpiryAll").checked = s.expiry_email_all !== false;
           $("bwExpiryStaff").checked = s.expiry_staff_alert !== false;
@@ -283,16 +292,17 @@
       var upd = { bookings_open_until: v, dining_cabanas_per_day: dn, lounge_cabanas_per_day: ln };
       if ($("bwStayUntil")) upd.villa_bookings_open_until = $("bwStayUntil").value || null;
       if ($("bwAutoExpire") && !$("bwAutoExpire").disabled) {
-        if (!$("bwAutoExpire").checked && !confirm("Turn off automatic cancellation? Unpaid bookings will then hold their cabanas / casitas until staff cancel them.")) { $("bwSave").disabled = false; return; }
+        if (!$("bwAutoExpire").checked && !confirm("Turn off automatic cancellation for villas? Unpaid villa bookings will then hold their casitas until staff cancel them.")) { $("bwSave").disabled = false; return; }
         upd.auto_expire = $("bwAutoExpire").checked;
         upd.pay_reminder_hours = parseInt($("bwRemind").value, 10) || 0;
         if (!$("bwRemindDt").disabled) { upd.daytrip_reminder_hours = parseInt($("bwRemindDt").value, 10) || 0; upd.daytrip_balance_cancel = $("bwDtBalance").checked; }
+        if ($("bwDtArrival") && !$("bwDtArrival").disabled) upd.daytrip_arrival_notice = $("bwDtArrival").checked;
         upd.expiry_email_all = $("bwExpiryAll").checked;
         upd.expiry_staff_alert = $("bwExpiryStaff").checked;
       }
       sb.from("booking_settings").update(upd).eq("id", 1).then(function (res) {
         $("bwSave").disabled = false;
-        if (res.error) return werr(/daytrip_/.test(res.error.message) ? "Needs the database update booking-v46-daytrip-payment-rules.sql." : /auto_expire|pay_reminder|expiry_/.test(res.error.message) ? "Needs the database update booking-v45-payment-deadline-options.sql." : /villa_bookings_open_until/.test(res.error.message) ? "Needs the database update booking-v36-cloudbeds-rates.sql." : /dining_cabanas_per_day/.test(res.error.message) ? "Needs the database update booking-v29-cabanas-by-count.sql." : "Couldn't save: " + res.error.message);
+        if (res.error) return werr(/daytrip_/.test(res.error.message) ? "Needs the database update booking-v47-daytrip-hold-until-trip-day.sql." : /auto_expire|pay_reminder|expiry_/.test(res.error.message) ? "Needs the database update booking-v45-payment-deadline-options.sql." : /villa_bookings_open_until/.test(res.error.message) ? "Needs the database update booking-v36-cloudbeds-rates.sql." : /dining_cabanas_per_day/.test(res.error.message) ? "Needs the database update booking-v29-cabanas-by-count.sql." : "Couldn't save: " + res.error.message);
         if (D.setStock) D.setStock({ dining: dn, lounge: ln });
         var sv = upd.villa_bookings_open_until;
         $("bwInfo").textContent = (v ? "Saved — day trips up to " + D.fmtDate(v) : "Saved — day trips: no date limit") +

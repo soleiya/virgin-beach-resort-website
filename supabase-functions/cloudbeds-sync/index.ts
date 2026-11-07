@@ -884,7 +884,9 @@ async function pushStatus(bookingId: string) {
   if (b.cb_info?.status === want) return { skipped: "already " + want + " in Cloudbeds" };
   try {
     // Cloudbeds sends its own Confirmed / Cancelled email (the website only sent the quotation)
-    await cb("PUT", "putReservation", { reservationID: b.cb_reservation_id, status: want, sendStatusChangeEmail: "true" });
+    // an unpaid booking cancelled by the website (24 h rule or staff "Cancel — not paid") gets the
+    // website's own cancellation email (with the staff's message) — no second email from Cloudbeds
+    await cb("PUT", "putReservation", { reservationID: b.cb_reservation_id, status: want, sendStatusChangeEmail: b.status === "expired" ? "false" : "true" });
   } catch (e) {
     await stateSet("last_error", { at: new Date().toISOString(), errors: [`status ${b.cb_reservation_id} → ${want}: ${(e as Error).message}`] });
     throw e;

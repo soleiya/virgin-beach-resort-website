@@ -504,6 +504,13 @@
   .mail-log .ml-st.sent { background: #d7ede5; color: #1f6e5a; } .mail-log .ml-st.failed { background: #f6dcdc; color: #9b2c2c; } .mail-log .ml-st.pending { background: #f5e7c4; color: #7a5a17; }
   .mail-log .ml-staff { opacity: .7; }
   .mail-log .ml-empty { padding: 10px; color: var(--ink-soft); font-size: .82rem; }
+  .npc { border: 1px solid #e6cf9e; background: #fbf4e4; border-radius: 12px; padding: 10px 12px; }
+  .npc-rule { margin: 0 0 8px; font-size: .84rem; line-height: 1.45; }
+  .npc-open { border-color: #c98a8a !important; color: #9b2c2c !important; }
+  .npc-box { margin-top: 10px; } .npc-box textarea { width: 100%; }
+  .npc-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 8px; }
+  .npc-go { background: #9b2c2c !important; border-color: #9b2c2c !important; }
+  .rules-modal h3 { margin: 16px 0 6px; font-size: 1rem; } .rules-modal ul { margin: 0 0 6px 18px; padding: 0; font-size: .9rem; line-height: 1.5; } .rules-modal li { margin: 3px 0; }
   .party-box { border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; margin: 14px 0 4px; background: var(--surface); }
   .party-head { font-size: .78rem; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--ink-soft); margin-bottom: 8px; }
   .party-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
@@ -731,6 +738,7 @@
         <button class="btn-sm ghost" id="webBtn">Website Bookings</button>
         <button class="btn-sm ghost" id="codesBtn">Discount Codes</button>
         <button class="btn-sm ghost" id="windowBtn">Booking Window &amp; Deadlines</button>
+        <button class="btn-sm ghost" id="rulesBtn">Payment Rules</button>
         <button class="btn-sm ghost" id="exportBtn">Export CSV</button>
         <button class="btn-sm primary" id="addVillaBtn" data-section="villas">+ Villa Booking</button>
         <button class="btn-sm primary" id="addBtn" data-section="daytrip">+ Day Trip Booking</button>
@@ -1165,6 +1173,19 @@
         <select id="vPayPortion" style="margin-top:8px;"><option value="full">This proof is for the full payment</option><option value="deposit">This proof is for the 50% down payment</option><option value="balance">This proof is for the remaining balance</option></select>
         <p class="modal-hint">Saving records the payment as verified (Payments, and the Cloudbeds folio once live) and confirms a pending booking — the guest gets the confirmation email.</p>
       </div>
+      <div class="modal-field npc" id="vNoPayCancel" hidden>
+        <label>Payment rule for this booking</label>
+        <p class="npc-rule" id="vNpcRule"></p>
+        <button type="button" class="btn-sm ghost npc-open" id="vNpcOpen">Cancel booking &mdash; not paid&hellip;</button>
+        <div class="npc-box" id="vNpcBox" hidden>
+          <label for="vNpcNote">Message to the guest <span class="muted">(edit as needed &middot; {first} {order} {date} fill in automatically)</span></label>
+          <textarea id="vNpcNote" rows="6"></textarea>
+          <label class="modal-check"><input type="checkbox" id="vNpcEmail" checked> Email this message to the guest (copy to reservations@)</label>
+          <p class="modal-hint">The booking becomes <b>Canceled &middot; payment not received</b>, the casita is released, and the reservation is cancelled in Cloudbeds too. Logged under your name.</p>
+          <div class="npc-actions"><button type="button" class="btn-sm ghost" id="vNpcBack">Keep the booking</button> <button type="button" class="btn-sm primary npc-go" id="vNpcGo">Cancel booking now</button></div>
+          <p class="modal-error" id="vNpcErr"></p>
+        </div>
+      </div>
       </div><aside class="bk-mail" id="vMail"></aside></div>
       <label class="modal-check" id="vNotifyWrap"><input type="checkbox" id="vNotify"> <span id="vNotifyText">Email the guest</span></label>
       <p class="modal-error" id="vError"></p>
@@ -1449,20 +1470,53 @@
     </div>
     <p class="field-hint" style="margin-top:-6px;">How many of each the website and the Day Trip Calendar count as available each day (before blocks and bookings).</p>
     <h3 class="modal-subhead" style="margin-top:18px;">Payment deadlines</h3>
-    <p class="field-hint" style="margin:-4px 0 10px;"><b>Unpaid bookings</b> (day trips and villas) are held <b>24 hours</b> from booking &mdash; never past <b>8:00 AM on the trip / arrival day</b> (booked after that = pay on arrival) &mdash; then cancelled and released. <b>Day trips with a down payment</b> are held until the trip day. <b>Villas</b> follow the website policy: balance due 15 days before arrival, full payment within 14 days; part-paid villas are never cancelled automatically. Proof-uploaded, Cloudbeds-made and Day-Trip-sheet bookings are never cancelled automatically.</p>
-    <label class="modal-check"><input type="checkbox" id="bwAutoExpire"> Cancel unpaid bookings automatically at the deadline and release the cabanas / casitas</label>
+    <p class="field-hint" style="margin:-4px 0 10px;"><b>Day trips</b> stay booked until the trip day, paid or not: a payment reminder before the usual 24-hour pay-by time, an &ldquo;expecting you&rdquo; email at <b>8:00 AM on the trip day</b>, and if still unpaid (or the balance isn&rsquo;t recorded) by <b>5:00 PM</b> the booking closes and the guest is emailed. <b>Villas booked 15+ days ahead</b>: unpaid bookings are held <b>24 hours</b>, then cancelled and released; balance due 15 days before arrival. <b>Villas booked within 14 days</b>: full payment required; a reminder goes out 24 hours after booking and staff cancel manually (&ldquo;Cancel booking &mdash; not paid&rdquo; in the booking). Part-paid villas are never cancelled automatically. See <b>Payment Rules</b>. Proof-uploaded, Cloudbeds-made and Day-Trip-sheet bookings are never cancelled automatically.</p>
+    <label class="modal-check"><input type="checkbox" id="bwAutoExpire"> Villas booked 15+ days ahead: cancel unpaid bookings automatically after 24 hours and release the casitas</label>
     <div class="modal-row" style="margin-top:8px;">
-      <div class="modal-field"><label for="bwRemindDt">Day trips: reminder before the deadline</label>
-        <select id="bwRemindDt"><option value="0">No reminder</option><option value="2">2 hours before</option><option value="4">4 hours before (20th hour)</option><option value="6">6 hours before</option></select></div>
+      <div class="modal-field"><label for="bwRemindDt">Day trips: payment reminder</label>
+        <select id="bwRemindDt"><option value="0">No reminder</option><option value="2">2 hours before the 24-hour mark</option><option value="4">4 hours before (20th hour)</option><option value="6">6 hours before</option></select></div>
       <div class="modal-field"><label for="bwRemind">Villas: reminder before the deadline</label>
         <select id="bwRemind"><option value="0">No reminder</option><option value="3">3 hours before</option><option value="4">4 hours before</option><option value="6">6 hours before</option><option value="12">12 hours before</option></select></div>
     </div>
-    <label class="modal-check"><input type="checkbox" id="bwDtBalance"> Day trips with a down payment: close the booking at <b>5:00 PM on the trip day</b> if the balance still isn&rsquo;t recorded (staff are alerted; the guest isn&rsquo;t emailed)</label>
+    <label class="modal-check"><input type="checkbox" id="bwDtArrival"> Day trips: at 8:00 AM on the trip day, email guests who still owe something that we&rsquo;re expecting them (and the cabana may be released if they don&rsquo;t come)</label>
+    <label class="modal-check"><input type="checkbox" id="bwDtBalance"> Day trips: close bookings still unpaid / not fully paid at <b>5:00 PM on the trip day</b> and email the guest</label>
     <label class="modal-check"><input type="checkbox" id="bwExpiryAll"> Email every guest with an email address when their booking is cancelled for non-payment (incl. staff-entered bookings and villas in Cloudbeds)</label>
     <label class="modal-check"><input type="checkbox" id="bwExpiryStaff"> Copy reservations@virginbeachresort.com on every payment reminder and cancellation email (and alert the team when a guest couldn&rsquo;t be emailed)</label>
     <p class="field-hint">Every email sent to a guest is listed at the bottom of that booking&rsquo;s edit form, under &ldquo;Emails sent&rdquo;.</p>
     <p class="form-error-box" id="bwError" style="display:none;"></p>
     <div class="modal-actions"><button type="button" class="btn-sm ghost" id="bwClose">Close</button> <button type="button" class="btn-sm primary" id="bwSave">Save</button></div>
+  </div>
+</div>
+
+<div class="modal-backdrop" id="rulesModalBackdrop">
+  <div class="modal rules-modal">
+    <h2>Payment &amp; Cancellation Rules</h2>
+    <p style="color:var(--ink-soft); font-size:0.85rem; margin:-10px 0 6px;">What the system does on its own, and what staff do. Every email sent is listed at the bottom of each booking (&ldquo;Emails sent&rdquo;); reminders and cancellations are copied to reservations@.</p>
+    <h3>Day trips</h3>
+    <ul>
+      <li>Bookings stay on until the trip day, paid or not.</li>
+      <li>Payment reminder ~20 hours after booking.</li>
+      <li><b>8:00 AM on the trip day:</b> anyone not fully paid gets &ldquo;We&rsquo;re expecting you today &mdash; if you don&rsquo;t arrive and pay by 5 PM, the cabana may be released.&rdquo;</li>
+      <li><b>5:00 PM on the trip day:</b> still unpaid / balance not recorded &rarr; booking closes automatically, guest emailed. <b>Record gate payments before 5 PM.</b></li>
+      <li>To cancel earlier: open the booking, set Status to <i>Canceled &middot; payment not received</i>, edit the message in the email panel, save.</li>
+    </ul>
+    <h3>Villas &mdash; booked 15 or more days before arrival</h3>
+    <ul>
+      <li>Pay at least 50% within <b>24 hours</b> (reminder 6 hours before). Unpaid at 24 h &rarr; cancelled automatically, casita released, guest emailed.</li>
+      <li>Balance due <b>15 days before arrival</b> &mdash; reminder 3 days before, overdue alert to staff the day after. Not cancelled automatically.</li>
+    </ul>
+    <h3>Villas &mdash; booked 14 days or less before arrival</h3>
+    <ul>
+      <li><b>Full payment</b> is required to reserve (website policy).</li>
+      <li>Not paid in full 24 hours after booking &rarr; the guest gets a reminder. <b>Not cancelled automatically.</b></li>
+      <li>Staff decide: open the booking &rarr; <b>Cancel booking &mdash; not paid&hellip;</b> &rarr; edit the message &rarr; cancel. The casita is released and the reservation cancelled in Cloudbeds.</li>
+    </ul>
+    <h3>Never cancelled automatically</h3>
+    <ul>
+      <li>Bookings with a payment proof waiting to be checked, bookings made in Cloudbeds (OTA), and Day Trip sheet bookings.</li>
+    </ul>
+    <p class="field-hint">Cancellation charges (website terms): free 15+ days before arrival; 50% forfeited within 14 days; 100% within 7 days or no-show. Timings can be changed under <b>Booking Window &amp; Deadlines</b>.</p>
+    <div class="modal-actions"><button type="button" class="btn-sm ghost" id="rulesClose">Close</button></div>
   </div>
 </div>
 
@@ -1573,13 +1627,13 @@
 <script src="../assets/js/booking-config.js?v=c116a3a0ae"></script>
 <script src="../assets/js/cabana-map.js?v=3741396eca"></script>
 <script src="../assets/js/pricing.js?v=43cc9875e9"></script>
-<script src="../assets/js/staff-dashboard.js?v=1fb9a6a9b9"></script>
+<script src="../assets/js/staff-dashboard.js?v=3fdc870553"></script>
 <script src="../assets/js/staff-email.js?v=ac542441c2"></script>
-<script src="../assets/js/staff-villas.js?v=55e203ac96"></script>
+<script src="../assets/js/staff-villas.js?v=4a335284cc"></script>
 <script src="../assets/js/staff-payments.js?v=d563661be7"></script>
 <script src="../assets/js/staff-activity.js?v=2d41dd54bc"></script>
 <script src="../assets/js/staff-website.js?v=24ff44d3e2"></script>
-<script src="../assets/js/staff-codes.js?v=5e58a8bea8"></script>
+<script src="../assets/js/staff-codes.js?v=78087e53b9"></script>
 <script src="../assets/js/staff-daycal.js?v=7e6ef430fd"></script>
 <script src="../assets/js/staff-summary.js?v=9596d523a5"></script>
 <script src="../assets/js/staff-find.js?v=4b69031a6f"></script>

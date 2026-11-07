@@ -75,7 +75,7 @@
     if (cbLock === "dates") { lockEl($("vIn")); lockEl($("vOut")); }
     if (cbLock === "all") {
       Array.prototype.forEach.call(form.querySelectorAll("input, select, textarea, button"), function (el) {
-        if (el.id === "vStaffNotes" || el.id === "vCancel" || el.id === "vSave" || el.id === "vLogBtn" || el.closest(".mail-panel")) return;
+        if (el.id === "vStaffNotes" || el.id === "vCancel" || el.id === "vSave" || el.id === "vLogBtn" || el.closest(".mail-panel") || el.closest("#vNoPayCancel")) return;
         // companions' names can still be corrected here (not their age group — that's pricing, done in Cloudbeds)
         if (el.closest("#vGuests") && el.tagName === "INPUT" && !el.readOnly) return;
         lockEl(el);
@@ -103,6 +103,7 @@
     preset = preset || {};
     var r = editing || {};
     if (D.renderEmailLog) D.renderEmailLog("vMailLogField", "vMailLog", editing ? r.id : null);
+    renderNoPayCancel(editing);
     $("villaModalTitle").textContent = editing ? "Edit Villa Booking" + (r.order_code ? " · " + r.order_code : "") : "New Villa Booking";
     $("villaModalSub").textContent = editing ? "Changes are saved to the activity log under your name." : "Overnight stay in one or more casitas. Priced from the same rate sheet as the website.";
     saveBtn.textContent = editing ? "Save Changes" : "Save Booking";
@@ -261,6 +262,57 @@
   function addOnPayload() {
     return Object.keys(addonQty).filter(function (k) { return addonQty[k] > 0; }).map(function (k) { return { slug: k, qty: addonQty[k] }; });
   }
+
+
+  // ---------------- payment rule + "Cancel booking — not paid" (staff, manual) ----------------
+  // Villas booked 14 days or less before arrival need full payment; they get a
+  // reminder 24 h after booking and are NOT cancelled automatically — staff use this.
+  function daysAhead(r) {
+    if (!r.check_in || !r.created_at) return null;
+    var made = new Date(new Date(r.created_at).toLocaleDateString("en-CA", { timeZone: "Asia/Manila" }) + "T00:00:00Z");
+    return Math.round((new Date(r.check_in + "T00:00:00Z") - made) / 86400000);
+  }
+  function renderNoPayCancel(r) {
+    var box = $("vNoPayCancel"); if (!box) return;
+    var owe = r ? (Number(r.total_amount) || 0) - (Number(r.amount_paid) || 0) : 0;
+    var active = r && !r.cb_owned && ["pending", "pending_payment", "confirmed"].indexOf(r.status) >= 0 && owe > 0.5;
+    box.hidden = !active;
+    $("vNpcBox").hidden = true; $("vNpcOpen").hidden = false; $("vNpcErr").textContent = "";
+    if (!active) return;
+    var d = daysAhead(r), paid = Number(r.amount_paid) || 0;
+    var bal = new Date(r.check_in + "T00:00:00Z"); bal.setUTCDate(bal.getUTCDate() - 15);
+    $("vNpcRule").innerHTML = d != null && d <= 14
+      ? "<b>Booked " + d + " day" + (d === 1 ? "" : "s") + " before arrival</b> &mdash; full payment is required. The guest gets a reminder 24 hours after booking; it is <b>not cancelled automatically</b>. " +
+        (paid ? "Paid so far: " + esc(peso(paid)) + " of " + esc(peso(r.total_amount)) + "." : "Nothing paid yet.") + " If they still don&rsquo;t pay, cancel it here."
+      : "<b>Booked " + (d != null ? d + " days" : "well") + " before arrival</b> &mdash; " + (paid
+        ? "50% received; balance of " + esc(peso(owe)) + " due " + esc(fmtDate(bal.toISOString().slice(0, 10))) + " (15 days before arrival). Not cancelled automatically &mdash; reminders and an overdue alert go out; cancel here if needed."
+        : "unpaid bookings are cancelled automatically 24 hours after booking. You can also cancel it now.");
+  }
+  $("vNpcOpen") && $("vNpcOpen").addEventListener("click", function () {
+    var r = editing; if (!r) return;
+    $("vNpcNote").value = "Hi {first},\n\nWe haven't received " + (Number(r.amount_paid) > 0 ? "the full payment" : "payment") +
+      " for your reservation {order} ({date}), so we've had to cancel it and release the casita.\n\nIf you'd still like to stay with us, just reply to this email and we'll gladly help you rebook.";
+    $("vNpcEmail").checked = !!(r.guest_email && EMAIL_RE.test(String(r.guest_email).trim()));
+    $("vNpcEmail").disabled = !$("vNpcEmail").checked;
+    $("vNpcBox").hidden = false; $("vNpcOpen").hidden = true; $("vNpcNote").focus();
+  });
+  $("vNpcBack") && $("vNpcBack").addEventListener("click", function () { $("vNpcBox").hidden = true; $("vNpcOpen").hidden = false; });
+  $("vNpcGo") && $("vNpcGo").addEventListener("click", function () {
+    var r = editing; if (!r) return;
+    if (!confirm("Cancel " + (r.order_code || "this booking") + " for non-payment and release the casita?")) return;
+    var btn = $("vNpcGo"); btn.disabled = true; $("vNpcErr").textContent = "";
+    var custom = Object.assign({}, r.email_custom || {});
+    custom.expired = { message: $("vNpcNote").value.trim(), skip: !$("vNpcEmail").checked };
+    var stamp = "[Cancelled for non-payment by " + (D.staffName() || "staff") + ", " + new Date().toLocaleDateString("en-PH", { timeZone: "Asia/Manila", month: "short", day: "numeric" }) + "]";
+    sb.from("booking_requests").update({
+      status: "expired", expire_reason: "manual_unpaid", email_custom: custom,
+      staff_notes: ((r.staff_notes || "") + (r.staff_notes ? "\n" : "") + stamp).trim(),
+    }).eq("id", r.id).then(function (res) {
+      btn.disabled = false;
+      if (res.error) { $("vNpcErr").textContent = /expire_reason/.test(res.error.message) ? "Needs the database update booking-v48." : "Couldn't cancel: " + res.error.message; return; }
+      close(); D.reload();
+    });
+  });
 
   // ---------------- guests ----------------
   function renderGuests() {

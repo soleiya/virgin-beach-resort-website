@@ -326,8 +326,13 @@ function securePara(r: Any, total: number, dl: { label: string }, units: string)
   const t = payTerms(r, total);
   const how = paysOnline(r) ? " online with the <strong>Pay now</strong> button below" : ", and send us your proof of payment";
   return t.half
-    ? `<strong>To secure your reservation, pay at least 50% (${esc(peso(t.deposit))}) &mdash; or the full ${esc(peso(t.total))} &mdash; by ${esc(dl.label)}</strong>${how}. The remaining balance is due by <strong>${esc(t.balanceDueLabel)}</strong> (${BALANCE_DAYS} days before arrival). Unpaid bookings are automatically cancelled and the ${units} released.`
-    : `<strong>Full payment of ${esc(peso(t.total))} is required by ${esc(dl.label)}</strong> to secure the reservation, as ${isOvernight(r) ? "your stay" : "your visit"} is less than ${BALANCE_DAYS} days away. Unpaid bookings are automatically cancelled and the ${units} released.`;
+    ? `<strong>To secure your reservation, pay at least 50% (${esc(peso(t.deposit))}) &mdash; or the full ${esc(peso(t.total))} &mdash; by ${esc(dl.label)}</strong>${how}. The remaining balance is due by <strong>${esc(t.balanceDueLabel)}</strong> (${BALANCE_DAYS} days before arrival). ${releaseLine(r, units)}`
+    : `<strong>Full payment of ${esc(peso(t.total))} is required by ${esc(dl.label)}</strong> to secure the reservation, as ${isOvernight(r) ? "your stay" : "your visit"} is less than ${BALANCE_DAYS} days away. ${releaseLine(r, units)}`;
+}
+// v47: day trips are kept until the trip day; villas are released after the hold
+function releaseLine(r: Any, units: string) {
+  return isOvernight(r) ? `Unpaid bookings are automatically cancelled and the ${units} released.`
+    : `If the booking is still unpaid on the day and you haven't arrived by 5:00 PM, it is cancelled and the ${units} released.`;
 }
 function secureRows(r: Any, total: number, dl: { label: string }): [string, string][] {
   const t = payTerms(r, total);
@@ -611,7 +616,7 @@ function cabanaNote(cabanas: Any[], r: Any = null) {
 // overnight casitas, not Day Trips, so it's no longer in these emails.)
 function rebookNote(paid = false, hours = deadlineHours()) {
   return p("<strong>Need to change your date?</strong> Just reply to this email and we'll help you rebook." +
-    (paid ? "" : ` Haven't paid yet? You can simply ignore this booking — unpaid bookings expire automatically after ${hours} hours — and make a new one.`),
+    (paid ? "" : ` Haven't paid yet and can't make it? Just reply and let us know, and we'll release the cabana.`),
     `font-size:13.5px;color:${C.soft};margin-top:14px;`);
 }
 
@@ -694,7 +699,7 @@ export function staffSubject(r: Any, c: ReturnType<typeof cfg>) {
 // opening (amounts, bank details, links, policies) is always generated, so it
 // can't drift from the booking. Tokens: {first} {name} {order} {date}
 // {checkout} {nights}.
-export type Custom = { subject?: string; message?: string } | null;
+export type Custom = { subject?: string; message?: string; skip?: boolean } | null;
 export function customOf(r: Any, kind: string): Custom {
   const all = r && r.email_custom && typeof r.email_custom === "object" ? r.email_custom : null;
   const x = all ? all[kind] : null;
@@ -867,7 +872,7 @@ ${h2("Follow-up checklist")}
 <ol style="margin:0 0 14px;padding-left:20px;font-size:14px;">
 <li>Watch the guest thread (search the Booking ID) for proof of payment, the signed agreement and one valid ID. Website uploads also alert this inbox.</li>
 <li>Verify the deposit against the bank statement, then click <strong>Verify</strong> on the payment in the dashboard (Payments) — that confirms the booking and emails the guest.</li>
-<li>No payment by ${esc(dl.label)}? The booking automatically turns <strong>Expired</strong> and the cabana(s) are released. Nothing to do unless the guest calls.</li>
+<li>Not paid? The guest gets a payment reminder, then an &ldquo;expecting you today&rdquo; email at 8:00 AM on the trip day. If it's still unpaid (or the balance isn't recorded) by <strong>5:00 PM on the trip day</strong>, the booking closes automatically and the guest is emailed. Record gate payments before 5 PM.</li>
 </ol>
 ${button(dash, "Open in staff dashboard")}${button(gmail, "Find guest thread in Gmail")}`;
 
@@ -1919,7 +1924,7 @@ export function guestPayReminderEmail(r: Any, c: ReturnType<typeof cfg>) {
   const first = esc(String(r.guest_name || "there").trim().split(/\s+/)[0]);
   const dl = finalDeadline(dueFrom(r));
   const body = `${p(`Hi ${first},`)}
-${p(`A friendly reminder: we're still holding ${isOvernight(r) ? "your casita(s)" : "your cabana(s)"} for reservation <strong>${esc(r.order_code || "")}</strong>, but we haven't received a payment yet. Please pay <strong>by ${esc(dl.label)}</strong> &mdash; after that the booking is cancelled automatically and ${isOvernight(r) ? "the casita(s) released" : "the cabana(s) released"} to other guests.`)}
+${p(`A friendly reminder: we're still holding ${isOvernight(r) ? "your casita(s)" : "your cabana(s)"} for reservation <strong>${esc(r.order_code || "")}</strong>, but we haven't received a payment yet. Please pay <strong>by ${esc(dl.label)}</strong>${isOvernight(r) ? " &mdash; after that the booking is cancelled automatically and the casita(s) released to other guests." : " to secure your cabana(s). Unpaid day trips can be released to other guests on the day."}`)}
 ${statusBox([
     ["Booking ID", esc(r.order_code || "—")],
     [isOvernight(r) ? "Stay" : "Date", esc(isOvernight(r) ? stayRange(r) : fmtDate(r.check_in, "short"))],
@@ -1932,6 +1937,69 @@ ${signature(c)}`;
   return {
     subject: "Re: " + guestSubject(r, c),
     html: shell({ preheader: `Payment reminder — please pay by ${dl.label} to keep ${r.order_code}`, body, c }),
+  };
+}
+
+// v48: villa booked 14 days or less before arrival, not fully paid 24 h after booking
+export function guestFullPayReminderEmail(r: Any, c: ReturnType<typeof cfg>) {
+  const first = esc(String(r.guest_name || "there").trim().split(/\s+/)[0]);
+  const owe = Math.max(0, (Number(r.total_amount) || 0) - (Number(r.amount_paid) || 0));
+  const part = Number(r.amount_paid) > 0;
+  const body = `${p(`Hi ${first},`)}
+${p(`Thank you for booking with us! As your stay <strong>${esc(r.order_code || "")}</strong> is less than ${BALANCE_DAYS} days away, <strong>full payment</strong> is needed to secure your casita(s). ${part ? `We've received ${esc(peso(r.amount_paid))} so far.` : "We haven't received a payment yet."}`)}
+${statusBox([
+    ["Booking ID", esc(r.order_code || "—")],
+    ["Stay", esc(stayRange(r))],
+    [part ? "Balance" : "To pay", `<strong>${esc(peso(owe))}</strong>`],
+  ])}
+${button(uploadUrl(r, c), "Pay now or upload your proof")}
+${p("Please complete your payment as soon as you can &mdash; unpaid bookings may be cancelled by our reservations team and the casita released to other guests. Already paid by GCash or bank transfer? Upload the screenshot on the same page or reply with it attached.", "margin-top:14px;")}
+${signature(c)}`;
+  return {
+    subject: "Re: " + guestSubject(r, c),
+    html: shell({ preheader: `Full payment needed to secure ${r.order_code}`, body, c }),
+  };
+}
+
+// v47: 8:00 AM on the trip day — day-trip guests who still owe something
+export function guestArrivalNoticeEmail(r: Any, c: ReturnType<typeof cfg>) {
+  const first = esc(String(r.guest_name || "there").trim().split(/\s+/)[0]);
+  const owe = Math.max(0, (Number(r.total_amount) || 0) - (Number(r.amount_paid) || 0));
+  const unpaid = !(Number(r.amount_paid) > 0);
+  const body = `${p(`Good morning ${first}!`)}
+${p(`We're expecting you <strong>today</strong> for your day trip <strong>${esc(r.order_code || "")}</strong>. ${unpaid ? "We haven't received a payment for this booking yet" : "There's still a balance on this booking"} &mdash; you can pay online now, or settle it at the front desk when you arrive.`)}
+${statusBox([
+    ["Booking ID", esc(r.order_code || "—")],
+    ["Date", esc(fmtDate(r.check_in, "short"))],
+    [unpaid ? "To pay" : "Balance", `<strong>${esc(peso(owe))}</strong>`],
+  ])}
+${button(uploadUrl(r, c), "Pay now online")}
+${p(`<strong>Not able to make it?</strong> Please reply to let us know. If you don't arrive and the booking is still ${unpaid ? "unpaid" : "not fully paid"} by <strong>5:00 PM today</strong>, it will be cancelled and your cabana(s) may be released to other guests.`, "margin-top:14px;")}
+${signature(c)}`;
+  return {
+    subject: "Re: " + guestSubject(r, c),
+    html: shell({ preheader: `We're expecting you today — ${r.order_code}`, body, c }),
+  };
+}
+
+// v47: 5:00 PM on the trip day — still unpaid / balance not recorded
+export function guestTripDayClosedEmail(r: Any, c: ReturnType<typeof cfg>) {
+  const first = esc(String(r.guest_name || "there").trim().split(/\s+/)[0]);
+  const paid = Number(r.amount_paid) > 0;
+  const body = `${p(`Hi ${first},`)}
+${p(`As we didn't see you today and the booking was ${paid ? "not fully paid" : "unpaid"} by 5:00 PM, your day trip <strong>${esc(r.order_code || "")}</strong> (${esc(fmtDate(r.check_in))}) has been cancelled and the cabana(s) released.`)}
+${statusBox([
+    ["Booking ID", esc(r.order_code || "—")],
+    ["Date", esc(fmtDate(r.check_in, "short"))],
+    ["Status", "Cancelled"],
+  ])}
+${paid ? p("Your down payment follows our cancellation policy &mdash; reply to this email and our team will help you rebook.") : ""}
+${p("<strong>Did you visit or already pay?</strong> Please reply with your proof of payment and we'll correct this right away.")}
+${button(PUBLIC_SITE, "Book another day")}
+${signature(c)}`;
+  return {
+    subject: "Re: " + guestSubject(r, c),
+    html: shell({ preheader: `Your day trip ${r.order_code} has been cancelled`, body, c }),
   };
 }
 
@@ -1958,14 +2026,18 @@ async function onExpired(r: Any) {
   const out: Record<string, unknown> = {};
   if (r.status !== "expired") return { skipped: "no longer expired" };
   // v46: part-paid day trip closed at 5 PM on the trip day — staff only (the guest may be at the resort)
-  if (r.expire_reason === "balance_unpaid") {
-    const m = staffExpiredEmail(r, c, `This day trip had a down payment (${peso(r.amount_paid)} of ${peso(r.total_amount)}) but no balance was recorded by 5:00 PM on the trip day, so it was closed automatically. The guest was NOT emailed. If they came and paid at the gate, record the payment and set the status back to Confirmed / Checked Out.`);
-    out.staff = await send({ booking: r, kind: "staff_expired", to: c.staffEmails, subject: m.subject, html: m.html, thread: "staff" });
-    return out;
+  const tripDay = r.expire_reason === "trip_day_unpaid" || r.expire_reason === "balance_unpaid";
+  // v48: cancelled by staff from the dashboard ("Cancel booking — not paid")
+  if (r.expire_reason === "manual_unpaid") {
+    if (customOf(r, "expired")?.skip) return { skipped: "staff chose not to email the guest" };
+    const ms = deadlineGate(r, c, true);
+    if (ms) return ms;
+    const g = guestExpiredEmail(r, c);
+    return { guest: await send({ booking: r, kind: "guest_expired", to: String(r.guest_email).trim(), cc: MAILBOX, subject: g.subject, html: g.html, thread: "guest" }) };
   }
   const skip = deadlineGate(r, c, s.expiry_email_all);
   if (!skip) {
-    const g = guestExpiredEmail(r, c);
+    const g = tripDay ? guestTripDayClosedEmail(r, c) : guestExpiredEmail(r, c);
     // v46: reservations@ gets a copy of the guest's cancellation email
     out.guest = await send({ booking: r, kind: "guest_expired", to: String(r.guest_email).trim(), cc: s.expiry_staff_alert ? MAILBOX : undefined, subject: g.subject, html: g.html, thread: "guest" });
   } else out.guest = skip;
@@ -1974,6 +2046,30 @@ async function onExpired(r: Any) {
     out.staff = await send({ booking: r, kind: "staff_expired", to: c.staffEmails, subject: m.subject, html: m.html, thread: "staff" });
   }
   return out;
+}
+
+async function onFullPayReminder(r: Any) {
+  const c = cfg();
+  const s = await deadlineSettings();
+  if (!isOvernight(r)) return { skipped: "not a villa" };
+  if (!["confirmed", "pending", "pending_payment"].includes(r.status)) return { skipped: "status " + r.status };
+  if (!((Number(r.total_amount) || 0) - (Number(r.amount_paid) || 0) > 0.5)) return { skipped: "paid" };
+  const skip = deadlineGate(r, c, s.expiry_email_all);
+  if (skip) return skip;
+  const g = guestFullPayReminderEmail(r, c);
+  return await send({ booking: r, kind: "full_pay_reminder", to: String(r.guest_email).trim(), cc: s.expiry_staff_alert ? MAILBOX : undefined, subject: g.subject, html: g.html, thread: "guest" });
+}
+
+async function onArrivalNotice(r: Any) {
+  const c = cfg();
+  const s = await deadlineSettings();
+  if (isOvernight(r)) return { skipped: "villa" };
+  if (!["confirmed", "pending", "pending_payment"].includes(r.status)) return { skipped: "status " + r.status };
+  if (!((Number(r.total_amount) || 0) - (Number(r.amount_paid) || 0) > 0.5)) return { skipped: "paid" };
+  const skip = deadlineGate(r, c, s.expiry_email_all);
+  if (skip) return skip;
+  const g = guestArrivalNoticeEmail(r, c);
+  return await send({ booking: r, kind: "arrival_notice", to: String(r.guest_email).trim(), cc: s.expiry_staff_alert ? MAILBOX : undefined, subject: g.subject, html: g.html, thread: "guest" });
 }
 
 async function onPayReminder(r: Any) {
@@ -2148,6 +2244,8 @@ export async function handle(req: Request): Promise<Response> {
     if (payload.type === "OVERPAID") out.overpaid = await onOverpaid(r, payload);
     if (payload.type === "PROOF_REJECTED") out.rejected = await onProofRejected(r, payload);
     if (payload.type === "PAY_REMINDER") out.reminder = await onPayReminder(r);
+    if (payload.type === "ARRIVAL_NOTICE") out.arrival = await onArrivalNotice(r);
+    if (payload.type === "FULL_PAY_REMINDER") out.fullPay = await onFullPayReminder(r);
     if (payload.type === "UPDATE") {
       // Staff ticked "Send this booking to the guest" — the dashboard flips
       // email_guest after the cabanas are attached, so the quote lists them.
