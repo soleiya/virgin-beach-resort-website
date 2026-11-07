@@ -1449,15 +1449,17 @@
     </div>
     <p class="field-hint" style="margin-top:-6px;">How many of each the website and the Day Trip Calendar count as available each day (before blocks and bookings).</p>
     <h3 class="modal-subhead" style="margin-top:18px;">Payment deadlines</h3>
-    <p class="field-hint" style="margin:-4px 0 10px;">Unpaid bookings must be paid within <b>24 hours</b> of booking, and never later than <b>8:00 AM on the trip / arrival day</b>. Bookings made after that are paid on arrival. A staff &ldquo;extend&rdquo; restarts the 24 hours. Paid, proof-uploaded, Cloudbeds-made and Day-Trip-sheet bookings are never cancelled automatically.</p>
+    <p class="field-hint" style="margin:-4px 0 10px;"><b>Unpaid bookings</b> (day trips and villas) are held <b>24 hours</b> from booking &mdash; never past <b>8:00 AM on the trip / arrival day</b> (booked after that = pay on arrival) &mdash; then cancelled and released. <b>Day trips with a down payment</b> are held until the trip day. <b>Villas</b> follow the website policy: balance due 15 days before arrival, full payment within 14 days; part-paid villas are never cancelled automatically. Proof-uploaded, Cloudbeds-made and Day-Trip-sheet bookings are never cancelled automatically.</p>
     <label class="modal-check"><input type="checkbox" id="bwAutoExpire"> Cancel unpaid bookings automatically at the deadline and release the cabanas / casitas</label>
     <div class="modal-row" style="margin-top:8px;">
-      <div class="modal-field"><label for="bwRemind">Reminder to the guest before the deadline</label>
-        <select id="bwRemind"><option value="0">No reminder</option><option value="3">3 hours before</option><option value="6">6 hours before</option><option value="12">12 hours before</option></select></div>
-      <div class="modal-field"></div>
+      <div class="modal-field"><label for="bwRemindDt">Day trips: reminder before the deadline</label>
+        <select id="bwRemindDt"><option value="0">No reminder</option><option value="2">2 hours before</option><option value="4">4 hours before (20th hour)</option><option value="6">6 hours before</option></select></div>
+      <div class="modal-field"><label for="bwRemind">Villas: reminder before the deadline</label>
+        <select id="bwRemind"><option value="0">No reminder</option><option value="3">3 hours before</option><option value="4">4 hours before</option><option value="6">6 hours before</option><option value="12">12 hours before</option></select></div>
     </div>
-    <label class="modal-check"><input type="checkbox" id="bwExpiryAll"> Email every guest with an email address when their booking is cancelled for non-payment (incl. staff-entered bookings and casitas in Cloudbeds)</label>
-    <label class="modal-check"><input type="checkbox" id="bwExpiryStaff"> Email the reservations team each time a booking is cancelled automatically</label>
+    <label class="modal-check"><input type="checkbox" id="bwDtBalance"> Day trips with a down payment: close the booking at <b>5:00 PM on the trip day</b> if the balance still isn&rsquo;t recorded (staff are alerted; the guest isn&rsquo;t emailed)</label>
+    <label class="modal-check"><input type="checkbox" id="bwExpiryAll"> Email every guest with an email address when their booking is cancelled for non-payment (incl. staff-entered bookings and villas in Cloudbeds)</label>
+    <label class="modal-check"><input type="checkbox" id="bwExpiryStaff"> Copy reservations@virginbeachresort.com on every payment reminder and cancellation email (and alert the team when a guest couldn&rsquo;t be emailed)</label>
     <p class="field-hint">Every email sent to a guest is listed at the bottom of that booking&rsquo;s edit form, under &ldquo;Emails sent&rdquo;.</p>
     <p class="form-error-box" id="bwError" style="display:none;"></p>
     <div class="modal-actions"><button type="button" class="btn-sm ghost" id="bwClose">Close</button> <button type="button" class="btn-sm primary" id="bwSave">Save</button></div>
@@ -1577,7 +1579,7 @@
 <script src="../assets/js/staff-payments.js?v=d563661be7"></script>
 <script src="../assets/js/staff-activity.js?v=2d41dd54bc"></script>
 <script src="../assets/js/staff-website.js?v=24ff44d3e2"></script>
-<script src="../assets/js/staff-codes.js?v=134c41e04f"></script>
+<script src="../assets/js/staff-codes.js?v=5e58a8bea8"></script>
 <script src="../assets/js/staff-daycal.js?v=7e6ef430fd"></script>
 <script src="../assets/js/staff-summary.js?v=9596d523a5"></script>
 <script src="../assets/js/staff-find.js?v=4b69031a6f"></script>

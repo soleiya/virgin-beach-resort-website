@@ -1594,10 +1594,10 @@ export function tagLinks(html: string, kind: string) {
 
 async function send(opts: {
   booking: Any; kind: string; to: string | string[]; subject: string; html: string;
-  thread: "guest" | "staff"; first?: boolean; replyTo?: string; attachments?: Any[];
+  thread: "guest" | "staff"; first?: boolean; replyTo?: string; attachments?: Any[]; cc?: string;
 }): Promise<{ ok: boolean; skipped?: boolean; error?: string }> {
   const to = Array.isArray(opts.to) ? opts.to.join(", ") : opts.to;
-  const logId = await claim(opts.booking.id, opts.kind, to, opts.subject);
+  const logId = await claim(opts.booking.id, opts.kind, opts.cc ? `${to} (cc ${opts.cc})` : to, opts.subject);
   if (!logId) return { ok: true, skipped: true };
   const root = msgId(opts.booking, opts.thread);
   const messageId = opts.first ? root : `<${opts.kind.replace(/[^a-z0-9]+/gi, ".")}.${Date.now()}.${root.slice(1)}`;
@@ -1606,6 +1606,7 @@ async function send(opts: {
     await t.sendMail({
       from: FROM,
       to,
+      ...(opts.cc ? { cc: opts.cc } : {}),
       // monitor copy: staff alerts only (new booking, proofs, overdue…), not the guest's copy
       ...(opts.thread === "staff" && monitorEmails().filter((m) => !to.includes(m)).length
         ? { bcc: monitorEmails().filter((m) => !to.includes(m)).join(", ") } : {}),
@@ -1894,9 +1895,9 @@ async function onCancelled(r: Any) {
 }
 
 // v45: payment-deadline options, set by staff in the dashboard (booking_settings)
-type DeadlineSettings = { auto_expire: boolean; expiry_email_all: boolean; pay_reminder_hours: number; expiry_staff_alert: boolean };
+type DeadlineSettings = { auto_expire: boolean; expiry_email_all: boolean; pay_reminder_hours: number; daytrip_reminder_hours: number; expiry_staff_alert: boolean };
 async function deadlineSettings(): Promise<DeadlineSettings> {
-  const d: DeadlineSettings = { auto_expire: true, expiry_email_all: true, pay_reminder_hours: 6, expiry_staff_alert: true };
+  const d: DeadlineSettings = { auto_expire: true, expiry_email_all: true, pay_reminder_hours: 6, daytrip_reminder_hours: 4, expiry_staff_alert: true };
   try {
     const c = cfg();
     const res = await fetch(`${c.supabaseUrl}/rest/v1/booking_settings?id=eq.1&select=*`, { headers: { apikey: c.serviceKey, Authorization: `Bearer ${c.serviceKey}` } });
@@ -1956,14 +1957,20 @@ async function onExpired(r: Any) {
   const s = await deadlineSettings();
   const out: Record<string, unknown> = {};
   if (r.status !== "expired") return { skipped: "no longer expired" };
+  // v46: part-paid day trip closed at 5 PM on the trip day — staff only (the guest may be at the resort)
+  if (r.expire_reason === "balance_unpaid") {
+    const m = staffExpiredEmail(r, c, `This day trip had a down payment (${peso(r.amount_paid)} of ${peso(r.total_amount)}) but no balance was recorded by 5:00 PM on the trip day, so it was closed automatically. The guest was NOT emailed. If they came and paid at the gate, record the payment and set the status back to Confirmed / Checked Out.`);
+    out.staff = await send({ booking: r, kind: "staff_expired", to: c.staffEmails, subject: m.subject, html: m.html, thread: "staff" });
+    return out;
+  }
   const skip = deadlineGate(r, c, s.expiry_email_all);
   if (!skip) {
     const g = guestExpiredEmail(r, c);
-    out.guest = await send({ booking: r, kind: "guest_expired", to: String(r.guest_email).trim(), subject: g.subject, html: g.html, thread: "guest" });
+    // v46: reservations@ gets a copy of the guest's cancellation email
+    out.guest = await send({ booking: r, kind: "guest_expired", to: String(r.guest_email).trim(), cc: s.expiry_staff_alert ? MAILBOX : undefined, subject: g.subject, html: g.html, thread: "guest" });
   } else out.guest = skip;
-  if (s.expiry_staff_alert && !r.cb_owned) {
-    const note = skip ? `The guest was not emailed (${skip.skipped}).` : `The guest has been emailed that the booking was cancelled for non-payment.`;
-    const m = staffExpiredEmail(r, c, note);
+  if (s.expiry_staff_alert && !r.cb_owned && skip) {
+    const m = staffExpiredEmail(r, c, `The guest was not emailed (${skip.skipped}).`);
     out.staff = await send({ booking: r, kind: "staff_expired", to: c.staffEmails, subject: m.subject, html: m.html, thread: "staff" });
   }
   return out;
@@ -1972,12 +1979,12 @@ async function onExpired(r: Any) {
 async function onPayReminder(r: Any) {
   const c = cfg();
   const s = await deadlineSettings();
-  if (!(s.pay_reminder_hours > 0)) return { skipped: "reminders off" };
+  if (!((isOvernight(r) ? s.pay_reminder_hours : s.daytrip_reminder_hours) > 0)) return { skipped: "reminders off" };
   if (!["pending", "pending_payment"].includes(r.status)) return { skipped: "not pending" };
   const skip = deadlineGate(r, c, s.expiry_email_all);
   if (skip) return skip;
   const g = guestPayReminderEmail(r, c);
-  return await send({ booking: r, kind: "pay_reminder", to: String(r.guest_email).trim(), subject: g.subject, html: g.html, thread: "guest" });
+  return await send({ booking: r, kind: "pay_reminder", to: String(r.guest_email).trim(), cc: s.expiry_staff_alert ? MAILBOX : undefined, subject: g.subject, html: g.html, thread: "guest" });
 }
 
 // PROOF_REJECTED: { record: {id}, payment_id, reason?, deadline? (ISO) }
