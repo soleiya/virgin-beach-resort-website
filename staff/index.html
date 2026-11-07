@@ -511,6 +511,35 @@
   .npc-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 8px; }
   .npc-go { background: #9b2c2c !important; border-color: #9b2c2c !important; }
   .rules-modal h3 { margin: 16px 0 6px; font-size: 1rem; } .rules-modal ul { margin: 0 0 6px 18px; padding: 0; font-size: .9rem; line-height: 1.5; } .rules-modal li { margin: 3px 0; }
+  .sp-box { border: 2px solid var(--lagoon, #2f7d6d); border-radius: 14px; padding: 12px 14px; margin: 4px 0 16px; background: #f3f9f7; }
+  .sp-head { display: grid; grid-template-columns: minmax(220px, 1fr) 1fr; gap: 12px; align-items: end; }
+  .sp-sum { font-size: .95rem; text-align: right; padding-bottom: 8px; } .sp-sum b { font-size: 1.15rem; }
+  .sp-sum .sp-chip { display: inline-block; border-radius: 999px; padding: 2px 10px; font-size: .78rem; font-weight: 700; margin-left: 6px; }
+  .sp-chip.paid { background: #d7ede5; color: #1f6e5a; } .sp-chip.part { background: #f5e7c4; color: #7a5a17; } .sp-chip.none { background: #f6dcdc; color: #9b2c2c; }
+  .sp-rule { font-size: .8rem; color: var(--ink-soft); margin: 6px 0 4px; }
+  .sp-box #addPaymentField { margin: 8px 0 0; }
+  @media (max-width: 760px) { .sp-head { grid-template-columns: 1fr; } .sp-sum { text-align: left; } }
+  #alertsBox { padding: 0; }
+  .alerts-box { border: 1px solid #e6cf9e; background: #fffaf0; border-radius: 14px; margin: 0 0 12px; overflow: hidden; }
+  .alerts-box.is-high { border-color: #d9a3a3; background: #fff6f5; }
+  .al-toggle { width: 100%; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; text-align: left; background: none; border: 0; padding: 10px 14px; cursor: pointer; font: inherit; color: inherit; }
+  .al-dot { width: 10px; height: 10px; border-radius: 50%; background: #d08a3c; flex: none; } .is-high .al-dot { background: #c0392b; }
+  .al-sum { color: var(--ink-soft); font-size: .82rem; flex: 1 1 300px; } .al-chev { font-size: .8rem; color: var(--lagoon-deep); font-weight: 600; }
+  .al-groups { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 10px; padding: 0 14px 14px; }
+  .al-group { border: 1px solid var(--line); border-radius: 12px; background: #fff; padding: 10px 12px; border-left-width: 5px; }
+  .al-group.lv-high { border-left-color: #c0392b; } .al-group.lv-med { border-left-color: #d08a3c; } .al-group.lv-low { border-left-color: #8aa8a0; }
+  .al-title { font-weight: 700; font-size: .9rem; } .al-n { display: inline-block; min-width: 20px; text-align: center; border-radius: 999px; background: #f1ece2; font-size: .75rem; padding: 0 6px; margin-left: 4px; }
+  .al-step { font-size: .8rem; color: var(--ink-soft); margin: 3px 0 8px; line-height: 1.4; }
+  .al-items { display: grid; gap: 4px; }
+  .al-item { display: flex; justify-content: space-between; gap: 8px; text-align: left; border: 1px solid #efece5; background: var(--surface); border-radius: 8px; padding: 5px 8px; font: inherit; font-size: .82rem; cursor: pointer; }
+  .al-item:hover { border-color: var(--lagoon, #2f7d6d); } .al-meta { color: var(--ink-soft); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .al-more { font-size: .78rem; color: var(--ink-soft); }
+  @media (max-width: 560px) { .al-groups { grid-template-columns: 1fr; } .al-item { flex-direction: column; } }
+  .sp-rec { margin: 8px 0 4px; padding: 10px; border-radius: 10px; background: #fff; border: 1px solid #cfe5dd; }
+  .sp-rec-title { font-size: .84rem; font-weight: 700; margin-bottom: 6px; } .sp-rec-title .muted { font-weight: 400; }
+  .sp-rec-row { display: grid; grid-template-columns: 140px 190px 1fr auto; gap: 8px; align-items: center; }
+  .sp-rec-msg { margin: 6px 0 0; font-size: .82rem; } .sp-rec-msg.ok { color: #1f6e5a; font-weight: 600; } .sp-rec-msg.err { color: #9b2c2c; }
+  @media (max-width: 760px) { .sp-rec-row { grid-template-columns: 1fr 1fr; } }
   .party-box { border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; margin: 14px 0 4px; background: var(--surface); }
   .party-head { font-size: .78rem; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--ink-soft); margin-bottom: 8px; }
   .party-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
@@ -871,7 +900,7 @@
     <p id="bookingModalSub" style="color:var(--ink-soft); font-size:0.85rem; margin:-10px 0 20px;">For a request that came in outside the website — Messenger, phone, walk-in, etc.</p>
     <form id="addForm">
       <div class="bk-grid"><div class="bk-main">
-      <div class="modal-row three">
+      <div class="modal-row">
         <div class="modal-field" style="margin-bottom:0;">
           <label for="addChannel">Came in via</label>
           <select id="addChannel">
@@ -896,18 +925,43 @@
             <option value="other">Other / Add-on</option>
           </select>
         </div>
-        <div class="modal-field" style="margin-bottom:0;">
+
+      </div>
+      <section class="sp-box" id="addStatusPay">
+        <div class="sp-head">
+        <div class="modal-field" style="margin-bottom:0;" id="addStatusField">
           <label for="addStatus">Status <span class="modal-lock" id="addStatusLock" hidden>&middot; new bookings start here</span></label>
           <select id="addStatus">
-            <option value="pending">Confirmation Pending</option>
-            <option value="pending_payment">Payment Under Review</option>
-            <option value="confirmed">Confirmed</option>
+            <option value="pending">Payment Pending</option>
+            <option value="pending_payment">Payment Under Review (proof to check)</option>
+            <option value="confirmed">Confirmed (paid or down payment)</option>
             <option value="declined">Cancelled</option>
-            <option value="completed">Completed</option>
-            <option value="expired">Cancelled · payment not received</option>
+            <option value="completed">Completed (visited)</option>
+            <option value="expired">Cancelled · not paid</option>
           </select>
         </div>
+          <div class="sp-sum" id="addPaySum"></div>
+        </div>
+        <p class="sp-rule" id="addPayRule"></p>
+        <div class="sp-rec" id="addRecBox">
+          <div class="sp-rec-title" id="addRecTitle">Record a payment received <span class="muted">(cash / GCash / card at the gate, bank transfer &mdash; no screenshot needed)</span></div>
+          <div class="sp-rec-row">
+            <input id="addRecAmount" type="number" min="0" step="0.01" placeholder="Amount (&#8369;)">
+            <select id="addRecMethod"><option value="cash">Cash</option><option value="transfer">GCash / bank transfer</option><option value="card">Card at the resort</option><option value="link">Payment link (Xendit)</option><option value="other">Other</option></select>
+            <input id="addRecNote" type="text" maxlength="80" placeholder="Ref. no. / note (optional)">
+            <button type="button" class="btn-sm primary" id="addRecBtn">Record payment</button>
+          </div>
+          <p class="sp-rec-msg" id="addRecMsg"></p>
+        </div>
+      <div class="modal-field" id="addPaymentField">
+        <label>Payments received</label>
+        <div id="addPayExisting" class="modal-pay-existing"></div>
+        <label for="addPayFile" class="pay-add-label">Or attach a screenshot as proof <span class="muted">(GCash / bank transfer &middot; saved when you click Save)</span></label>
+        <input id="addPayFile" type="file" accept="image/*,application/pdf">
+        <select id="addPayPortion" style="margin-top:8px;"><option value="full">This proof is for the full payment</option><option value="deposit">This proof is for the 50% down payment</option><option value="balance">This proof is for the remaining balance</option></select>
+        <p class="modal-hint">Saving records the payment as verified (it appears under Payments and, for villas, on the Cloudbeds folio) and confirms a pending booking.</p>
       </div>
+      </section>
       <div class="modal-row">
         <div class="modal-field" style="margin-bottom:0;">
           <label for="addName">Guest Name <span class="modal-lock" id="addNameLock" hidden>&middot; locked</span></label>
@@ -1037,14 +1091,6 @@
       <div class="modal-field">
         <label for="addNotes">Notes</label>
         <textarea id="addNotes" rows="3" placeholder="Anything from the conversation worth keeping"></textarea>
-      </div>
-      <div class="modal-field" id="addPaymentField">
-        <label>Payments</label>
-        <div id="addPayExisting" class="modal-pay-existing"></div>
-        <label for="addPayFile" class="pay-add-label">Add a payment proof <span class="muted">(GCash / bank-transfer screenshot)</span></label>
-        <input id="addPayFile" type="file" accept="image/*,application/pdf">
-        <select id="addPayPortion" style="margin-top:8px;"><option value="full">This proof is for the full payment</option><option value="deposit">This proof is for the 50% down payment</option><option value="balance">This proof is for the remaining balance</option></select>
-        <p class="modal-hint">Saving records the payment as verified (it appears under Payments and, for villas, on the Cloudbeds folio) and confirms a pending booking.</p>
       </div>
       <div class="modal-field" id="addStaffNotesField">
         <label for="addStaffNotes">Staff Notes</label>
@@ -1479,7 +1525,7 @@
         <select id="bwRemind"><option value="0">No reminder</option><option value="3">3 hours before</option><option value="4">4 hours before</option><option value="6">6 hours before</option><option value="12">12 hours before</option></select></div>
     </div>
     <label class="modal-check"><input type="checkbox" id="bwDtArrival"> Day trips: at 8:00 AM on the trip day, email guests who still owe something that we&rsquo;re expecting them (and the cabana may be released if they don&rsquo;t come)</label>
-    <label class="modal-check"><input type="checkbox" id="bwDtBalance"> Day trips: close bookings still unpaid / not fully paid at <b>5:00 PM on the trip day</b> and email the guest</label>
+    <label class="modal-check"><input type="checkbox" id="bwDtBalance"> Day trips booked online by guests: close bookings still unpaid / not fully paid at <b>5:00 PM on the trip day</b> and email the guest (staff-entered bookings are never closed automatically)</label>
     <label class="modal-check"><input type="checkbox" id="bwExpiryAll"> Email every guest with an email address when their booking is cancelled for non-payment (incl. staff-entered bookings and villas in Cloudbeds)</label>
     <label class="modal-check"><input type="checkbox" id="bwExpiryStaff"> Copy reservations@virginbeachresort.com on every payment reminder and cancellation email (and alert the team when a guest couldn&rsquo;t be emailed)</label>
     <p class="field-hint">Every email sent to a guest is listed at the bottom of that booking&rsquo;s edit form, under &ldquo;Emails sent&rdquo;.</p>
@@ -1497,8 +1543,10 @@
       <li>Bookings stay on until the trip day, paid or not.</li>
       <li>Payment reminder ~20 hours after booking.</li>
       <li><b>8:00 AM on the trip day:</b> anyone not fully paid gets &ldquo;We&rsquo;re expecting you today &mdash; if you don&rsquo;t arrive and pay by 5 PM, the cabana may be released.&rdquo;</li>
-      <li><b>5:00 PM on the trip day:</b> still unpaid / balance not recorded &rarr; booking closes automatically, guest emailed. <b>Record gate payments before 5 PM.</b></li>
-      <li>To cancel earlier: open the booking, set Status to <i>Canceled &middot; payment not received</i>, edit the message in the email panel, save.</li>
+      <li><b>5:00 PM on the trip day:</b> bookings <b>made online by guests</b> still unpaid / balance not recorded &rarr; closed automatically, guest emailed.</li>
+      <li><b>Bookings entered by staff</b> (walk-ins, phone, Messenger&hellip;) are <b>never cancelled automatically</b> &mdash; they show under &ldquo;Action needed&rdquo; until paid or cancelled.</li>
+      <li><b>Recording a payment:</b> open the booking &rarr; <b>Record a payment received</b> (amount + Cash / GCash / Card) &rarr; <b>Record payment</b>. No screenshot needed. New walk-in already paid? Fill &ldquo;Paid now?&rdquo; before saving.</li>
+      <li>New bookings start as <b>Payment Pending</b>. To cancel earlier: open the booking, set Status to <i>Cancelled &middot; not paid</i>, edit the message in the email panel, save.</li>
     </ul>
     <h3>Villas &mdash; booked 15 or more days before arrival</h3>
     <ul>
@@ -1627,7 +1675,7 @@
 <script src="../assets/js/booking-config.js?v=c116a3a0ae"></script>
 <script src="../assets/js/cabana-map.js?v=3741396eca"></script>
 <script src="../assets/js/pricing.js?v=43cc9875e9"></script>
-<script src="../assets/js/staff-dashboard.js?v=3fdc870553"></script>
+<script src="../assets/js/staff-dashboard.js?v=91efe81c8e"></script>
 <script src="../assets/js/staff-email.js?v=ac542441c2"></script>
 <script src="../assets/js/staff-villas.js?v=4a335284cc"></script>
 <script src="../assets/js/staff-payments.js?v=d563661be7"></script>
@@ -1637,6 +1685,7 @@
 <script src="../assets/js/staff-daycal.js?v=7e6ef430fd"></script>
 <script src="../assets/js/staff-summary.js?v=9596d523a5"></script>
 <script src="../assets/js/staff-find.js?v=4b69031a6f"></script>
+<script src="../assets/js/staff-alerts.js?v=963c58c4fb"></script>
 <script src="../assets/js/staff-insights.js?v=9f52209975"></script>
 <script src="../assets/js/staff-track.js?v=28f180d1db"></script>
 <script src="../assets/js/staff-cloudbeds.js?v=6a3ae5265c"></script>

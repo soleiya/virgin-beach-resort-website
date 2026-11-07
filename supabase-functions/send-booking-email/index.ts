@@ -203,12 +203,12 @@ export const isOvernight = (r: Any) => r?.stay_type === "overnight";
 export function statusLabel(r: Any): string {
   const s = String(r?.status || "");
   const cbs = r?.cb_info?.status;
-  if (s === "pending") return "Confirmation Pending";
+  if (s === "pending") return isOvernight(r) ? "Confirmation Pending" : "Payment Pending";
   if (s === "pending_payment") return "Payment Under Review";
   if (s === "confirmed") return isOvernight(r) && cbs === "checked_in" ? "Checked In" : "Confirmed";
   if (s === "completed") return isOvernight(r) ? "Checked Out" : "Completed";
   if (s === "declined") return isOvernight(r) && cbs === "no_show" ? "No-Show" : "Cancelled";
-  if (s === "expired") return "Cancelled · payment not received";
+  if (s === "expired") return isOvernight(r) ? "Cancelled · payment not received" : "Cancelled · not paid";
   return s || "—";
 }
 

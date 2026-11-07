@@ -56,8 +56,8 @@
   var STATUS_ORDER = ["pending", "pending_payment", "confirmed", "declined", "completed", "expired"];
   // One vocabulary everywhere — dashboard, guest emails and Cloudbeds.
   var STATUS_LABELS = {
-    pending: "Confirmation Pending", pending_payment: "Payment Under Review", confirmed: "Confirmed",
-    declined: "Cancelled", completed: "Completed", expired: "Cancelled · payment not received",
+    pending: "Payment Pending", pending_payment: "Payment Under Review", confirmed: "Confirmed",
+    declined: "Cancelled", completed: "Completed", expired: "Cancelled · not paid",
   };
   // Villas show exactly Cloudbeds' six statuses, in Cloudbeds' words. A
   // payment waiting to be checked is still "Confirmation Pending" (as in
@@ -1359,6 +1359,71 @@
         }).join("");
       });
   }
+
+  // Status & Payment box (top of the day-trip form): paid summary + the rule
+  function renderPaySum(r, proofWaiting) {
+    var sumEl = $("addPaySum"), ruleEl = $("addPayRule"); if (!sumEl) return;
+    if (!r || !r.id) {
+      sumEl.innerHTML = '<span class="muted">New booking · starts as <b>Payment Pending</b></span>';
+      ruleEl.innerHTML = "Bookings entered by staff are never cancelled automatically. Walk-in already paid? Enter the amount below — it's recorded when you save.";
+      return;
+    }
+    var total = Number(r.total_amount) || 0, paid = Number(r.amount_paid) || 0, owe = total - paid;
+    var chip = paid >= total - 0.5 && total > 0 ? '<span class="sp-chip paid">Fully paid</span>'
+      : paid > 0 ? '<span class="sp-chip part">Balance ' + esc(peso(owe)) + "</span>"
+      : '<span class="sp-chip none">Not paid</span>';
+    sumEl.innerHTML = "Paid <b>" + esc(peso(paid)) + "</b> of " + esc(peso(total)) + chip;
+    var active = ["pending", "pending_payment", "confirmed"].indexOf(r.status) >= 0;
+    ruleEl.innerHTML = !active ? "" : proofWaiting ? "<b>A payment proof is waiting to be checked</b> — verify it below, or the booking stays Payment Under Review."
+      : owe > 0.5 ? (r.booking_origin === "site_guest" && r.source !== "walk_in"
+          ? "Booked online, not fully paid: if still unpaid at <b>5:00 PM on " + esc(fmtDate(r.check_in)) + "</b> it is cancelled automatically and the guest emailed. Record gate payments before 5 PM."
+          : "Entered by staff — <b>never cancelled automatically</b>. Record the payment below as soon as it's received.")
+      : "Fully paid — nothing to do.";
+  }
+  function recKind(paid, owe, amount) { return paid > 0 ? "balance" : amount >= owe - 0.5 ? "full" : "deposit"; }
+  function setRecBox(r) {
+    var amt = $("addRecAmount"); if (!amt) return;
+    $("addRecMsg").textContent = ""; $("addRecMsg").className = "sp-rec-msg"; $("addRecNote").value = "";
+    var isNew = !r || !r.id;
+    var owe = isNew ? null : (Number(r.total_amount) || 0) - (Number(r.amount_paid) || 0);
+    var show = isNew || (["pending", "pending_payment", "confirmed", "completed"].indexOf(r.status) >= 0 && owe > 0.5) || r.status === "expired";
+    $("addRecBox").hidden = !show;
+    $("addRecBtn").hidden = isNew;
+    $("addRecTitle").firstChild.textContent = isNew ? "Paid now? (walk-ins) " : "Record a payment received ";
+    amt.value = isNew ? "" : owe > 0.5 ? String(Math.round(owe * 100) / 100) : "";
+    $("addRecMethod").value = (isNew ? $("addChannel").value === "walk_in" : r.source === "walk_in") ? "cash" : "transfer";
+  }
+  function recordPayment(row, amount, done) {
+    var paid = Number(row.amount_paid) || 0, owe = (Number(row.total_amount) || 0) - paid;
+    return sb.rpc("staff_record_payment", { p_booking_id: row.id, p_amount: amount, p_kind: recKind(paid, owe, amount),
+      p_method: $("addRecMethod").value, p_note: $("addRecNote").value.trim() || null }).then(function (res) {
+      if (done) done(res.error);
+      return res.error;
+    });
+  }
+  $("addChannel").addEventListener("change", function () { if (!editingRow && $("addRecMethod")) $("addRecMethod").value = $("addChannel").value === "walk_in" ? "cash" : "transfer"; });
+  $("addRecBtn") && $("addRecBtn").addEventListener("click", function () {
+    var r = editingRow; if (!r) return;
+    var amount = Number($("addRecAmount").value);
+    var msg = $("addRecMsg");
+    if (!(amount > 0)) { msg.className = "sp-rec-msg err"; msg.textContent = "Enter the amount received."; return; }
+    $("addRecBtn").disabled = true;
+    var revive = r.status === "expired";
+    recordPayment(r, amount, function (err) {
+      $("addRecBtn").disabled = false;
+      if (err) { msg.className = "sp-rec-msg err"; msg.textContent = "Couldn't record: " + err.message; return; }
+      var after = function () {
+        sb.from("booking_requests").select("*, booking_cabanas(cabana_id), booking_villas(villa_id,provisional), booking_payments(method,note,status,amount)").eq("id", r.id).single().then(function (q) {
+          if (q.data) { editingRow = q.data; $("addStatus").value = q.data.status; renderPayExisting(q.data); setRecBox(q.data); }
+          msg.className = "sp-rec-msg ok"; msg.textContent = "✓ " + peso(amount) + " recorded" + (revive ? " and the booking restored to Confirmed" : "") + ".";
+          loadBookings();
+        });
+      };
+      // a booking closed at 5 PM but actually paid at the gate → back to Confirmed
+      if (revive) sb.from("booking_requests").update({ status: "confirmed", expire_reason: null }).eq("id", r.id).then(after); else after();
+    });
+  });
+
   // Payment section of the edit form: every payment already received (Xendit
   // online payments are recorded automatically with their channel + invoice),
   // any open Xendit payment link, then the uploaded proofs / IDs.
@@ -1410,8 +1475,10 @@
           esc(KIND_NAMES[x.kind] || "payment") + ' <span class="muted">· expires ' + esc(fmtDateTime(x.expires_at)) + "</span></span></div>";
       });
       var total = Number(r.total_amount) || 0, paid = Number(r.amount_paid) || 0;
+      renderPaySum(r, pays.some(function (p) { return p.status === "pending"; }));
+      setRecBox(r);
       if (pays.length || open.length) {
-        html = '<div class="pay-sum">Paid <b>' + esc(peso(paid)) + "</b>" + (total ? " of " + esc(peso(total)) + (paid >= total - 0.5 ? " — fully paid" : " — balance " + esc(peso(total - paid))) : "") + "</div>" + html;
+        // the paid / balance summary is shown at the top of the Status & Payment box
       } else html = '<span class="muted">No payments yet — no online payment and no proof uploaded.</span>';
       payBox.innerHTML = html;
       Array.prototype.forEach.call(payBox.querySelectorAll("a[data-proof]"), function (a) {
@@ -1803,6 +1870,8 @@
       saveBookingBtn.textContent = "Save Booking";
       staffNotesField.style.display = "none";
       renderEmailLog("addMailLogField", "addMailLog", null);
+      renderPaySum(null);
+      setRecBox(null);
       paymentField.style.display = "none";
       // A new booking always starts at the first step, like creating one in
       // Cloudbeds; payment / confirmation move it on from there.
@@ -2053,7 +2122,12 @@
     sb.from("booking_requests").insert([payload]).select().then(function (res) {
       if (res.error) return showFormError("Couldn't save this booking: " + res.error.message);
       var row = res.data && res.data[0];
-      var attach = row && cabanaIds.length ? syncCabanas(row.id, [], cabanaIds) : Promise.resolve();
+      var paidNow = Number($("addRecAmount") && $("addRecAmount").value) || 0;
+      var attach = (row && cabanaIds.length ? syncCabanas(row.id, [], cabanaIds) : Promise.resolve()).then(function () {
+        // "Paid now?" on a new booking (walk-ins): record it straight away
+        if (!row || !(paidNow > 0)) return null;
+        return recordPayment(row, paidNow).then(function (e) { if (e) alert("Booking saved, but the payment couldn't be recorded: " + e.message + " — record it from the booking."); });
+      });
       attach.then(function () {
         // Flip email_guest only now that the cabanas are attached — the
         // database trigger then sends the quotation with them listed.
