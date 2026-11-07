@@ -1353,7 +1353,8 @@
         var isX = p.method === "xendit";
         html += '<div class="pay-row' + (p.status === "verified" ? " ok" : " wait") + '">' +
           '<span class="pay-ico">' + (p.status === "verified" ? "✓" : "…") + "</span>" +
-          "<span><b>" + esc(peso(p.amount)) + "</b> · " + esc(KIND_NAMES[p.kind] || "payment") + " · " + esc(payMethodName(p) || p.method) +
+          (Number(p.amount) > 0 ? "<span><b>" + esc(peso(p.amount)) + "</b> · " + esc(KIND_NAMES[p.kind] || "payment") + " · " + esc(payMethodName(p) || p.method)
+            : "<span><b>Extra proof uploaded</b> · no amount added") +
           (isX ? ' <span class="pay-tag">paid online · no screenshot needed</span>' : "") +
           '<br><span class="muted">' + esc(fmtDateTime(p.verified_at || p.created_at)) +
           (p.status === "verified" ? " · verified" + (p.verified_by && !isX ? " by " + esc(p.verified_by) : "") : " · waiting to be checked") +
