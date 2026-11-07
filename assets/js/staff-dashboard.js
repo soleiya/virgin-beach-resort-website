@@ -1315,6 +1315,38 @@
     if (dtMail) dtMail.refresh();
   }
 
+
+  // ---------- emails sent for a booking (booking_email_log), newest first ----------
+  var MAIL_KINDS = {
+    guest_quote: "Booking received / quotation", guest_confirmed: "Booking confirmed", guest_changed: "Changes to the reservation",
+    guest_cancelled: "Booking cancelled", guest_expired: "Cancelled — payment not received", pay_reminder: "Payment reminder (before the deadline)",
+    proof_guest: "Payment proof received", proof_rejected: "Payment proof not verified", payment_received: "Payment receipt",
+    paid_in_full: "Fully paid", balance_due: "Balance reminder", balance_overdue_guest: "Balance overdue",
+    staff_new: "Staff alert — new booking", staff_new_monitor: "Staff alert — new booking", proof_staff: "Staff alert — proof to verify",
+    docs_staff: "Staff alert — IDs / documents", balance_overdue_staff: "Staff alert — balance overdue", staff_expired: "Staff alert — auto-cancelled",
+    overpaid_staff: "Staff alert — overpaid",
+  };
+  function renderEmailLog(fieldId, listId, bookingId) {
+    var field = document.getElementById(fieldId), el = document.getElementById(listId);
+    if (!field || !el) return;
+    field.hidden = !bookingId;
+    if (!bookingId) return;
+    el.innerHTML = '<div class="ml-empty">Loading…</div>';
+    sb.from("booking_email_log").select("kind,recipient,subject,status,error,created_at,sent_at").eq("booking_id", bookingId)
+      .order("created_at", { ascending: false }).limit(100).then(function (res) {
+        if (res.error) { el.innerHTML = '<div class="ml-empty">Couldn\'t load the email log.</div>'; return; }
+        var rows = res.data || [];
+        if (!rows.length) { el.innerHTML = '<div class="ml-empty">No emails sent for this booking yet.</div>'; return; }
+        el.innerHTML = rows.map(function (m) {
+          var base = String(m.kind || "").split(":")[0], staff = /staff/.test(base);
+          var st = m.status === "sent" ? "sent" : m.status === "failed" ? "failed" : "pending";
+          return '<div class="ml-row' + (staff ? " ml-staff" : "") + '"><span class="ml-when">' + esc(fmtDateTime(m.sent_at || m.created_at)) + "</span>" +
+            '<span class="ml-what"><b>' + esc(MAIL_KINDS[base] || base.replace(/_/g, " ")) + "</b><small>to " + esc(m.recipient || "—") +
+            (m.error ? " · " + esc(String(m.error).slice(0, 120)) : "") + "</small></span>" +
+            '<span class="ml-st ' + st + '">' + (st === "sent" ? "Sent" : st === "failed" ? "Failed" : "Sending") + "</span></div>";
+        }).join("");
+      });
+  }
   // Payment section of the edit form: every payment already received (Xendit
   // online payments are recorded automatically with their channel + invoice),
   // any open Xendit payment link, then the uploaded proofs / IDs.
@@ -1721,6 +1753,7 @@
       paymentField.style.display = "block";
       notifyEl.checked = true;
       renderPayExisting(r);
+      renderEmailLog("addMailLogField", "addMailLog", r.id);
       $("addChannel").value = r.source || "other";
       $("addType").value = r.stay_type || "day_trip";
       $("addStatus").value = r.status || "pending";
@@ -1757,6 +1790,7 @@
       modalSub.textContent = "For a request that came in outside the website — Messenger, phone, walk-in, etc.";
       saveBookingBtn.textContent = "Save Booking";
       staffNotesField.style.display = "none";
+      renderEmailLog("addMailLogField", "addMailLog", null);
       paymentField.style.display = "none";
       // A new booking always starts at the first step, like creating one in
       // Cloudbeds; payment / confirmation move it on from there.
@@ -2639,6 +2673,7 @@
 
   // Shared with staff-villas.js (overnight bookings, villa calendar).
   window.VBRDash = {
+    renderEmailLog: renderEmailLog,
     sb: sb,
     rows: function () { return allRows; },
     reload: loadBookings,

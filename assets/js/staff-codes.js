@@ -259,6 +259,14 @@
         if ($("bwStayUntil")) $("bwStayUntil").value = s.villa_bookings_open_until || "";
         $("bwDining").value = s.dining_cabanas_per_day != null ? s.dining_cabanas_per_day : 43;
         $("bwLounge").value = s.lounge_cabanas_per_day != null ? s.lounge_cabanas_per_day : 6;
+        if ($("bwAutoExpire")) {
+          $("bwAutoExpire").checked = s.auto_expire !== false;
+          $("bwRemind").value = String(s.pay_reminder_hours != null ? s.pay_reminder_hours : 6);
+          $("bwExpiryAll").checked = s.expiry_email_all !== false;
+          $("bwExpiryStaff").checked = s.expiry_staff_alert !== false;
+          $("bwAutoExpire").disabled = $("bwRemind").disabled = $("bwExpiryAll").disabled = $("bwExpiryStaff").disabled = s.auto_expire === undefined;
+          if (s.auto_expire === undefined) werr("Payment-deadline options need the database update booking-v45-payment-deadline-options.sql.");
+        }
         $("bwInfo").textContent = s.updated_by ? "Last changed by " + s.updated_by + " on " + D.fmtDate(String(s.updated_at).slice(0, 10)) + "." : "";
       });
     });
@@ -271,9 +279,16 @@
       $("bwSave").disabled = true;
       var upd = { bookings_open_until: v, dining_cabanas_per_day: dn, lounge_cabanas_per_day: ln };
       if ($("bwStayUntil")) upd.villa_bookings_open_until = $("bwStayUntil").value || null;
+      if ($("bwAutoExpire") && !$("bwAutoExpire").disabled) {
+        if (!$("bwAutoExpire").checked && !confirm("Turn off automatic cancellation? Unpaid bookings will then hold their cabanas / casitas until staff cancel them.")) { $("bwSave").disabled = false; return; }
+        upd.auto_expire = $("bwAutoExpire").checked;
+        upd.pay_reminder_hours = parseInt($("bwRemind").value, 10) || 0;
+        upd.expiry_email_all = $("bwExpiryAll").checked;
+        upd.expiry_staff_alert = $("bwExpiryStaff").checked;
+      }
       sb.from("booking_settings").update(upd).eq("id", 1).then(function (res) {
         $("bwSave").disabled = false;
-        if (res.error) return werr(/villa_bookings_open_until/.test(res.error.message) ? "Needs the database update booking-v36-cloudbeds-rates.sql." : /dining_cabanas_per_day/.test(res.error.message) ? "Needs the database update booking-v29-cabanas-by-count.sql." : "Couldn't save: " + res.error.message);
+        if (res.error) return werr(/auto_expire|pay_reminder|expiry_/.test(res.error.message) ? "Needs the database update booking-v45-payment-deadline-options.sql." : /villa_bookings_open_until/.test(res.error.message) ? "Needs the database update booking-v36-cloudbeds-rates.sql." : /dining_cabanas_per_day/.test(res.error.message) ? "Needs the database update booking-v29-cabanas-by-count.sql." : "Couldn't save: " + res.error.message);
         if (D.setStock) D.setStock({ dining: dn, lounge: ln });
         var sv = upd.villa_bookings_open_until;
         $("bwInfo").textContent = (v ? "Saved — day trips up to " + D.fmtDate(v) : "Saved — day trips: no date limit") +

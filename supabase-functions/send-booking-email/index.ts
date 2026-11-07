@@ -40,6 +40,11 @@
 //   Unpaid at the payment deadline — booked + 24 h, never later than 8:00 AM
 //   on the trip date (process_booking_deadlines cron → status 'expired')
 //     → GUEST:  "Cancelled · payment not received", hold released  (kind: guest_expired)
+//               v45: every guest with an email when "email every guest" is on
+//               (staff-entered bookings and villas in Cloudbeds too)
+//     → STAFF:  "Auto-cancelled — no payment"  (kind: staff_expired), if on
+//   N hours before that deadline (v45, PAY_REMINDER from the cron)
+//     → GUEST:  "Please pay by … or the booking is released"  (kind: pay_reminder)
 //
 //   Balance due 15 days before arrival (types BALANCE_DUE / BALANCE_OVERDUE)
 //     → GUEST:  balance reminder  (kind: balance_due / balance_overdue_guest)
@@ -1888,14 +1893,91 @@ async function onCancelled(r: Any) {
   return await send({ booking: r, kind: "guest_cancelled", to: String(r.guest_email).trim(), subject: g.subject, html: g.html, thread: "guest" });
 }
 
+// v45: payment-deadline options, set by staff in the dashboard (booking_settings)
+type DeadlineSettings = { auto_expire: boolean; expiry_email_all: boolean; pay_reminder_hours: number; expiry_staff_alert: boolean };
+async function deadlineSettings(): Promise<DeadlineSettings> {
+  const d: DeadlineSettings = { auto_expire: true, expiry_email_all: true, pay_reminder_hours: 6, expiry_staff_alert: true };
+  try {
+    const c = cfg();
+    const res = await fetch(`${c.supabaseUrl}/rest/v1/booking_settings?id=eq.1&select=*`, { headers: { apikey: c.serviceKey, Authorization: `Bearer ${c.serviceKey}` } });
+    const row = (await res.json())?.[0] || {};
+    for (const k of Object.keys(d) as (keyof DeadlineSettings)[]) if (row[k] !== undefined && row[k] !== null) (d as Any)[k] = row[k];
+  } catch (_) { /* defaults */ }
+  return d;
+}
+// with "email every guest" on, staff-entered bookings and website villas already in Cloudbeds are included
+function deadlineGate(r: Any, c: ReturnType<typeof cfg>, all: boolean): { skipped: string } | null {
+  if (r.cb_owned === true) return { skipped: "made in Cloudbeds" };
+  if (!r.guest_email || !EMAIL_RE.test(String(r.guest_email).trim())) return { skipped: "no valid guest email" };
+  if (!all) { if (inCloudbeds(r)) return CB_SKIP; return guestGate(r, c); }
+  return null;
+}
+const dueFrom = (r: Any) => ({ ...r, created_at: r.pay_deadline_from || r.created_at });
+
+export function guestPayReminderEmail(r: Any, c: ReturnType<typeof cfg>) {
+  const first = esc(String(r.guest_name || "there").trim().split(/\s+/)[0]);
+  const dl = finalDeadline(dueFrom(r));
+  const body = `${p(`Hi ${first},`)}
+${p(`A friendly reminder: we're still holding ${isOvernight(r) ? "your casita(s)" : "your cabana(s)"} for reservation <strong>${esc(r.order_code || "")}</strong>, but we haven't received a payment yet. Please pay <strong>by ${esc(dl.label)}</strong> &mdash; after that the booking is cancelled automatically and ${isOvernight(r) ? "the casita(s) released" : "the cabana(s) released"} to other guests.`)}
+${statusBox([
+    ["Booking ID", esc(r.order_code || "—")],
+    [isOvernight(r) ? "Stay" : "Date", esc(isOvernight(r) ? stayRange(r) : fmtDate(r.check_in, "short"))],
+    ["Total", esc(peso(r.total_amount))],
+    ["Pay by", `<strong>${esc(dl.label)}</strong>`],
+  ])}
+${button(uploadUrl(r, c), "Pay now or upload your proof")}
+${p("Already paid by GCash or bank transfer? Upload the screenshot on the same page, or reply to this email with it attached, and we'll keep your booking.", "margin-top:14px;")}
+${signature(c)}`;
+  return {
+    subject: "Re: " + guestSubject(r, c),
+    html: shell({ preheader: `Payment reminder — please pay by ${dl.label} to keep ${r.order_code}`, body, c }),
+  };
+}
+
+export function staffExpiredEmail(r: Any, c: ReturnType<typeof cfg>, guestNote: string) {
+  const dash = `${c.site}/staff/index.html?q=${encodeURIComponent(r.order_code || "")}`;
+  const body = `${statusBox([
+    ["Booking ID", esc(r.order_code || "—")],
+    [isOvernight(r) ? "Stay" : "Date", esc(isOvernight(r) ? stayRange(r) : fmtDate(r.check_in, "short"))],
+    ["Total", esc(peso(r.total_amount))],
+  ])}
+${p(`<strong>${esc(r.guest_name)}</strong>'s booking was <strong>cancelled automatically</strong> &mdash; no payment by the deadline. ${isOvernight(r) ? "The casita(s) are" : "The cabana(s) are"} free again.`)}
+${p(esc(guestNote))}
+${p("If the guest paid another way, record the payment in the dashboard and set the status back to Confirmed.")}
+<p style="margin-top:16px;">${button(dash, "Open in staff dashboard")}</p>`;
+  return {
+    subject: "Re: " + staffSubject(r, c),
+    html: shell({ preheader: `Auto-cancelled — no payment for ${r.order_code}`, body, c, internal: true }),
+  };
+}
+
 async function onExpired(r: Any) {
   const c = cfg();
-  if (inCloudbeds(r)) return CB_SKIP;
-  const skip = guestGate(r, c);
-  if (skip) return skip;
+  const s = await deadlineSettings();
+  const out: Record<string, unknown> = {};
   if (r.status !== "expired") return { skipped: "no longer expired" };
-  const g = guestExpiredEmail(r, c);
-  return await send({ booking: r, kind: "guest_expired", to: String(r.guest_email).trim(), subject: g.subject, html: g.html, thread: "guest" });
+  const skip = deadlineGate(r, c, s.expiry_email_all);
+  if (!skip) {
+    const g = guestExpiredEmail(r, c);
+    out.guest = await send({ booking: r, kind: "guest_expired", to: String(r.guest_email).trim(), subject: g.subject, html: g.html, thread: "guest" });
+  } else out.guest = skip;
+  if (s.expiry_staff_alert && !r.cb_owned) {
+    const note = skip ? `The guest was not emailed (${skip.skipped}).` : `The guest has been emailed that the booking was cancelled for non-payment.`;
+    const m = staffExpiredEmail(r, c, note);
+    out.staff = await send({ booking: r, kind: "staff_expired", to: c.staffEmails, subject: m.subject, html: m.html, thread: "staff" });
+  }
+  return out;
+}
+
+async function onPayReminder(r: Any) {
+  const c = cfg();
+  const s = await deadlineSettings();
+  if (!(s.pay_reminder_hours > 0)) return { skipped: "reminders off" };
+  if (!["pending", "pending_payment"].includes(r.status)) return { skipped: "not pending" };
+  const skip = deadlineGate(r, c, s.expiry_email_all);
+  if (skip) return skip;
+  const g = guestPayReminderEmail(r, c);
+  return await send({ booking: r, kind: "pay_reminder", to: String(r.guest_email).trim(), subject: g.subject, html: g.html, thread: "guest" });
 }
 
 // PROOF_REJECTED: { record: {id}, payment_id, reason?, deadline? (ISO) }
@@ -2058,6 +2140,7 @@ export async function handle(req: Request): Promise<Response> {
     if (payload.type === "PAYMENT_RECEIVED") out.receipt = await onPaymentReceived(r, payload);
     if (payload.type === "OVERPAID") out.overpaid = await onOverpaid(r, payload);
     if (payload.type === "PROOF_REJECTED") out.rejected = await onProofRejected(r, payload);
+    if (payload.type === "PAY_REMINDER") out.reminder = await onPayReminder(r);
     if (payload.type === "UPDATE") {
       // Staff ticked "Send this booking to the guest" — the dashboard flips
       // email_guest after the cabanas are attached, so the quote lists them.

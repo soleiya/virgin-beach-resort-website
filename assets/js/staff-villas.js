@@ -102,6 +102,7 @@
     editing = row && row.id ? row : null;
     preset = preset || {};
     var r = editing || {};
+    if (D.renderEmailLog) D.renderEmailLog("vMailLogField", "vMailLog", editing ? r.id : null);
     $("villaModalTitle").textContent = editing ? "Edit Villa Booking" + (r.order_code ? " · " + r.order_code : "") : "New Villa Booking";
     $("villaModalSub").textContent = editing ? "Changes are saved to the activity log under your name." : "Overnight stay in one or more casitas. Priced from the same rate sheet as the website.";
     saveBtn.textContent = editing ? "Save Changes" : "Save Booking";
