@@ -53,10 +53,10 @@
     cloudbeds: "Cloudbeds booking engine", booking_com: "Booking.com", agoda: "Agoda", expo: "Expo", events: "Wedding / Events",
     corporate: "Corporate", partner: "Partner / Referral", returnee: "Returning guest", staff_stay: "Employee / friend stay",
   };
-  var STATUS_ORDER = ["pending", "pending_payment", "confirmed", "declined", "completed", "expired"];
+  var STATUS_ORDER = ["pending", "pending_payment", "downpaid", "confirmed", "completed", "declined", "expired"];
   // One vocabulary everywhere — dashboard, guest emails and Cloudbeds.
   var STATUS_LABELS = {
-    pending: "Payment Pending", pending_payment: "Payment Under Review", confirmed: "Confirmed",
+    pending: "Unpaid", pending_payment: "Proof uploaded · to check", downpaid: "Confirmed · Downpaid", confirmed: "Confirmed · Paid",
     declined: "Cancelled", completed: "Completed", expired: "Cancelled · not paid",
   };
   // Villas show exactly Cloudbeds' six statuses, in Cloudbeds' words. A
@@ -78,7 +78,15 @@
   }
   function statusLabel(r) {
     if (r && r.stay_type === "overnight") return VILLA_LABELS[villaStatusKey(r)] || r.status;
+    if (r && r.status === "pending") return pendingLabel(r);
+    if (r && r.status === "confirmed" && isDownpaid(r)) return STATUS_LABELS.downpaid;
     return STATUS_LABELS[r.status] || r.status;
+  }
+  // day trips: confirmed with a down payment, balance still to pay
+  function isDownpaid(r) { return r.status === "confirmed" && Number(r.amount_paid) > 0 && r.total_amount != null && Number(r.amount_paid) < Number(r.total_amount) - 0.5; }
+  // day trips: who made it, then "Unpaid"
+  function pendingLabel(r) {
+    return originOf(r) === "site_guest" ? "Customer Booked · Unpaid" : originOf(r) === "site_staff" ? "Staff Booked · Unpaid" : "Booked · Unpaid";
   }
   // Bookings that no longer hold their cabana(s).
   function releasesCabanas(status) { return status === "declined" || status === "expired"; }
@@ -507,7 +515,7 @@
         if (dTo && d > dateOnly(dTo)) return false;
       }
 
-      if (fStatus && (isVillaRow(r) ? villaStatusKey(r) : r.status) !== fStatus) return false;
+      if (fStatus && (isVillaRow(r) ? villaStatusKey(r) : r.status === "confirmed" && isDownpaid(r) ? "downpaid" : r.status) !== fStatus) return false;
       if (fType && r.stay_type !== fType) return false;
       if (fBookedBy && r.booked_by !== fBookedBy) return false;
       if (fSource && (r.source || "website") !== fSource) return false;
@@ -1384,6 +1392,9 @@
   function setRecBox(r) {
     var amt = $("addRecAmount"); if (!amt) return;
     $("addRecMsg").textContent = ""; $("addRecMsg").className = "sp-rec-msg"; $("addRecNote").value = "";
+    $("addRecFile").value = ""; $("addRecFileName").textContent = "Attach screenshot / receipt photo *"; $("addRecFile").parentNode.classList.remove("has");
+    var po = $("addStatusPendingOpt"); if (po) po.textContent = r && r.id ? pendingLabel(r) : "Staff Booked · Unpaid";
+    var co = $("addStatusConfirmedOpt"); if (co) co.textContent = r && r.id && isDownpaid(r) ? "Confirmed · Downpaid (balance due)" : "Confirmed · Paid";
     var isNew = !r || !r.id;
     var owe = isNew ? null : (Number(r.total_amount) || 0) - (Number(r.amount_paid) || 0);
     var show = isNew || (["pending", "pending_payment", "confirmed", "completed"].indexOf(r.status) >= 0 && owe > 0.5) || r.status === "expired";
@@ -1393,20 +1404,33 @@
     amt.value = isNew ? "" : owe > 0.5 ? String(Math.round(owe * 100) / 100) : "";
     $("addRecMethod").value = (isNew ? $("addChannel").value === "walk_in" : r.source === "walk_in") ? "cash" : "transfer";
   }
+  // v50: a staff-recorded payment always carries its screenshot / receipt photo
   function recordPayment(row, amount, done) {
     var paid = Number(row.amount_paid) || 0, owe = (Number(row.total_amount) || 0) - paid;
-    return sb.rpc("staff_record_payment", { p_booking_id: row.id, p_amount: amount, p_kind: recKind(paid, owe, amount),
-      p_method: $("addRecMethod").value, p_note: $("addRecNote").value.trim() || null }).then(function (res) {
-      if (done) done(res.error);
-      return res.error;
-    });
+    var file = $("addRecFile").files && $("addRecFile").files[0];
+    var fail = function (e) { if (done) done(e); return e; };
+    if (!file) return Promise.resolve(fail({ message: "Attach the payment screenshot or a photo of the receipt." }));
+    return uploadProof(row, file).then(function (path) {
+      return sb.rpc("staff_record_payment_proof", { p_booking_id: row.id, p_amount: amount, p_kind: recKind(paid, owe, amount),
+        p_method: $("addRecMethod").value, p_note: $("addRecNote").value.trim() || null, p_path: path }).then(function (res) {
+        var e = res.error ? (/staff_record_payment_proof/.test(res.error.message) ? { message: "Needs the database update booking-v50-record-payment-with-proof.sql." } : res.error) : null;
+        if (done) done(e);
+        return e;
+      });
+    }, function (e) { return fail({ message: "Couldn't upload the screenshot: " + (e && e.message || e) }); });
   }
+  $("addRecFile") && $("addRecFile").addEventListener("change", function () {
+    var f = this.files && this.files[0];
+    $("addRecFileName").textContent = f ? "✓ " + f.name : "Attach screenshot / receipt photo *";
+    this.parentNode.classList.toggle("has", !!f);
+  });
   $("addChannel").addEventListener("change", function () { if (!editingRow && $("addRecMethod")) $("addRecMethod").value = $("addChannel").value === "walk_in" ? "cash" : "transfer"; });
   $("addRecBtn") && $("addRecBtn").addEventListener("click", function () {
     var r = editingRow; if (!r) return;
     var amount = Number($("addRecAmount").value);
     var msg = $("addRecMsg");
     if (!(amount > 0)) { msg.className = "sp-rec-msg err"; msg.textContent = "Enter the amount received."; return; }
+    if (!($("addRecFile").files && $("addRecFile").files[0])) { msg.className = "sp-rec-msg err"; msg.textContent = "Attach the payment screenshot or a photo of the receipt."; return; }
     $("addRecBtn").disabled = true;
     var revive = r.status === "expired";
     recordPayment(r, amount, function (err) {
@@ -2016,6 +2040,14 @@
     if (vals.pet_count > 2) return showFormError("A maximum of two pets are permitted per reservation.");
     if (!vals.guest_name) return showFormError("Guest name is required.");
     if (vals.senior_count > vals.adults) return showFormError("Senior citizens are counted within adults — senior count can't be more than adults.");
+    var recAmt = Number($("addRecAmount") && $("addRecAmount").value) || 0, recFile = $("addRecFile") && $("addRecFile").files && $("addRecFile").files[0];
+    if (!editingRow && recAmt > 0 && !recFile) return showFormError("Paid now? Attach the payment screenshot or a photo of the receipt, or clear the amount.");
+    // v50: "Confirmed · Paid" needs evidence — a recorded payment (screenshot or Xendit) or one being recorded now
+    if ((vals.stay_type !== "overnight") && (vals.status === "confirmed" || vals.status === "completed") &&
+        !(editingRow && editingRow.status === vals.status) &&
+        !(editingRow && Number(editingRow.amount_paid) > 0) && !(recAmt > 0 && recFile)) {
+      return showFormError("To mark this Confirmed · Paid, record the payment with its screenshot (or wait for the online Xendit payment). Use “Record a payment received” in the Status & Payment box.");
+    }
     // Day trips need a cabana with a seat for everyone (Dining seats 10, Lounge 4) — same rule as online bookings.
     // Checked on new bookings, and on edits that change the party or the cabanas.
     if (vals.stay_type === "day_trip" || vals.stay_type === "half_day") {

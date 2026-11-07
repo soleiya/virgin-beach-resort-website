@@ -540,6 +540,9 @@
   .sp-rec-row { display: grid; grid-template-columns: 140px 190px 1fr auto; gap: 8px; align-items: center; }
   .sp-rec-msg { margin: 6px 0 0; font-size: .82rem; } .sp-rec-msg.ok { color: #1f6e5a; font-weight: 600; } .sp-rec-msg.err { color: #9b2c2c; }
   @media (max-width: 760px) { .sp-rec-row { grid-template-columns: 1fr 1fr; } }
+  .sp-rec-row2 { display: flex; gap: 8px; align-items: center; justify-content: space-between; margin-top: 8px; flex-wrap: wrap; }
+  .sp-file { display: inline-flex; align-items: center; gap: 6px; font-size: .84rem; border: 1px dashed #9cc6b9; border-radius: 8px; padding: 6px 10px; cursor: pointer; background: #f6fbf9; }
+  .sp-file input { max-width: 210px; } .sp-file.has { border-style: solid; border-color: #2f7d6d; }
   .party-box { border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; margin: 14px 0 4px; background: var(--surface); }
   .party-head { font-size: .78rem; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--ink-soft); margin-bottom: 8px; }
   .party-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
@@ -932,11 +935,11 @@
         <div class="modal-field" style="margin-bottom:0;" id="addStatusField">
           <label for="addStatus">Status <span class="modal-lock" id="addStatusLock" hidden>&middot; new bookings start here</span></label>
           <select id="addStatus">
-            <option value="pending">Payment Pending</option>
-            <option value="pending_payment">Payment Under Review (proof to check)</option>
-            <option value="confirmed">Confirmed (paid or down payment)</option>
+            <option value="pending" id="addStatusPendingOpt">Staff Booked &middot; Unpaid</option>
+            <option value="pending_payment">Proof uploaded &middot; to check</option>
+            <option value="confirmed" id="addStatusConfirmedOpt">Confirmed &middot; Paid</option>
             <option value="declined">Cancelled</option>
-            <option value="completed">Completed (visited)</option>
+            <option value="completed">Completed</option>
             <option value="expired">Cancelled · not paid</option>
           </select>
         </div>
@@ -944,11 +947,14 @@
         </div>
         <p class="sp-rule" id="addPayRule"></p>
         <div class="sp-rec" id="addRecBox">
-          <div class="sp-rec-title" id="addRecTitle">Record a payment received <span class="muted">(cash / GCash / card at the gate, bank transfer &mdash; no screenshot needed)</span></div>
+          <div class="sp-rec-title" id="addRecTitle">Record a payment received <span class="muted">(screenshot or photo of the receipt required &middot; online Xendit payments are recorded automatically)</span></div>
           <div class="sp-rec-row">
             <input id="addRecAmount" type="number" min="0" step="0.01" placeholder="Amount (&#8369;)">
-            <select id="addRecMethod"><option value="cash">Cash</option><option value="transfer">GCash / bank transfer</option><option value="card">Card at the resort</option><option value="link">Payment link (Xendit)</option><option value="other">Other</option></select>
+            <select id="addRecMethod"><option value="cash">Cash</option><option value="transfer">GCash / bank transfer</option><option value="card">Card at the resort</option><option value="other">Other</option></select>
             <input id="addRecNote" type="text" maxlength="80" placeholder="Ref. no. / note (optional)">
+          </div>
+          <div class="sp-rec-row2">
+            <label class="sp-file"><input id="addRecFile" type="file" accept="image/*,application/pdf"> <span id="addRecFileName">Attach screenshot / receipt photo *</span></label>
             <button type="button" class="btn-sm primary" id="addRecBtn">Record payment</button>
           </div>
           <p class="sp-rec-msg" id="addRecMsg"></p>
@@ -956,10 +962,8 @@
       <div class="modal-field" id="addPaymentField">
         <label>Payments received</label>
         <div id="addPayExisting" class="modal-pay-existing"></div>
-        <label for="addPayFile" class="pay-add-label">Or attach a screenshot as proof <span class="muted">(GCash / bank transfer &middot; saved when you click Save)</span></label>
-        <input id="addPayFile" type="file" accept="image/*,application/pdf">
-        <select id="addPayPortion" style="margin-top:8px;"><option value="full">This proof is for the full payment</option><option value="deposit">This proof is for the 50% down payment</option><option value="balance">This proof is for the remaining balance</option></select>
-        <p class="modal-hint">Saving records the payment as verified (it appears under Payments and, for villas, on the Cloudbeds folio) and confirms a pending booking.</p>
+        <div hidden><input id="addPayFile" type="file" accept="image/*,application/pdf">
+        <select id="addPayPortion" style="margin-top:8px;"><option value="full">This proof is for the full payment</option><option value="deposit">This proof is for the 50% down payment</option><option value="balance">This proof is for the remaining balance</option></select></div>
       </div>
       </section>
       <div class="modal-row">
@@ -1540,6 +1544,8 @@
     <p style="color:var(--ink-soft); font-size:0.85rem; margin:-10px 0 6px;">What the system does on its own, and what staff do. Every email sent is listed at the bottom of each booking (&ldquo;Emails sent&rdquo;); reminders and cancellations are copied to reservations@.</p>
     <h3>Day trips</h3>
     <ul>
+      <li>Statuses: <b>Staff Booked &middot; Unpaid</b> / <b>Customer Booked &middot; Unpaid</b> &rarr; <b>Proof uploaded &middot; to check</b> &rarr; <b>Confirmed &middot; Downpaid</b> (balance due) or <b>Confirmed &middot; Paid</b> &rarr; <b>Completed</b>. Cancelled / Cancelled &middot; not paid.</li>
+      <li>&ldquo;Confirmed&rdquo; needs evidence: a payment recorded with its screenshot / receipt photo, or an online Xendit payment (recorded automatically).</li>
       <li>Bookings stay on until the trip day, paid or not.</li>
       <li>Payment reminder ~20 hours after booking.</li>
       <li><b>8:00 AM on the trip day:</b> anyone not fully paid gets &ldquo;We&rsquo;re expecting you today &mdash; if you don&rsquo;t arrive and pay by 5 PM, the cabana may be released.&rdquo;</li>
@@ -1675,14 +1681,14 @@
 <script src="../assets/js/booking-config.js?v=c116a3a0ae"></script>
 <script src="../assets/js/cabana-map.js?v=3741396eca"></script>
 <script src="../assets/js/pricing.js?v=43cc9875e9"></script>
-<script src="../assets/js/staff-dashboard.js?v=91efe81c8e"></script>
+<script src="../assets/js/staff-dashboard.js?v=ddd0a6abdc"></script>
 <script src="../assets/js/staff-email.js?v=ac542441c2"></script>
 <script src="../assets/js/staff-villas.js?v=4a335284cc"></script>
 <script src="../assets/js/staff-payments.js?v=d563661be7"></script>
 <script src="../assets/js/staff-activity.js?v=2d41dd54bc"></script>
 <script src="../assets/js/staff-website.js?v=24ff44d3e2"></script>
 <script src="../assets/js/staff-codes.js?v=78087e53b9"></script>
-<script src="../assets/js/staff-daycal.js?v=7e6ef430fd"></script>
+<script src="../assets/js/staff-daycal.js?v=da14f65d37"></script>
 <script src="../assets/js/staff-summary.js?v=9596d523a5"></script>
 <script src="../assets/js/staff-find.js?v=4b69031a6f"></script>
 <script src="../assets/js/staff-alerts.js?v=963c58c4fb"></script>

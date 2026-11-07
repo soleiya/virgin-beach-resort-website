@@ -61,7 +61,16 @@
       b.classList.toggle("active", b.getAttribute("data-view") === st.view);
       b.setAttribute("aria-selected", b.getAttribute("data-view") === st.view ? "true" : "false");
     });
-    if (cal) draw();
+    if (cal) {
+      draw();
+      // open on today's row (not the 1st of the month) — once per opening
+      if (!st.jumped && st.year === +today().slice(0, 4) && st.month === +today().slice(5, 7)) {
+        st.jumped = true;
+        var td = today(), t = [].slice.call(panel.querySelectorAll(".dcal-day[data-date]")).filter(function (x) { return x.getAttribute("data-date") >= td; })[0],
+          sc = panel.querySelector(".dcal-scroll");
+        if (t && sc) { var head = sc.querySelector("thead"); sc.scrollTop = Math.max(0, t.offsetTop - (head ? head.offsetHeight : 0)); }
+      }
+    } else st.jumped = false;
   }
   if (viewSwitch) viewSwitch.addEventListener("click", function (e) {
     var b = e.target.closest("button[data-view]");
