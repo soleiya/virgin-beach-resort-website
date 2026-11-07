@@ -513,6 +513,10 @@ html = """<!doctype html>
   .modal-row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 14px; }
   .modal-row.three { grid-template-columns: 1fr 1fr 1fr; }
   .modal-row.four { grid-template-columns: 1fr 1fr 1fr 1fr; }
+  .nocab-why { margin: 6px 0 0 26px; padding: 8px 10px; border: 1px dashed #d9b86c; border-radius: 10px; background: #fbf4e4; display: grid; gap: 4px; }
+  .nocab-why .nocab-q { font-size: .78rem; font-weight: 700; color: #7a5a17; }
+  .nocab-why .modal-check { margin: 0; }
+  .nocab-why input[type=text] { margin: 0 0 4px 24px; max-width: 320px; }
   .party-box { border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; margin: 14px 0 4px; background: var(--surface); }
   .party-head { font-size: .78rem; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--ink-soft); margin-bottom: 8px; }
   .party-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
@@ -971,7 +975,18 @@ html = """<!doctype html>
           <p class="modal-hint" id="addCabanaLeft" style="margin-top:8px;">Pick a date</p>
         </div>
       </div>
-      <label class="modal-check" id="addNoCabanaWrap" style="margin:-4px 0 10px;"><input type="checkbox" id="addNoCabana"> Entrance only &mdash; no cabana (rare; say why in the notes)</label>
+      <div id="addNoCabanaWrap" style="margin:-4px 0 10px;">
+        <label class="modal-check"><input type="checkbox" id="addNoCabana"> Entrance only &mdash; no cabana</label>
+        <div class="nocab-why" id="addNoCabanaWhy" hidden>
+          <span class="nocab-q">Why? (pick one)</span>
+          <label class="modal-check"><input type="radio" name="addNoCabWhy" value="promo"> Promo</label>
+          <label class="modal-check"><input type="radio" name="addNoCabWhy" value="addon"> Add-on to another booking</label>
+          <input id="addNoCabRef" type="text" maxlength="40" placeholder="Booking ID (optional), e.g. VBR-27358" hidden>
+          <label class="modal-check"><input type="radio" name="addNoCabWhy" value="other"> Others</label>
+          <input id="addNoCabOther" type="text" maxlength="80" placeholder="Reason" hidden>
+          <p class="modal-hint">Promo with a free cabana? Better to add the cabana and pick <b>Waive 1 Dining / Lounge cabana</b> under Discount &mdash; it then still counts toward the day&rsquo;s cabanas.</p>
+        </div>
+      </div>
       <div class="modal-field">
         <label>Cabana no. <span class="muted">(internal use only &mdash; for our records of who sat where; optional, assign any time)</span></label>
         <p class="modal-map-status" id="addMapStatus">Pick a date to see which cabanas are free that day.</p>
@@ -987,8 +1002,17 @@ html = """<!doctype html>
             <label for="addDiscountType">Discount</label>
             <select id="addDiscountType">
               <option value="">No discount</option>
-              <option value="percent">Percent (%)</option>
-              <option value="amount">Amount (&#8369;)</option>
+              <optgroup label="Quick">
+                <option value="w_dining">Waive 1 Dining cabana</option>
+                <option value="w_lounge">Waive 1 Lounge cabana</option>
+                <option value="w_cabanas">Waive all cabanas</option>
+                <option value="w_pax">Free entrance &mdash; number of guests</option>
+                <option value="w_pets">Waive pet fee</option>
+              </optgroup>
+              <optgroup label="Custom">
+                <option value="percent">Percent (%)</option>
+                <option value="amount">Amount (&#8369;)</option>
+              </optgroup>
             </select>
           </div>
           <div class="modal-field" style="margin-bottom:0;">

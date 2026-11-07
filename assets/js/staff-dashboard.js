@@ -1467,6 +1467,31 @@
   // discount and the total. For an existing booking whose pricing inputs
   // haven't been touched, the saved total is kept as-is (older bookings were
   // priced by hand) — change anything that affects price and it's recalculated.
+  // Quick discount presets for day trips (Reservations' usual promos)
+  var DISC_PRESETS = {
+    w_dining: { reason: "Promo — 1 Dining Cabana waived", need: "Add a Dining cabana first — this waives one Dining cabana.",
+      amount: function (b) { var l = (b.cabanaLines || []).filter(function (x) { return x.kind === "dining"; })[0]; return l ? l.rate : null; } },
+    w_lounge: { reason: "Promo — 1 Lounge Cabana waived", need: "Add a Lounge cabana first — this waives one Lounge cabana.",
+      amount: function (b) { var l = (b.cabanaLines || []).filter(function (x) { return x.kind === "lounge"; })[0]; return l ? l.rate : null; } },
+    w_cabanas: { reason: "Promo — cabana(s) waived", need: "There's no cabana to waive.",
+      amount: function (b) { return b.cabanaTotal > 0 ? b.cabanaTotal : null; } },
+    w_pax: { reason: "Promo — free entrance", need: "Enter how many guests get free entrance (at most the party size).", value: "Guests free",
+      amount: function (b, n) {
+        n = Math.floor(Number(n) || 0);
+        if (n <= 0 || b.isPackage || !b.rate) return null;
+        // waive the people's own fees, adults first, then seniors, then kids 6–12
+        var heads = [], i;
+        for (i = 0; i < b.regularAdults; i++) heads.push(b.rate.adult);
+        for (i = 0; i < b.seniors; i++) heads.push(b.seniorRate);
+        for (i = 0; i < b.kids612 - (b.pwdKids || 0); i++) heads.push(b.rate.child612);
+        for (i = 0; i < (b.pwdKids || 0); i++) heads.push(b.pwdKidRate);
+        if (n > heads.length) return null;
+        return heads.slice(0, n).reduce(function (x, y) { return x + y; }, 0);
+      } },
+    w_pets: { reason: "Pet fee waived", need: "There's no pet fee on this booking.",
+      amount: function (b) { var c = b.isPackage ? b.extraPetCost : b.petCost; return c > 0 ? c : null; } },
+  };
+  var lastAutoReason = "";
   function modalPricing() {
     var type = $("addType").value;
     var bill = P.compute({
@@ -1478,6 +1503,14 @@
     if (bill.rated) {
       var kind = discTypeEl.value;
       var val = Number(discValueEl.value) || 0;
+      // quick presets → a peso amount (saved as an "amount" discount with its reason)
+      var pre = DISC_PRESETS[kind];
+      if (pre) {
+        var amt = pre.amount(bill, val);
+        if (amt == null) { out.error = pre.need; amt = 0; }
+        kind = "amount"; val = P.r2(Math.min(amt, bill.total));
+        out.preset = discTypeEl.value; out.presetAmount = val;
+      }
       if (kind && val > 0) {
         if (kind === "percent" && val > 100) out.error = "A percentage discount can't be more than 100%.";
         if (kind === "amount" && val > bill.total) out.error = "The discount is more than the total.";
@@ -1530,8 +1563,13 @@
     manualTotalWrap.hidden = rated;
     discTypeEl.disabled = !rated;
     if (!rated) discTypeEl.value = "";
-    discValueEl.disabled = discReasonEl.disabled = !rated || !discTypeEl.value;
-    $("addDiscountValueLabel").textContent = discTypeEl.value === "percent" ? "Percent (%)" : discTypeEl.value === "amount" ? "Amount (₱)" : "Value";
+    var dk = discTypeEl.value, dp = DISC_PRESETS[dk];
+    discReasonEl.disabled = !rated || !dk;
+    discValueEl.disabled = !rated || !dk || (dp && !dp.value);
+    $("addDiscountValueLabel").textContent = dk === "percent" ? "Percent (%)" : dk === "amount" ? "Amount (₱)" : dp && dp.value ? dp.value : dp ? "Amount (auto)" : "Value";
+    if (dp && !dp.value) discValueEl.value = pr.presetAmount != null ? pr.presetAmount : "";
+    // fill the guest-facing reason for a preset (unless staff typed their own)
+    if (dp && (!discReasonEl.value.trim() || discReasonEl.value === lastAutoReason)) { discReasonEl.value = dp.reason; lastAutoReason = dp.reason; }
     if (!rated) {
       billEl.innerHTML = '<div class="bill-lines">' + billRow(esc(FULL_TYPE_NAMES[b.type] || b.type), "Quoted by hand") + "</div>" +
         '<div class="bill-total"><span>Total</span><span>' + (pr.total == null ? "—" : peso(pr.total)) + "</span></div>";
@@ -1567,7 +1605,13 @@
   function plural(n, one, many) { return n + " " + (n === 1 ? one : many); }
   function renderPartyLine() {
     var nc = $("addNoCabanaWrap"), cc = $("addCabanaCounts");
-    if (nc && cc) nc.style.display = cc.style.display === "none" || !/^(day_trip|half_day)$/.test($("addType").value) ? "none" : "";
+    if (nc && cc) {
+      nc.style.display = cc.style.display === "none" || !/^(day_trip|half_day)$/.test($("addType").value) ? "none" : "";
+      var on = $("addNoCabana").checked, why = (document.querySelector('input[name="addNoCabWhy"]:checked') || {}).value;
+      $("addNoCabanaWhy").hidden = !on;
+      $("addNoCabRef").hidden = !on || why !== "addon";
+      $("addNoCabOther").hidden = !on || why !== "other";
+    }
     var el = $("addPartyLine"); if (!el) return;
     var a = intVal("addAdults"), sr = intVal("addSeniors"), k = intVal("addKids"), pk = intVal("addPwdKids"), b = intVal("addKids05");
     var total = a + k + b, bits = [];
@@ -1585,6 +1629,9 @@
     });
   }
   window.VBRRenderPartyLine = renderPartyLine;
+  ["addNoCabana"].concat([].slice.call(document.querySelectorAll('input[name="addNoCabWhy"]'))).forEach(function (el) {
+    (typeof el === "string" ? $(el) : el).addEventListener("change", renderPartyLine);
+  });
   document.querySelectorAll("#addParty input[data-stepper]").forEach(function (inp) {
     var w = document.createElement("div"); w.className = "stepper";
     inp.parentNode.insertBefore(w, inp);
@@ -1825,7 +1872,16 @@
           ? "Add a cabana — day trips need one (Dining seats 10, Lounge seats 4). Tick “Entrance only” if this guest really has none."
           : "Not enough cabana seats: " + party + " guests but " + seats + " seats (Dining 10, Lounge 4 each). Add a cabana, or tick “Entrance only”.");
       }
-      if (noCab && seats === 0 && !String(vals.staff_notes || vals.notes || "").trim()) return showFormError("Entrance only — please say why in the notes.");
+      if (noCab && seats < party) {
+        var why = (document.querySelector('input[name="addNoCabWhy"]:checked') || {}).value;
+        if (!why) return showFormError("Entrance only — pick why: Promo, Add-on to another booking, or Others.");
+        var whyText = why === "promo" ? "Promo"
+          : why === "addon" ? "Add-on to another booking" + ($("addNoCabRef").value.trim() ? " (" + $("addNoCabRef").value.trim() + ")" : "")
+          : $("addNoCabOther").value.trim();
+        if (!whyText) return showFormError("Entrance only — type the reason under Others.");
+        var tag = "[No cabana — " + whyText + "]";
+        if (String(vals.staff_notes || "").indexOf("[No cabana —") < 0) vals.staff_notes = (tag + " " + String(vals.staff_notes || "")).trim();
+      }
     }
     if ((vals.pwd_kid_count || 0) > (vals.children_6_12 || 0)) return showFormError("PWD kids are counted within Kids 6–12 — PWD kids can't be more than Kids 6–12.");
     if (assignedCount("dining") > vals.dining_cabanas || assignedCount("lounge") > vals.lounge_cabanas) {
