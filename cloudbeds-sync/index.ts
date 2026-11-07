@@ -413,12 +413,28 @@ export function byRoom(villas: Any[], adults: number[], kids: number[]) {
   };
 }
 
-export function reservationParams(b: Any, sources: Any = {}) {
+// Guests per casita as sent to Cloudbeds. `trim` = guests left out because
+// Cloudbeds' own limit for the room type is lower than the website's (the
+// website allows an extra bed; Cloudbeds refuses with "No rate found ... choose
+// fewer number of guests"). Children go first, then adults (never below 1).
+export function roomGuests(b: Any, trim = 0) {
+  const n = (b.villas || []).length || 1;
+  const adults = spread(Math.max(Number(b.adults) || 1, n), n);
+  const kids = spread((Number(b.children_6_12) || 0) + (Number(b.children_0_5) || 0), n);
+  for (let t = 0; t < trim; t++) {
+    let i = 0;
+    for (let j = 1; j < n; j++) if (adults[j] + kids[j] > adults[i] + kids[i]) i = j;
+    if (kids[i] > 0) kids[i]--; else if (adults[i] > 1) adults[i]--; else break;
+  }
+  return { adults, kids };
+}
+const CAPACITY_ERR = /fewer number of guests|allows maximum \d+ (adults|children|guests)|maximum occupancy/i;
+
+export function reservationParams(b: Any, sources: Any = {}, trim = 0) {
   const villas: Any[] = b.villas || [];
   const missing = villas.filter((v) => !v.cb_room_id || !v.cb_room_type_id).map((v) => v.unit_label);
   if (missing.length) throw new Error(`Not linked to a Cloudbeds room yet: ${missing.join(", ")} (run setup)`);
-  const adults = spread(Math.max(Number(b.adults) || 1, villas.length), villas.length);
-  const kids = spread((Number(b.children_6_12) || 0) + (Number(b.children_0_5) || 0), villas.length);
+  const { adults, kids } = roomGuests(b, trim);
   const [first, last] = splitName(b.guest_name);
   const email = String(b.guest_email || "").trim();
   return {
@@ -453,7 +469,24 @@ async function push(bookingId: string): Promise<Any> {
   let reservationId: string | null = null;
   const notes: string[] = [];
   try {
-    const created = await cb("POST", "postReservation", reservationParams(b, (await state("sources")) || {}));
+    // Cloudbeds may cap a room type below the website's limit (extra bed): then
+    // send one guest fewer at a time (children first, max 3) and note the real party
+    const sources = (await state("sources")) || {};
+    let created: Any = null, trim = 0;
+    for (;;) {
+      try { created = await cb("POST", "postReservation", reservationParams(b, sources, trim)); break; }
+      catch (e) {
+        if (trim >= 3 || !CAPACITY_ERR.test((e as Error).message)) throw e;
+        trim++;
+      }
+    }
+    if (trim) {
+      const g = roomGuests(b, trim);
+      const sent = g.adults.reduce((x: number, y: number) => x + y, 0), sentKids = g.kids.reduce((x: number, y: number) => x + y, 0);
+      notes.push(`Cloudbeds' guest limit is lower than the website's: sent ${sent} adult(s)${sentKids ? " + " + sentKids + " child(ren)" : ""}; ` +
+        `the real party is ${b.adults} adult(s)` + ((Number(b.children_6_12) || 0) + (Number(b.children_0_5) || 0) ? ` + ${(Number(b.children_6_12) || 0) + (Number(b.children_0_5) || 0)} child(ren)` : "") +
+        ` — extra bed(s) are on the folio; adjust the guest count in Cloudbeds if needed`);
+    }
     reservationId = String(created.reservationID);
     // put each room on the exact casita booked on the website
     // (Cloudbeds often assigns the room itself — then there's nothing to do)
@@ -497,7 +530,8 @@ async function push(bookingId: string): Promise<Any> {
     if (folio.state !== "done") notes.push(...folio.notes);
     await cb("POST", "postReservationNote", {
       reservationID: reservationId,
-      reservationNote: `Booked on the new website ${b.booking_origin === "site_staff" ? "by staff" + (b.booked_by ? " (" + b.booked_by + ")" : "") : "by the guest"} · Booking ID ${b.cb_ref_code ? "VBR-" + reservationId + " (temporary website code " + b.order_code + ")" : b.order_code} · ` +
+      reservationNote: (trim ? `PARTY: ${b.adults} adult(s)` + ((Number(b.children_6_12) || 0) + (Number(b.children_0_5) || 0) ? ` + ${(Number(b.children_6_12) || 0) + (Number(b.children_0_5) || 0)} child(ren)` : "") +
+        ` (more than this room type's Cloudbeds guest limit; extra bed on the folio). ` : "") + `Booked on the new website ${b.booking_origin === "site_staff" ? "by staff" + (b.booked_by ? " (" + b.booked_by + ")" : "") : "by the guest"} · Booking ID ${b.cb_ref_code ? "VBR-" + reservationId + " (temporary website code " + b.order_code + ")" : b.order_code} · ` +
         `quoted total ${peso(b.total_amount)} incl. full-board meals (meals, extras and discounts are on this folio). The guest got the quotation from the website; ` +
         `Cloudbeds' emails take it from here. Online payments (card / GCash / Maya etc. via Xendit) are posted to the Folio automatically with their Xendit reference — there is no screenshot for these. Bank-transfer screenshots uploaded on the website appear under Documents and are posted to the Folio once verified. ` +
         `Change dates, casitas, guests or status here in Cloudbeds — the website follows.`,
