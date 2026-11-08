@@ -48,7 +48,7 @@ body = f"""
   <div class="wrap page-hero-content">
     <span class="eyebrow">Book Direct &middot; Overnight</span>
     <h1>Book Your Stay</h1>
-    <p class="lede">Choose your dates and casita, tell us who's coming, and get your quotation by email right away &mdash; straight from our reservations team.</p>
+    <p class="lede">Pick your dates and casita, tell us who's coming, and book and pay online in minutes &mdash; your stay is confirmed as soon as your payment goes through.</p>
   </div>
 </section>
 
@@ -63,6 +63,7 @@ body = f"""
             <div><label for="checkIn">Check-in</label><input id="checkIn" type="date" required data-booking-date="checkin"></div>
             <div><label for="checkOut">Check-out</label><input id="checkOut" type="date" required data-booking-date="checkout"></div>
           </div>
+          <div class="stay-cal" id="stayCal" hidden></div>
           <p class="stay-nights" id="nightsLine"></p>
           <div class="request-banner" id="requestBanner" role="status" hidden>
             <p class="rb-title">Booking request &mdash; not an instant booking</p>
@@ -168,7 +169,7 @@ body = f"""
         </div>
 
         <div class="stay-step">
-          <div class="stay-step-head"><span class="stay-step-num">6</span><div><h2>Your quotation</h2></div></div>
+          <div class="stay-step-head"><span class="stay-step-num">6</span><div><h2 id="summaryTitle">Your booking summary</h2></div></div>
           <div class="code-row" id="codeRow">
             <label for="discountCode">Discount code <span class="muted">(optional)</span></label>
             <div class="code-input"><input id="discountCode" type="text" autocomplete="off" autocapitalize="characters" spellcheck="false" maxlength="30" placeholder="Enter code"><button type="button" class="btn btn-ghost" id="applyCode">Apply</button></div>
@@ -192,7 +193,7 @@ body = f"""
   <div class="wrap" style="max-width:560px; margin:0 auto;">
     <span class="eyebrow">Already booked?</span>
     <h2>Pay for your booking</h2>
-    <p class="prose mx-auto mt-lg">Pay your down payment or balance online with the Booking ID from your quotation email, and upload any Senior / PWD IDs or pet vaccination cards.</p>
+    <p class="prose mx-auto mt-lg">Pay your down payment or balance online with the Booking ID from your booking email, and upload any Senior / PWD IDs or pet vaccination cards.</p>
     <a class="btn btn-ghost mt-lg" href="../pay/index.html">Pay online</a>
   </div>
 </section>
@@ -211,9 +212,10 @@ body = f"""
 <script src="../assets/js/booking-config.js?v={asset_v('assets/js/booking-config.js')}"></script>
 <script src="../assets/js/booking-window.js?v={asset_v('assets/js/booking-window.js')}"></script>
 <script src="../assets/js/xendit-pay.js?v={asset_v('assets/js/xendit-pay.js')}"></script>
+<script src="../assets/js/stay-calendar.js?v={asset_v('assets/js/stay-calendar.js')}"></script>
 <script src="../assets/js/stay-booking.js?v={asset_v('assets/js/stay-booking.js')}"></script>
 """
 
 page("book-stay/index.html", "Book Your Stay",
-     "Book an overnight casita at Virgin Beach Resort directly — live availability, instant quotation, full-board meals included.",
+     "Book an overnight casita at Virgin Beach Resort directly — live availability, instant online booking, full-board meals included.",
      body, cta_label="Book a Day Trip", cta_href="../day-packages/index.html")
