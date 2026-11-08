@@ -871,3 +871,38 @@ form.inquiry .field-hint { font-size: 0.8rem; color: var(--ink-soft); margin-top
 }
 :root[data-theme="dark"] .request-banner, :root[data-theme="dark"] .bill-request-note, :root[data-theme="dark"] .request-agree { background: #2b2414; border-color: #6b5422; }
 :root[data-theme="dark"] .request-banner .rb-title, :root[data-theme="dark"] .villa-type.is-request .vt-avail { color: #e8c36a; }
+
+/* v52 — stay calendar (book-stay): unavailable nights can't be clicked */
+.stay-cal { margin: 14px 0 0; padding: 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
+.stay-cal[hidden] { display: none; }
+.stay-cal .sc-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 8px; }
+.stay-cal .sc-hint { margin: 0; font-size: .9rem; color: var(--ink); text-align: center; }
+.stay-cal .sc-nav { width: 36px; height: 36px; border-radius: 50%; border: 1px solid var(--line); background: transparent; color: var(--ink); font-size: 1.3rem; line-height: 1; cursor: pointer; }
+.stay-cal .sc-nav:disabled { opacity: .3; cursor: default; }
+.stay-cal .sc-months { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 18px; }
+.stay-cal .sc-title { margin: 0 0 6px; text-align: center; font-weight: 700; font-size: .95rem; color: var(--ink); }
+.stay-cal .sc-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; }
+.stay-cal .sc-dow { text-align: center; font-size: .72rem; text-transform: uppercase; letter-spacing: .04em; color: var(--ink-soft); padding: 2px 0 4px; }
+.stay-cal .sc-day { position: relative; aspect-ratio: 1 / 1; min-height: 36px; border: 0; border-radius: 8px; background: transparent; color: var(--ink); font: inherit; font-size: .9rem; cursor: pointer; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 0; }
+.stay-cal .sc-day:not(:disabled):hover { background: var(--lagoon-tint); }
+.stay-cal .sc-day.is-open .sc-num { font-weight: 600; }
+.stay-cal .sc-day:disabled { cursor: not-allowed; color: var(--ink-soft); opacity: .45; }
+.stay-cal .sc-day.is-blocked:disabled, .stay-cal .sc-day.is-full:disabled { opacity: .55; }
+.stay-cal .sc-day.is-blocked .sc-num, .stay-cal .sc-day.is-full .sc-num { text-decoration: line-through; }
+.stay-cal .sc-tag { font-size: .55rem; line-height: 1; text-transform: uppercase; letter-spacing: .03em; margin-top: 2px; }
+.stay-cal .sc-day.is-request { color: #7a5a12; }
+.stay-cal .sc-day.is-request::after { content: ""; position: absolute; bottom: 5px; width: 4px; height: 4px; border-radius: 50%; background: #c99a2e; }
+.stay-cal .sc-day.is-today .sc-num { text-decoration: underline; text-underline-offset: 3px; }
+.stay-cal .sc-day.is-range { background: var(--lagoon-tint); border-radius: 0; }
+.stay-cal .sc-day.is-start, .stay-cal .sc-day.is-end { background: var(--lagoon); color: #fff; opacity: 1; }
+.stay-cal .sc-day.is-start::after, .stay-cal .sc-day.is-end::after { display: none; }
+.stay-cal .sc-legend { display: flex; flex-wrap: wrap; gap: 6px 16px; align-items: center; margin-top: 12px; font-size: .78rem; color: var(--ink-soft); }
+.stay-cal .lg { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; }
+.stay-cal .lg-open { background: var(--lagoon); }
+.stay-cal .lg-off { background: var(--line); }
+.stay-cal .lg-req { background: #c99a2e; border-radius: 50%; }
+.stay-cal .sc-clear { margin-left: auto; border: 0; background: none; color: var(--lagoon); text-decoration: underline; font: inherit; font-size: .8rem; cursor: pointer; padding: 0; }
+@media (max-width: 480px) { .stay-cal { padding: 10px; } .stay-cal .sc-day { min-height: 40px; } }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .stay-cal .sc-day.is-request { color: #e8c36a; } :root:not([data-theme="light"]) .stay-cal .sc-day.is-start, :root:not([data-theme="light"]) .stay-cal .sc-day.is-end { color: #10140f; } }
+:root[data-theme="dark"] .stay-cal .sc-day.is-request { color: #e8c36a; }
+:root[data-theme="dark"] .stay-cal .sc-day.is-start, :root[data-theme="dark"] .stay-cal .sc-day.is-end { color: #10140f; }
