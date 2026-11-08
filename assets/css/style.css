@@ -854,3 +854,20 @@ form.inquiry .field-hint { font-size: 0.8rem; color: var(--ink-soft); margin-top
 .floor-plan .fp-table .fp-total td { font-weight: 700; border-top: 2px solid var(--line); }
 .floor-plan .fp-note { font-size: 0.85rem; color: var(--ink-soft); margin-top: 12px; max-width: 46ch; }
 @media (max-width: 760px) { .floor-plan { grid-template-columns: 1fr; } .floor-plan .fp-media { max-width: 360px; } }
+
+/* v51 — booking request (stays past the online booking window) */
+.request-banner { margin: 14px 0 0; padding: 14px 16px; border-radius: 10px; background: #fbf3df; border: 1px solid #e6cf94; color: var(--ink); font-size: 0.9rem; line-height: 1.5; }
+.request-banner .rb-title { margin: 0 0 6px; font-weight: 700; font-size: 0.95rem; color: #7a5a12; }
+.request-banner p { margin: 0 0 8px; }
+.request-banner ul { margin: 0; padding-left: 18px; }
+.request-banner li { margin: 2px 0; }
+.inline-check[hidden] { display: none !important; }
+.bill-request-note { background: #fbf3df; border: 1px solid #e6cf94; border-radius: 6px; padding: 10px 14px; font-size: 0.84rem; color: var(--ink); margin: 0 0 14px; }
+.villa-type.is-request .vt-avail { color: #7a5a12; }
+.request-agree { background: #fbf3df; border-radius: 8px; padding: 10px 12px; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .request-banner, :root:not([data-theme="light"]) .bill-request-note, :root:not([data-theme="light"]) .request-agree { background: #2b2414; border-color: #6b5422; }
+  :root:not([data-theme="light"]) .request-banner .rb-title, :root:not([data-theme="light"]) .villa-type.is-request .vt-avail { color: #e8c36a; }
+}
+:root[data-theme="dark"] .request-banner, :root[data-theme="dark"] .bill-request-note, :root[data-theme="dark"] .request-agree { background: #2b2414; border-color: #6b5422; }
+:root[data-theme="dark"] .request-banner .rb-title, :root[data-theme="dark"] .villa-type.is-request .vt-avail { color: #e8c36a; }
