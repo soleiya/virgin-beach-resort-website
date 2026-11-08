@@ -84,6 +84,15 @@
     return new Date(s + "T00:00:00+08:00").toLocaleDateString("en-US", { timeZone: "Asia/Manila", weekday: "short", month: "short", day: "numeric" });
   }
 
+  // ---------------------------------------------------------------- v52: calendar
+  function cal() { return window.VBRStayCalendar || null; }
+  function anyNightBlocked() {
+    var c = cal();
+    if (!c || !datesReady()) return false;
+    for (var n = checkInEl.value; n < checkOutEl.value; n = addDays(n, 1)) if (c.status(n) === "blocked") return true;
+    return false;
+  }
+
   // ---------------------------------------------------------------- v51: request mode
   function BW() { return window.VBRBookingWindow || null; }
   function requestMode() {
@@ -103,6 +112,7 @@
     if (codeRow) codeRow.hidden = req;
     if (submitHint) submitHint.innerHTML = req ? SUBMIT_HINT_REQUEST : SUBMIT_HINT_BOOK;
     billEl.classList.toggle("is-request", req);
+    if ($("summaryTitle")) $("summaryTitle").textContent = req ? "Your request estimate" : "Your booking summary";
     if (!submitBtn.disabled) submitBtn.textContent = submitLabel();
     var p = party();
     seniorIdWrap.hidden = p.seniors === 0 || req;
@@ -182,8 +192,9 @@
       if (!datesReady()) availEl.textContent = "Pick your dates to check availability";
       else if (!all.length) availEl.textContent = "Not bookable online — please call us";
       else if (requestMode()) availEl.textContent = "Available to request — we'll confirm availability";
-      else if (all.length === 1) availEl.textContent = free.length ? "Available for your dates" : "Not available for these dates — try other dates";
-      else if (!free.length) availEl.textContent = "Not available for these dates";
+      else if (!free.length && cal() && cal().typeClosed(t, checkInEl.value, checkOutEl.value)) availEl.textContent = "Blocked for these dates";
+      else if (all.length === 1) availEl.textContent = free.length ? "Available for your dates" : "Booked for these dates — try other dates";
+      else if (!free.length) availEl.textContent = "Fully booked for these dates";
       else availEl.textContent = free.length === 1 ? "1 casita left for these dates" : free.length + " available for these dates";
       card.classList.toggle("is-full", datesReady() && !free.length);
       card.classList.toggle("is-request", datesReady() && requestMode());
@@ -237,8 +248,10 @@
       return Promise.resolve();
     }
     availStatus.textContent = "Checking availability…";
-    return sb.from("public_villa_holds").select("villa_id")
-      .lt("check_in", checkOutEl.value).gt("check_out", checkInEl.value)
+    return Promise.all([
+      sb.from("public_villa_holds").select("villa_id").lt("check_in", checkOutEl.value).gt("check_out", checkInEl.value),
+      cal() ? cal().ensure(checkInEl.value, checkOutEl.value) : null,
+    ]).then(function (all) { return all[0]; })
       .then(function (res) {
         if (seq !== availSeq) return;
         if (res.error) throw res.error;
@@ -246,7 +259,9 @@
         var free = villas.filter(function (v) { return !heldIds.has(v.id); }).length;
         availStatus.textContent = free
           ? free + " of " + villas.length + " casitas are free for " + nights() + " night" + (nights() === 1 ? "" : "s") + " from " + fmtDay(checkInEl.value) + "."
-          : "Sorry — no casitas are open for online booking on these dates. Try other dates, or call us at +63 917 792 0712.";
+          : anyNightBlocked()
+            ? "These dates are blocked for online booking. Please pick other dates — available nights are the ones you can click in the calendar."
+            : "Sorry — every casita is booked for these dates. Try other dates, or call us at +63 917 792 0712.";
         // keep the guest's picks where still possible
         Object.keys(counts).forEach(function (t) { counts[t] = Math.min(counts[t], freeUnitsOfType(t).length); });
         var pre = params.get("casita");
@@ -400,7 +415,7 @@
       renderBill(res.data);
     }).catch(function () {
       if (seq !== quoteSeq) return;
-      billEl.innerHTML = '<div class="bill-lines"><div class="bill-row"><span>' + (requestMode() ? "Couldn\'t calculate an estimate just now — you can still send your request." : "Couldn\'t calculate the total just now — it will be in your quotation email.") + '</span><span>—</span></div></div>';
+      billEl.innerHTML = '<div class="bill-lines"><div class="bill-row"><span>' + (requestMode() ? "Couldn\'t calculate an estimate just now — you can still send your request." : "Couldn\'t calculate the total just now — it will be in your booking email.") + '</span><span>—</span></div></div>';
     });
   }
 
@@ -540,7 +555,7 @@
     var name = $("guestName").value.trim();
     if (!/\S+\s+\S+/.test(name)) return ["Please enter your full name (first and last).", $("guestName")];
     if (!$("guestPhone").value.trim()) return ["Please enter your mobile number.", $("guestPhone")];
-    if (!EMAIL_RE.test($("guestEmail").value.trim())) return [requestMode() ? "Please enter a valid email address — we\u2019ll reply to your request there." : "Please enter a valid email address — your quotation is sent there.", $("guestEmail")];
+    if (!EMAIL_RE.test($("guestEmail").value.trim())) return [requestMode() ? "Please enter a valid email address — we\u2019ll reply to your request there." : "Please enter a valid email address — your booking details are sent there.", $("guestEmail")];
     var rows = guestList.querySelectorAll(".guest-row:not(.is-primary)");
     var bad = null;
     companions.forEach(function (c, i) {
@@ -726,7 +741,7 @@
       '<button type="button" class="btn ' + (half ? "btn-ghost" : "btn-primary") + '" data-pay="full">Pay in full' + (total != null ? " · " + peso(total) : "") + "</button>" +
       "</div>" +
       '<p class="pay-now-error" hidden></p>' +
-      "<p>Your quotation is on its way to <strong>" + esc(payload.guest_email) + "</strong> with the same payment button. " +
+      "<p>Your booking details are on their way to <strong>" + esc(payload.guest_email) + "</strong>, with the same payment button. " +
       "Can't find it? Check Spam or Promotions, or call us at +63 917 792 0712.</p>" +
       '<p class="muted" style="font-size:0.9rem;">Need to upload a Senior / PWD ID or pet vaccination card? <a class="text-link" href="' + payUrl + '">Use the Pay &amp; Upload Documents page</a>.</p>';
     Array.prototype.forEach.call(st.querySelectorAll("[data-pay]"), function (b) {
@@ -755,5 +770,8 @@
   renderGuests();
   onPartyChanged();
   loadAddOns();
-  loadVillas().then(onDates);
+  loadVillas().then(function () {
+    if (cal() && $("stayCal")) cal().init({ sb: sb, host: $("stayCal"), checkIn: checkInEl, checkOut: checkOutEl, villas: function () { return villas; } });
+    onDates();
+  });
 })();
