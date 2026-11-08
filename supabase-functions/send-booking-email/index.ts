@@ -1717,6 +1717,65 @@ async function onInsert(r0: Any) {
   return mode === "confirmed" ? { confirmed, staff } : { guest, staff };
 }
 
+// v51: a booking REQUEST (status "inquiry") for dates past the online booking
+// window. Nothing is held or charged and it never goes to Cloudbeds, so the
+// guest gets a "request received — subject to review" note (no quotation, no
+// payment button) and staff get an alert to review it.
+export function guestInquiryEmail(r: Any, c: ReturnType<typeof cfg>) {
+  const first = esc(String(r.guest_name || "there").trim().split(/\s+/)[0]);
+  const guests = (Number(r.adults) || 0) + (Number(r.children_6_12) || 0) + (Number(r.children_0_5) || 0);
+  const body = `${p(`Hi ${first},`)}
+${p(`Thank you for your interest in Virgin Beach Resort! We've received your <strong>booking request</strong> for <strong>${esc(stayRange(r))}</strong>${guests ? ` for ${guests} guest${guests === 1 ? "" : "s"}` : ""}. It's now <strong>under review</strong> by our reservations team.`)}
+${statusBox([
+    ["Casitas requested", esc(r.room_name || "—")],
+    ["Estimated total", `${esc(peso(Number(r.total_amount) || 0))}<br><span style="color:#6b6559;font-weight:normal;">at 2026 rates</span>`],
+    ["Status", "Inquiry &mdash; not yet booked"],
+  ])}
+${p(`<strong>Please note: this is an inquiry only, not a confirmed reservation.</strong> No casita has been reserved for you yet and nothing has been charged.`)}
+${p(`The estimated total above uses our <strong>2026 rates</strong> as a guide. <strong>2027 rates are subject to change</strong>, so your final price may be different.`)}
+${p("Our reservations team will review your request and reply to this email to confirm availability and the final rate. Please don't send any payment until we've confirmed your booking.")}
+${signature(c)}`;
+  return {
+    subject: `Booking request received — ${stayRange(r)} — Virgin Beach Resort`,
+    html: shell({ preheader: "We've received your booking request — it's subject to review, nothing has been charged", body, c }),
+  };
+}
+
+function staffInquiryEmail(r: Any, c: ReturnType<typeof cfg>, guest: Any) {
+  const guests = (Number(r.adults) || 0) + (Number(r.children_6_12) || 0) + (Number(r.children_0_5) || 0);
+  const body = `${p(`<strong>New booking REQUEST from the website &mdash; not a reservation.</strong> No casita is held, nothing was sent to Cloudbeds and no payment was asked for.`)}
+${statusBox([
+    ["Reference", esc(r.order_code || "—")],
+    ["Guest", esc(r.guest_name || "—")],
+    ["Email", r.guest_email ? `<a href="mailto:${esc(r.guest_email)}">${esc(r.guest_email)}</a>` : "—"],
+    ["Mobile", esc(r.guest_phone || "—")],
+    ["Stay", esc(stayRange(r))],
+    ["Casitas requested", esc(r.room_name || "—")],
+    ["Guests", esc(`${guests} (${r.adults || 0} adult${Number(r.adults) === 1 ? "" : "s"}${Number(r.senior_count) ? `, ${r.senior_count} senior/PWD` : ""}${Number(r.children_6_12) ? `, ${r.children_6_12} child 6–12` : ""}${Number(r.children_0_5) ? `, ${r.children_0_5} child 0–5` : ""})`)],
+    ["Names", esc(r.guest_names || "—")],
+    ["Estimate shown", `${esc(peso(Number(r.total_amount) || 0))} at 2026 rates (guest told 2027 rates are subject to change)`],
+    ["Notes", esc(r.notes || "—")],
+    ["Guest email", guest?.ok ? "Request-received note sent" : esc(String(guest?.error || "not sent"))],
+  ])}
+${p("Check availability and the 2027 rate in Cloudbeds, then reply to the guest. If they go ahead, create the booking in the dashboard or Cloudbeds; otherwise set this request to Cancelled (no email is sent to the guest for a request).")}`;
+  return {
+    subject: `Booking request (inquiry) — ${stayRange(r)} — ${r.guest_name || "Guest"}`,
+    html: shell({ preheader: "New booking request — review availability and 2027 rate", body, c, internal: true }),
+  };
+}
+
+async function onInquiry(r: Any) {
+  const c = cfg();
+  let guest: Any = { ok: false, error: "no guest email on request" };
+  if (r.guest_email) {
+    const g = guestInquiryEmail(r, c);
+    guest = await send({ booking: r, kind: "guest_inquiry", to: r.guest_email, subject: g.subject, html: g.html, thread: "guest", first: true });
+  }
+  const s = staffInquiryEmail(r, c, guest);
+  const staff = await send({ booking: r, kind: "staff_inquiry", to: c.staffEmails, subject: s.subject, html: s.html, thread: "staff", first: true, replyTo: r.guest_email || undefined });
+  return { guest, staff };
+}
+
 // Every other NEW booking — made in Cloudbeds (OTAs, walk-ins) or added by
 // staff without emailing the guest — still gets the same staff alert, sent
 // only to the monitor address(es). Sheet imports and old/past stays (e.g. a
@@ -2234,6 +2293,8 @@ export async function handle(req: Request): Promise<Response> {
   const out: Record<string, unknown> = {};
 
   try {
+    // v51: booking requests — their own emails; INQUIRY_UPDATE is ignored on purpose
+    if (payload.type === "INQUIRY_INSERT") out.inquiry = await onInquiry(r);
     if (payload.type === "INSERT") out.insert = await onInsert(r);
     if (payload.type === "CHANGE") out.changed = await onChanged(r, payload);
     if (payload.type === "DOCS") out.docs = await onDocs(r, payload);
