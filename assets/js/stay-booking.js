@@ -11,6 +11,10 @@
       quotation email and the staff dashboard use.
    5. submit_overnight_booking() saves it; a database constraint makes a
       double booking impossible even if two guests click at the same time.
+   6. v51 — stays whose last night is past the casita booking window become a
+      booking REQUEST: no availability check, no casita held, priced at the
+      website's own (2026) rates as an estimate (quote_overnight_inquiry), saved
+      by submit_overnight_inquiry() for the reservations team to review.
    ========================================================================== */
 (function () {
   var form = document.getElementById("stayForm");
@@ -35,6 +39,11 @@
   var petCountEl = $("petCount"), petWrap = $("petWrap"), petVaxFilesEl = $("petVaxFiles"), petAgreeEl = $("petPolicyAgree");
   var billEl = $("billSummary"), formError = $("formError"), submitBtn = $("submitBtn");
   var addonListEl = $("addonList");
+  // v51: booking request mode
+  var requestBanner = $("requestBanner"), requestAgreeWrap = $("requestAgreeWrap"), requestAgreeEl = $("requestAgree");
+  var codeRow = $("codeRow"), submitHint = $("submitHint"), agreeTermsWrap = $("agreeTerms").closest("label");
+  var SUBMIT_HINT_BOOK = submitHint ? submitHint.innerHTML : "";
+  var SUBMIT_HINT_REQUEST = "Sending a request doesn\u2019t reserve a casita or charge you anything. Our reservations team will reply by email to confirm availability and the final 2027 rate &mdash; your booking is only made once we confirm.";
   var addOns = [];            // offered add-ons (from the add_ons table)
   var addonQty = {};          // slug -> quantity
 
@@ -75,6 +84,40 @@
     return new Date(s + "T00:00:00+08:00").toLocaleDateString("en-US", { timeZone: "Asia/Manila", weekday: "short", month: "short", day: "numeric" });
   }
 
+  // ---------------------------------------------------------------- v51: request mode
+  function BW() { return window.VBRBookingWindow || null; }
+  function requestMode() {
+    var w = BW();
+    return !!(w && w.isRequest && checkInEl.value && checkOutEl.value && w.isRequest(checkInEl.value, checkOutEl.value));
+  }
+  function submitLabel() { return requestMode() ? "Send Request" : "Book Now"; }
+  function applyMode() {
+    var req = requestMode(), w = BW();
+    form.classList.toggle("is-request", req);
+    if (requestBanner) requestBanner.hidden = !req;
+    if (req && w && w.stayLimitText) {
+      Array.prototype.forEach.call(document.querySelectorAll(".js-stay-until"), function (el) { el.textContent = w.stayLimitText(); });
+    }
+    if (requestAgreeWrap) requestAgreeWrap.hidden = !req;
+    if (agreeTermsWrap) agreeTermsWrap.hidden = req;
+    if (codeRow) codeRow.hidden = req;
+    if (submitHint) submitHint.innerHTML = req ? SUBMIT_HINT_REQUEST : SUBMIT_HINT_BOOK;
+    billEl.classList.toggle("is-request", req);
+    if (!submitBtn.disabled) submitBtn.textContent = submitLabel();
+    var p = party();
+    seniorIdWrap.hidden = p.seniors === 0 || req;
+    petWrap.hidden = pets() === 0 || req;
+  }
+  function roomsPayload() {
+    return Object.keys(counts).filter(function (t) { return counts[t] > 0; }).map(function (t) { return { room_type: t, qty: counts[t] }; });
+  }
+  function requestedText() {
+    return Object.keys(counts).filter(function (t) { return counts[t] > 0; }).map(function (t) {
+      var u = unitsOfType(t)[0];
+      return counts[t] + " \u00d7 " + (u ? u.room_type_name : t);
+    }).join(", ");
+  }
+
   // ---------------------------------------------------------------- dates
   checkInEl.min = todayManila();
   checkOutEl.min = addDays(todayManila(), 1);
@@ -85,8 +128,11 @@
     }
     var n = nights();
     nightsLine.textContent = n > 0 ? n + " night" + (n === 1 ? "" : "s") + " · " + fmtDay(checkInEl.value) + " → " + fmtDay(checkOutEl.value) : "";
+    applyMode();
     loadAvailability();
   }
+  // the live booking window arrives after the page loads
+  document.addEventListener("vbr:booking-window", function () { if (datesReady()) onDates(); });
   checkInEl.addEventListener("change", onDates);
   checkOutEl.addEventListener("change", onDates);
   var datesTracked = function () { if (checkInEl.value && checkOutEl.value && checkOutEl.value > checkInEl.value) T1("st_dates", { check_in: checkInEl.value, nights: nights() }); };
@@ -104,7 +150,7 @@
   });
 
   function unitsOfType(t) { return villas.filter(function (v) { return v.room_type === t; }); }
-  function freeUnitsOfType(t) { return unitsOfType(t).filter(function (v) { return !heldIds.has(v.id); }); }
+  function freeUnitsOfType(t) { return unitsOfType(t).filter(function (v) { return requestMode() || !heldIds.has(v.id); }); }
   function datesReady() { return nights() > 0; }
 
   function setCount(t, n) {
@@ -135,10 +181,12 @@
       var availEl = card.querySelector(".vt-avail");
       if (!datesReady()) availEl.textContent = "Pick your dates to check availability";
       else if (!all.length) availEl.textContent = "Not bookable online — please call us";
-      else if (all.length === 1) availEl.textContent = free.length ? "Available for your dates" : "Booked for these dates — try other dates";
-      else if (!free.length) availEl.textContent = "Fully booked for these dates";
+      else if (requestMode()) availEl.textContent = "Available to request — we'll confirm availability";
+      else if (all.length === 1) availEl.textContent = free.length ? "Available for your dates" : "Not available for these dates — try other dates";
+      else if (!free.length) availEl.textContent = "Not available for these dates";
       else availEl.textContent = free.length === 1 ? "1 casita left for these dates" : free.length + " available for these dates";
       card.classList.toggle("is-full", datesReady() && !free.length);
+      card.classList.toggle("is-request", datesReady() && requestMode());
       card.classList.toggle("is-picked", counts[t] > 0);
       card.querySelector(".st-count").textContent = counts[t];
       card.querySelector(".st-minus").disabled = counts[t] <= 0;
@@ -146,7 +194,10 @@
     });
     var picked = pickedVillas();
     pickedNote.hidden = !picked.length;
-    if (picked.length) {
+    if (picked.length && requestMode()) {
+      pickedNote.innerHTML = "<strong>Requesting:</strong> " + esc(requestedText()) +
+        '<br><span class="muted" style="font-size:0.8rem;">Nothing is reserved yet — our team will confirm availability by email.</span>';
+    } else if (picked.length) {
       pickedNote.innerHTML = "<strong>Holding:</strong> " + picked.map(function (v) { return esc(v.room_type_name) + " (" + esc(v.unit_label) + ")"; }).join(", ") +
         '<br><span class="muted" style="font-size:0.8rem;">Unit numbers are a preference — the resort may move you to an identical casita if needed, and will always let you know.</span>';
     }
@@ -172,6 +223,19 @@
   function loadAvailability() {
     if (!sb || !datesReady()) { heldIds = new Set(); renderTypes(); renderCapacity(); requestQuote(); return Promise.resolve(); }
     var seq = ++availSeq;
+    if (requestMode()) {
+      // v51: a request doesn't check or hold availability — the team does
+      heldIds = new Set();
+      availStatus.textContent = "Booking request: choose the casita(s) you\u2019d like for " + nights() + " night" + (nights() === 1 ? "" : "s") +
+        " from " + fmtDay(checkInEl.value) + " \u2014 our team will check availability for you.";
+      Object.keys(counts).forEach(function (t) { counts[t] = Math.min(counts[t], freeUnitsOfType(t).length); });
+      var preR = params.get("casita");
+      if (preR && counts[preR] === 0 && pickedVillas().length === 0 && freeUnitsOfType(preR).length) counts[preR] = 1;
+      renderTypes();
+      renderCapacity();
+      requestQuote();
+      return Promise.resolve();
+    }
     availStatus.textContent = "Checking availability…";
     return sb.from("public_villa_holds").select("villa_id")
       .lt("check_in", checkOutEl.value).gt("check_out", checkInEl.value)
@@ -182,7 +246,7 @@
         var free = villas.filter(function (v) { return !heldIds.has(v.id); }).length;
         availStatus.textContent = free
           ? free + " of " + villas.length + " casitas are free for " + nights() + " night" + (nights() === 1 ? "" : "s") + " from " + fmtDay(checkInEl.value) + "."
-          : "Sorry — every casita is booked for these dates. Try other dates, or call us to join the waitlist.";
+          : "Sorry — no casitas are open for online booking on these dates. Try other dates, or call us at +63 917 792 0712.";
         // keep the guest's picks where still possible
         Object.keys(counts).forEach(function (t) { counts[t] = Math.min(counts[t], freeUnitsOfType(t).length); });
         var pre = params.get("casita");
@@ -262,7 +326,7 @@
 
   function onPartyChanged() {
     var p = party();
-    seniorIdWrap.hidden = p.seniors === 0;
+    seniorIdWrap.hidden = p.seniors === 0 || requestMode();
     renderCapacity();
     requestQuote();
   }
@@ -295,7 +359,7 @@
     var n = parseInt(petCountEl.value || "0", 10) || 0;
     if (n > 2) { n = 2; petCountEl.value = 2; }
     if (n < 0) { n = 0; petCountEl.value = 0; }
-    petWrap.hidden = n === 0;
+    petWrap.hidden = n === 0 || requestMode();
     requestQuote();
   }
   petCountEl.addEventListener("input", refreshPets);
@@ -317,11 +381,18 @@
       return;
     }
     var p = party(), seq = ++quoteSeq;
-    sb.rpc("quote_overnight", {
-      p_check_in: checkInEl.value, p_check_out: checkOutEl.value, p_villa_ids: picked.map(function (v) { return v.id; }),
-      p_adults: p.adults, p_seniors: p.seniors, p_kids612: p.kids612, p_kids05: p.kids05, p_pets: pets(),
-      p_add_ons: addOnPayload(), p_online_bank: false, p_code: appliedCode || null,
-    }).then(function (res) {
+    var call = requestMode()
+      ? sb.rpc("quote_overnight_inquiry", {
+          p_check_in: checkInEl.value, p_check_out: checkOutEl.value, p_rooms: roomsPayload(),
+          p_adults: p.adults, p_seniors: p.seniors, p_kids612: p.kids612, p_kids05: p.kids05, p_pets: pets(),
+          p_add_ons: addOnPayload(),
+        })
+      : sb.rpc("quote_overnight", {
+          p_check_in: checkInEl.value, p_check_out: checkOutEl.value, p_villa_ids: picked.map(function (v) { return v.id; }),
+          p_adults: p.adults, p_seniors: p.seniors, p_kids612: p.kids612, p_kids05: p.kids05, p_pets: pets(),
+          p_add_ons: addOnPayload(), p_online_bank: false, p_code: appliedCode || null,
+        });
+    call.then(function (res) {
       if (seq !== quoteSeq) return;
       if (res.error) throw res.error;
       lastQuote = res.data;
@@ -329,7 +400,7 @@
       renderBill(res.data);
     }).catch(function () {
       if (seq !== quoteSeq) return;
-      billEl.innerHTML = '<div class="bill-lines"><div class="bill-row"><span>Couldn\'t calculate the total just now — it will be in your quotation email.</span><span>—</span></div></div>';
+      billEl.innerHTML = '<div class="bill-lines"><div class="bill-row"><span>' + (requestMode() ? "Couldn\'t calculate an estimate just now — you can still send your request." : "Couldn\'t calculate the total just now — it will be in your quotation email.") + '</span><span>—</span></div></div>';
     });
   }
 
@@ -374,11 +445,14 @@
     }).join("");
     var nightsTxt = q.nights + " night" + (q.nights === 1 ? "" : "s") +
       (q.weekend_nights ? " (" + q.weekday_nights + " weekday, " + q.weekend_nights + " weekend/peak)" : "");
+    var req = !!q.inquiry;
     billEl.innerHTML =
+      (req ? '<p class="bill-request-note"><strong>Estimate at our 2026 rates.</strong> 2027 rates are subject to change &mdash; our team will confirm the final price. This is a booking inquiry: nothing is charged now.</p>' : "") +
       '<div class="bill-lines">' + rows + "</div>" +
       (q.error ? '<p class="bill-warning">' + esc(q.error) + "</p>" : "") +
-      '<div class="bill-total"><span>Total</span><span>' + peso(q.total) + "</span></div>" +
-      '<p class="bill-sub">' + esc(nightsTxt) + " · " + q.guests + " guest" + (q.guests === 1 ? "" : "s") + " · full-board meals included. " + payTerms() + "</p>";
+      '<div class="bill-total"><span>' + (req ? "Estimated total" : "Total") + '</span><span>' + peso(q.total) + "</span></div>" +
+      '<p class="bill-sub">' + esc(nightsTxt) + " · " + q.guests + " guest" + (q.guests === 1 ? "" : "s") + " · full-board meals included. " +
+      (req ? "Final price confirmed by our reservations team." : payTerms()) + "</p>";
   }
 
   // ---------------------------------------------------------------- add-ons
@@ -466,7 +540,7 @@
     var name = $("guestName").value.trim();
     if (!/\S+\s+\S+/.test(name)) return ["Please enter your full name (first and last).", $("guestName")];
     if (!$("guestPhone").value.trim()) return ["Please enter your mobile number.", $("guestPhone")];
-    if (!EMAIL_RE.test($("guestEmail").value.trim())) return ["Please enter a valid email address — your quotation is sent there.", $("guestEmail")];
+    if (!EMAIL_RE.test($("guestEmail").value.trim())) return [requestMode() ? "Please enter a valid email address — we\u2019ll reply to your request there." : "Please enter a valid email address — your quotation is sent there.", $("guestEmail")];
     var rows = guestList.querySelectorAll(".guest-row:not(.is-primary)");
     var bad = null;
     companions.forEach(function (c, i) {
@@ -477,6 +551,11 @@
     if (bad) return ["Please enter the full name (first and last) and age group of every guest — meals are prepared and charged per person.", bad.querySelector(c0(bad))];
     var cap = capacity(), p = party();
     if (p.total > cap.max) return ["Your group is bigger than the casita(s) you picked can take — please add another casita.", document.querySelector(".st-plus:not(:disabled)")];
+    if (requestMode()) {
+      // v51: a request — IDs / vaccination cards can be sent once the booking is confirmed
+      if (!requestAgreeEl.checked) return ["Please confirm you understand this is a booking request only (subject to review, 2027 rates subject to change).", requestAgreeEl];
+      return null;
+    }
     if (p.seniors > 0 && !(seniorIdFilesEl.files && seniorIdFilesEl.files.length)) return ["Please attach a photo of the Senior Citizen / PWD ID(s) for the 20% discount.", seniorIdFilesEl];
     if (pets() > 0) {
       if (!(petVaxFilesEl.files && petVaxFilesEl.files.length)) return ["Please attach your pet's vaccination card.", petVaxFilesEl];
@@ -507,12 +586,14 @@
     formError.hidden = true;
     if (!sb) return showError("Online booking isn't available right now — please email reservations@virginbeachresort.com.");
     var problem = validate();
-    T("st_submit", { casitas: pickedVillas().length, guests: party().total, nights: nights() });
+    var isReq = requestMode();
+    T(isReq ? "st_request_submit" : "st_submit", { casitas: pickedVillas().length, guests: party().total, nights: nights() });
     if (problem) { T("st_blocked", { reason: String(problem[0]).replace(/\s*\(.*$/, "").slice(0, 100) }); return showError(esc(problem[0]), problem[1]); }
 
     submitBtn.disabled = true;
     submitBtn.textContent = "Sending…";
     var picked = pickedVillas();
+    var rooms = roomsPayload(), roomsText = requestedText();
     var p = party();
     var payload = {
       check_in: checkInEl.value,
@@ -532,6 +613,24 @@
       notes: $("notes").value.trim() || null,
       marketing_opt_in: $("marketingOptIn").checked,
     };
+    if (isReq) {
+      payload.discount_code = null;
+      return sb.rpc("submit_overnight_inquiry", { payload: payload, p_rooms: rooms }).then(function (res) {
+        if (res.error) throw res.error;
+        var row = Array.isArray(res.data) ? res.data[0] : res.data;
+        T("st_requested", { casitas: picked.length, types: rooms.map(function (r) { return r.room_type; }), guests: p.total, nights: nights(),
+          total: row && row.total != null ? Number(row.total) : null }, row && row.order_code);
+        showRequestSuccess(payload, row, roomsText, p.total);
+      }).catch(function (err) {
+        submitBtn.disabled = false;
+        submitBtn.textContent = submitLabel();
+        var msg = err && err.message ? err.message : "";
+        T("st_error", { reason: String(msg).slice(0, 120) || "unknown", request: true });
+        showError(msg && msg.length < 220 && !/fetch|network|JWT|permission|violates/i.test(msg)
+          ? esc(msg)
+          : 'Something went wrong sending your request. Please try again, or email <a class="text-link" href="mailto:reservations@virginbeachresort.com">reservations@virginbeachresort.com</a>.');
+      });
+    }
     Promise.all([
       p.seniors > 0 ? upload("senior-ids", seniorIdFilesEl.files) : Promise.resolve([]),
       pets() > 0 ? upload("pet-vaccinations", petVaxFilesEl.files) : Promise.resolve([]),
@@ -549,7 +648,7 @@
       });
     }).catch(function (err) {
       submitBtn.disabled = false;
-      submitBtn.textContent = "Book Now";
+      submitBtn.textContent = submitLabel();
       var msg = err && err.message ? err.message : "";
       T("st_error", { reason: String(msg).slice(0, 120) || "unknown" });
       if (/just booked|already booked/i.test(msg)) {
@@ -580,6 +679,25 @@
         }, function () { resolve(row); });
       })();
     });
+  }
+
+  // v51: booking request sent — clearly NOT a booking
+  function showRequestSuccess(payload, row, roomsText, guests) {
+    $("stayFormWrap").hidden = true;
+    var st = $("stayStatus");
+    st.hidden = false;
+    st.className = "form-status form-status-success";
+    var first = esc(payload.guest_name.split(" ")[0]);
+    var total = row && row.total != null ? Number(row.total) : null;
+    var n = Math.round((Date.parse(payload.check_out + "T00:00:00Z") - Date.parse(payload.check_in + "T00:00:00Z")) / 86400000);
+    st.innerHTML = "<h3>Request sent — thank you, " + first + "!</h3>" +
+      "<p><strong>This is not a confirmed booking yet.</strong> We\u2019ve received your request for " + esc(roomsText) + ", " +
+      fmtDay(payload.check_in) + " → " + fmtDay(payload.check_out) + " (" + n + " night" + (n === 1 ? "" : "s") + "), for " + guests + " guest" + (guests === 1 ? "" : "s") + ".</p>" +
+      (total != null ? "<p>Estimated total at our 2026 rates: <strong>" + peso(total) + "</strong>. <strong>2027 rates are subject to change</strong>, so the final price may be different.</p>" : "") +
+      "<p>Our reservations team will review your request and reply to <strong>" + esc(payload.guest_email) + "</strong> to confirm availability and the final rate. " +
+      "No casita is reserved and nothing has been charged &mdash; please don\u2019t send any payment until we\u2019ve confirmed your booking.</p>" +
+      "<p class=\"muted\" style=\"font-size:0.9rem;\">Can\u2019t find our email? Check Spam or Promotions, or call us at +63 917 792 0712.</p>";
+    window.scrollTo({ top: st.getBoundingClientRect().top + window.scrollY - 120, behavior: "smooth" });
   }
 
   function showSuccess(payload, row, picked) {

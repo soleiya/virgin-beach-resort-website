@@ -58,13 +58,15 @@
   var STATUS_LABELS = {
     pending: "Unpaid", pending_payment: "Proof uploaded · to check", downpaid: "Confirmed · Downpaid", confirmed: "Confirmed · Paid",
     declined: "Cancelled", completed: "Completed", expired: "Cancelled · not paid",
+    inquiry: "Booking Request (inquiry)", // v51: website request for dates past the booking window — nothing held
   };
   // Villas show exactly Cloudbeds' six statuses, in Cloudbeds' words. A
   // payment waiting to be checked is still "Confirmation Pending" (as in
   // Cloudbeds) — the Payment column shows it.
-  var VILLA_ORDER = ["pending", "confirmed", "checked_in", "checked_out", "canceled", "no_show"];
+  var VILLA_ORDER = ["inquiry", "pending", "confirmed", "checked_in", "checked_out", "canceled", "no_show"];
   var VILLA_LABELS = { pending: "Confirmation Pending", confirmed: "Confirmed", checked_in: "In-House",
-    checked_out: "Checked Out", canceled: "Canceled", no_show: "No-Show" };
+    checked_out: "Checked Out", canceled: "Canceled", no_show: "No-Show",
+    inquiry: "Booking Request (inquiry)" }; // v51: not a reservation — review, then book or cancel
   function villaStatusKey(r) {
     var cbs = r.cb_info && r.cb_info.status;
     switch (r.status) {
