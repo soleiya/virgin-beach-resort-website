@@ -67,9 +67,42 @@
     });
   }
 
+  // Upcoming rate increase: one quiet line under the dates of every booking
+  // form. Hides itself after RATE_NOTE_UNTIL (Manila date) — move or blank it
+  // when the new rates take effect.
+  var RATE_NOTE_UNTIL = "2026-12-31";
+  var RATE_NOTE = "2027 rates are scheduled to increase. Book early to secure today\u2019s rates.";
+  function manilaToday() { return new Date(Date.now() + 8 * 3600e3).toISOString().slice(0, 10); }
+  function addRateNotes() {
+    if (!RATE_NOTE_UNTIL || manilaToday() > RATE_NOTE_UNTIL) return;
+    if (!document.getElementById("bwRateCss")) {
+      var css = document.createElement("style");
+      css.id = "bwRateCss";
+      css.textContent = ".bw-rate{display:flex;gap:8px;align-items:baseline;margin:10px 0 0;font-size:.86rem;line-height:1.45;color:var(--ink-soft,#6b6559)}" +
+        ".bw-rate::before{content:\"\";flex:none;width:7px;height:7px;border-radius:50%;background:var(--driftwood,#a89a7c);transform:translateY(-1px)}" +
+        ".quickbook .bw-rate{margin:12px 0 0}";
+      document.head.appendChild(css);
+    }
+    // once per page: on the first booking form (the hero box where there is one)
+    var el = inputs()[0];
+    if (!el || document.querySelector(".bw-rate")) return;
+    (function () {
+      var form = el.closest("form");
+      if (!form) return;
+      var n = document.createElement("p");
+      n.className = "bw-rate";
+      n.textContent = RATE_NOTE;
+      var err = form.querySelector(".qb-error");
+      if (err) { err.parentNode.insertBefore(n, err); return; } // home + day-trip quick-book boxes
+      var host = el.closest("div") || el.parentNode;
+      if (host.parentNode && host.parentNode.classList && host.parentNode.classList.contains("row-2")) host = host.parentNode; // check-in + check-out side by side
+      host.parentNode.insertBefore(n, host.nextSibling);
+    })();
+  }
+
   applyMax();
-  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", function () { applyMax(); setTimeout(recheckPrefilled, 0); });
-  else setTimeout(recheckPrefilled, 0);
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", function () { applyMax(); addRateNotes(); setTimeout(recheckPrefilled, 0); });
+  else { addRateNotes(); setTimeout(recheckPrefilled, 0); }
 
   if (cfg.url && cfg.anonKey) {
     fetch(cfg.url + "/rest/v1/booking_settings?select=*&id=eq.1", {
