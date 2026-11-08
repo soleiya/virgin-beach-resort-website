@@ -67,7 +67,7 @@ body = f"""
           <p class="stay-nights" id="nightsLine"></p>
           <div class="request-banner" id="requestBanner" role="status" hidden>
             <p class="rb-title">Booking request &mdash; not an instant booking</p>
-            <p>Online booking is open for stays through <strong class="js-stay-until">31 January 2027</strong>. For these dates you can <strong>send us a booking request</strong>: our reservations team will review it and reply by email to confirm availability and the final rate.</p>
+            <p>Online booking is open for stays through <strong class="js-stay-until">December 31, 2026</strong>. For these dates you can <strong>send us a booking request</strong> (for stays up to <span class="js-request-until">December 31, 2027</span>): our reservations team will review it and reply by email to confirm availability and the final rate.</p>
             <ul>
               <li>Prices shown are our <strong>2026 rates</strong>, for reference only &mdash; <strong>2027 rates are subject to change</strong>.</li>
               <li>This is an <strong>inquiry only</strong>: no casita is reserved and nothing is charged until we confirm.</li>
