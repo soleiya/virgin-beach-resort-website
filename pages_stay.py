@@ -64,6 +64,14 @@ body = f"""
             <div><label for="checkOut">Check-out</label><input id="checkOut" type="date" required data-booking-date="checkout"></div>
           </div>
           <p class="stay-nights" id="nightsLine"></p>
+          <div class="request-banner" id="requestBanner" role="status" hidden>
+            <p class="rb-title">Booking request &mdash; not an instant booking</p>
+            <p>Online booking is open for stays through <strong class="js-stay-until">31 January 2027</strong>. For these dates you can <strong>send us a booking request</strong>: our reservations team will review it and reply by email to confirm availability and the final rate.</p>
+            <ul>
+              <li>Prices shown are our <strong>2026 rates</strong>, for reference only &mdash; <strong>2027 rates are subject to change</strong>.</li>
+              <li>This is an <strong>inquiry only</strong>: no casita is reserved and nothing is charged until we confirm.</li>
+            </ul>
+          </div>
         </div>
 
         <div class="stay-step">
@@ -161,17 +169,18 @@ body = f"""
 
         <div class="stay-step">
           <div class="stay-step-head"><span class="stay-step-num">6</span><div><h2>Your quotation</h2></div></div>
-          <div class="code-row">
+          <div class="code-row" id="codeRow">
             <label for="discountCode">Discount code <span class="muted">(optional)</span></label>
             <div class="code-input"><input id="discountCode" type="text" autocomplete="off" autocapitalize="characters" spellcheck="false" maxlength="30" placeholder="Enter code"><button type="button" class="btn btn-ghost" id="applyCode">Apply</button></div>
             <p class="code-msg" id="codeMsg" hidden></p>
           </div>
           <div id="billSummary" class="bill-summary"><div class="bill-lines"><div class="bill-row"><span>Choose dates, casita(s) and guests to see your total</span><span>&mdash;</span></div></div></div>
+          <label class="inline-check request-agree" id="requestAgreeWrap" hidden><input type="checkbox" id="requestAgree"><span>I understand this is a <strong>booking inquiry only</strong>, not a confirmed reservation. Availability and the final 2027 rate are subject to review and may change, and nothing is charged until the resort confirms my booking.</span></label>
           <label class="inline-check"><input type="checkbox" id="agreeTerms"> I understand the full-board meal package is required for every guest, and I agree to the <a class="text-link" href="../assets/docs/VBR-Reservations-Agreement.pdf" target="_blank" rel="noopener">Reservations Agreement</a> (cancellation: free 15+ days before arrival; 50% within 14 days; 100% within 7 days or no-show).</label>
           <label class="inline-check" style="font-size:0.85rem !important; color:var(--ink-soft) !important;"><input type="checkbox" id="marketingOptIn"> Send me occasional promos and updates from Virgin Beach Resort.</label>
           <div class="form-error-box" id="formError" hidden></div>
           <button class="btn btn-primary" type="submit" id="submitBtn">Book Now</button>
-          <p class="field-hint">Your casita is held for 24 hours while you pay. Right after booking you can <strong>pay 50% or 100% online</strong> — card, GCash, Maya and more, through our secure payment partner Xendit — and your stay is confirmed as soon as it goes through. The balance is due 15 days before arrival (bookings within 14 days of arrival are paid in full).</p>
+          <p class="field-hint" id="submitHint">Your casita is held for 24 hours while you pay. Right after booking you can <strong>pay 50% or 100% online</strong> — card, GCash, Maya and more, through our secure payment partner Xendit — and your stay is confirmed as soon as it goes through. The balance is due 15 days before arrival (bookings within 14 days of arrival are paid in full).</p>
         </div>
       </form>
     </div>
