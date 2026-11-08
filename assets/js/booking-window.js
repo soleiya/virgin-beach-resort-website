@@ -11,7 +11,7 @@
   "use strict";
   var FALLBACK = "2026-12-31"; // used until the live setting loads (or if it can't)
   var cfg = window.SUPABASE_CONFIG || {};
-  var W = (window.VBRBookingWindow = { until: FALLBACK, stayUntil: null });
+  var W = (window.VBRBookingWindow = { until: FALLBACK, stayUntil: null, requestUntil: null });
   // v36: casitas (data-booking-date checkin/checkout) can have their own, later
   // window (booking_settings.villa_bookings_open_until); day trips use until.
   function untilFor(kind) { return (kind === "checkin" || kind === "checkout") && W.stayUntil ? W.stayUntil : W.until; }
@@ -21,7 +21,10 @@
   function fmt(s) {
     return new Date(s + "T00:00:00Z").toLocaleDateString("en-PH", { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" });
   }
-  W.message = function (kind) { return "We're taking bookings up to " + fmt(untilFor(kind)) + " for now — later dates open soon."; };
+  W.message = function (kind) {
+    if (isStayKind(kind)) return "We're taking booking requests for stays up to " + fmt(W.requestLimit()) + " for now — please pick earlier dates.";
+    return "We're taking bookings up to " + fmt(untilFor(kind)) + " for now — later dates open soon.";
+  };
   W.limitFor = function (kind) { var u = untilFor(kind); return u ? (kind === "checkout" ? addDays(u, 1) : u) : null; };
   W.tooLate = function (value, kind) { var l = W.limitFor(kind || "visit"); return !!(l && value && value > l); };
   // v51: last night guests can book online for casitas (null = no limit)
@@ -34,6 +37,10 @@
   };
   function isStayKind(kind) { return kind === "checkin" || kind === "checkout"; }
   function farLimit() { return addDays(manilaToday(), 550); } // same 18-month cap as the database
+  // v53: last night a booking REQUEST can be sent for (booking_settings.requests_open_until)
+  W.requestLimit = function () { var f = farLimit(); return W.requestUntil && W.requestUntil < f ? W.requestUntil : f; };
+  W.requestLimitText = function () { return fmt(W.requestLimit()); };
+  function stayMax(kind) { var r = W.requestLimit(); return kind === "checkout" ? addDays(r, 1) : r; }
 
   function inputs() { return Array.prototype.slice.call(document.querySelectorAll("input[data-booking-date]")); }
   function noteFor(el, show) {
@@ -56,7 +63,13 @@
   // returns true if the value was cleared
   function check(el) {
     if (!el.value) return false; // keep any note until a good date is picked
-    if (isStayKind(el.getAttribute("data-booking-date"))) { noteFor(el, false); return false; } // v51: later stays → request
+    var sk = el.getAttribute("data-booking-date");
+    if (isStayKind(sk)) { // v51: later stays → request; v53: but not past the request window
+      var tooFar = el.value > stayMax(sk);
+      if (tooFar) el.value = "";
+      noteFor(el, tooFar);
+      return tooFar;
+    }
     var bad = W.tooLate(el.value, el.getAttribute("data-booking-date"));
     if (bad) el.value = "";
     noteFor(el, bad);
@@ -65,7 +78,7 @@
   function applyMax() {
     inputs().forEach(function (el) {
       var kind = el.getAttribute("data-booking-date");
-      var lim = isStayKind(kind) ? farLimit() : W.limitFor(kind); // v51: casitas can be requested further out
+      var lim = isStayKind(kind) ? stayMax(kind) : W.limitFor(kind); // v51/v53: casitas can be requested up to the request window
       if (lim) el.max = lim; else el.removeAttribute("max");
     });
   }
@@ -93,7 +106,7 @@
   function stayNote() {
     var u = untilFor("checkin");
     if (!u || manilaToday() > u) return "";
-    return "Online booking is open for stays through " + fmt(u) + ". For later dates, you can send us a booking request \u2014 2027 rates are subject to change.";
+    return "Online booking is open for stays through " + fmt(u) + ". For stays up to " + fmt(W.requestLimit()) + ", you can send us a booking request \u2014 2027 rates are subject to change.";
   }
   function noteText(kind) {
     if (isStayKind(kind)) return stayNote();
@@ -157,6 +170,7 @@
         if (!rows || !rows.length) return; // table not set up yet: keep the fallback
         W.until = rows[0].bookings_open_until || null;
         W.stayUntil = rows[0].villa_bookings_open_until || null;
+        W.requestUntil = rows[0].requests_open_until || null;
         applyMax();
         refreshRateNote();
         recheckPrefilled();

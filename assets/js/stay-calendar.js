@@ -46,7 +46,7 @@
 
   function BW() { return window.VBRBookingWindow || null; }
   function stayLimit() { var w = BW(); return w && w.stayLimit ? w.stayLimit() : null; }
-  function farLimit() { return addDays(todayManila(), 550); }
+  function farLimit() { var w = BW(); return w && w.requestLimit ? w.requestLimit() : addDays(todayManila(), 550); } // v53: request window
 
   // ------------------------------------------------------------ data
   function pageAll(q) {
@@ -65,7 +65,7 @@
     if (S.loaded[key]) return S.loaded[key] === true ? Promise.resolve() : S.loaded[key];
     var start = monthStart(m0), end = nextMonth(m0), lim = stayLimit();
     // nights past the online window are requests — no need to load them
-    if (lim && start > lim) { S.loaded[key] = true; return Promise.resolve(); }
+    if (lim && start > lim) return Promise.resolve(); // not cached: the live window may arrive later
     if (lim && end > addDays(lim, 1)) end = addDays(lim, 1);
     if (!S.sb) return Promise.resolve(); // not initialised yet — load later, don't cache "nothing"
     var p = Promise.all([
@@ -79,6 +79,7 @@
       });
       r[1].forEach(function (c) { if (S.closed[c.night]) S.closed[c.night].add(c.room_type); });
       S.loaded[key] = true;
+      document.dispatchEvent(new CustomEvent("vbr:calendar-data", { detail: { month: key } }));
     }).catch(function () { delete S.loaded[key]; });
     S.loaded[key] = p;
     return p;
@@ -147,7 +148,7 @@
       m = nextMonth(m);
     }
     html += '</div><div class="sc-legend"><span><i class="lg lg-open"></i>Available</span><span><i class="lg lg-off"></i>Blocked / full &mdash; not bookable</span>' +
-      (stayLimit() ? '<span><i class="lg lg-req"></i>Booking request only (after ' + fmtShort(stayLimit()) + ")</span>" : "") +
+      (stayLimit() ? '<span><i class="lg lg-req"></i>Booking request only (' + fmtShort(addDays(stayLimit(), 1)) + " \u2013 " + fmtShort(farLimit()) + ")</span>" : "") +
       (a ? '<button type="button" class="sc-clear">Clear dates</button>' : "") + "</div>";
     S.host.innerHTML = html;
   }
@@ -208,8 +209,6 @@
     S.host.addEventListener("mouseleave", function () { if (S.hover) { S.hover = null; render(); } });
     var w0 = S.host.clientWidth;
     window.addEventListener("resize", function () { if ((S.host.clientWidth >= 620) !== (w0 >= 620)) { w0 = S.host.clientWidth; refresh(); } });
-    // the live booking window arrives after load: forget months loaded with the fallback
-    document.addEventListener("vbr:booking-window", function () { S.loaded = {}; refresh(); });
     refresh();
   }
   function setView(d) { if (d) { S.view = monthStart(d); refresh(); } }
@@ -224,6 +223,10 @@
     while (m <= b) { p.push(loadMonth(m)); m = nextMonth(m); }
     return Promise.all(p);
   }
+
+  // the live booking window arrives after load: forget months loaded with the
+  // fallback window (registered now, so it runs before the booking form's own listener)
+  document.addEventListener("vbr:booking-window", function () { S.loaded = {}; if (S.host) refresh(); });
 
   window.VBRStayCalendar = { init: init, refresh: refresh, setView: setView, typeClosed: typeClosed, ensure: ensure, status: status };
 })();

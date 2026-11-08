@@ -106,6 +106,7 @@
     if (requestBanner) requestBanner.hidden = !req;
     if (req && w && w.stayLimitText) {
       Array.prototype.forEach.call(document.querySelectorAll(".js-stay-until"), function (el) { el.textContent = w.stayLimitText(); });
+      if (w.requestLimitText) Array.prototype.forEach.call(document.querySelectorAll(".js-request-until"), function (el) { el.textContent = w.requestLimitText(); });
     }
     if (requestAgreeWrap) requestAgreeWrap.hidden = !req;
     if (agreeTermsWrap) agreeTermsWrap.hidden = req;
@@ -143,6 +144,13 @@
   }
   // the live booking window arrives after the page loads
   document.addEventListener("vbr:booking-window", function () { if (datesReady()) onDates(); });
+  // v52: closed-night data arrived → refresh the "Blocked" labels
+  document.addEventListener("vbr:calendar-data", function () {
+    if (!datesReady() || requestMode()) return;
+    renderTypes();
+    var free = villas.filter(function (v) { return !heldIds.has(v.id); }).length;
+    if (!free && anyNightBlocked()) availStatus.textContent = "These dates are blocked for online booking. Please pick other dates — available nights are the ones you can click in the calendar.";
+  });
   checkInEl.addEventListener("change", onDates);
   checkOutEl.addEventListener("change", onDates);
   var datesTracked = function () { if (checkInEl.value && checkOutEl.value && checkOutEl.value > checkInEl.value) T1("st_dates", { check_in: checkInEl.value, nights: nights() }); };
