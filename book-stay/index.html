@@ -4,12 +4,12 @@
 <meta charset="utf-8">
 <title>Book Your Stay · Virgin Beach Resort</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="description" content="Book an overnight casita at Virgin Beach Resort directly — live availability, instant quotation, full-board meals included.">
+<meta name="description" content="Book an overnight casita at Virgin Beach Resort directly — live availability, instant online booking, full-board meals included.">
 <link rel="canonical" href="https://virginbeachresort.com/book-stay/">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="Virgin Beach Resort">
 <meta property="og:title" content="Book Your Stay · Virgin Beach Resort">
-<meta property="og:description" content="Book an overnight casita at Virgin Beach Resort directly — live availability, instant quotation, full-board meals included.">
+<meta property="og:description" content="Book an overnight casita at Virgin Beach Resort directly — live availability, instant online booking, full-board meals included.">
 <meta property="og:url" content="https://virginbeachresort.com/book-stay/">
 <meta property="og:image" content="https://virginbeachresort.com/assets/images/og-cover.jpg">
 <meta property="og:image:width" content="1200">
@@ -19,7 +19,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400..600;1,9..144,400..600&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="../assets/css/style.css?v=502cceec23">
+<link rel="stylesheet" href="../assets/css/style.css?v=e7bb8c59be">
 <script src="../assets/js/track.js?v=abd1f73494"></script>
 </head>
 <body>
@@ -47,7 +47,7 @@
   <div class="wrap page-hero-content">
     <span class="eyebrow">Book Direct &middot; Overnight</span>
     <h1>Book Your Stay</h1>
-    <p class="lede">Choose your dates and casita, tell us who's coming, and get your quotation by email right away &mdash; straight from our reservations team.</p>
+    <p class="lede">Pick your dates and casita, tell us who's coming, and book and pay online in minutes &mdash; your stay is confirmed as soon as your payment goes through.</p>
   </div>
 </section>
 
@@ -62,6 +62,7 @@
             <div><label for="checkIn">Check-in</label><input id="checkIn" type="date" required data-booking-date="checkin"></div>
             <div><label for="checkOut">Check-out</label><input id="checkOut" type="date" required data-booking-date="checkout"></div>
           </div>
+          <div class="stay-cal" id="stayCal" hidden></div>
           <p class="stay-nights" id="nightsLine"></p>
           <div class="request-banner" id="requestBanner" role="status" hidden>
             <p class="rb-title">Booking request &mdash; not an instant booking</p>
@@ -405,7 +406,7 @@
         </div>
 
         <div class="stay-step">
-          <div class="stay-step-head"><span class="stay-step-num">6</span><div><h2>Your quotation</h2></div></div>
+          <div class="stay-step-head"><span class="stay-step-num">6</span><div><h2 id="summaryTitle">Your booking summary</h2></div></div>
           <div class="code-row" id="codeRow">
             <label for="discountCode">Discount code <span class="muted">(optional)</span></label>
             <div class="code-input"><input id="discountCode" type="text" autocomplete="off" autocapitalize="characters" spellcheck="false" maxlength="30" placeholder="Enter code"><button type="button" class="btn btn-ghost" id="applyCode">Apply</button></div>
@@ -429,7 +430,7 @@
   <div class="wrap" style="max-width:560px; margin:0 auto;">
     <span class="eyebrow">Already booked?</span>
     <h2>Pay for your booking</h2>
-    <p class="prose mx-auto mt-lg">Pay your down payment or balance online with the Booking ID from your quotation email, and upload any Senior / PWD IDs or pet vaccination cards.</p>
+    <p class="prose mx-auto mt-lg">Pay your down payment or balance online with the Booking ID from your booking email, and upload any Senior / PWD IDs or pet vaccination cards.</p>
     <a class="btn btn-ghost mt-lg" href="../pay/index.html">Pay online</a>
   </div>
 </section>
@@ -448,7 +449,8 @@
 <script src="../assets/js/booking-config.js?v=c116a3a0ae"></script>
 <script src="../assets/js/booking-window.js?v=88a63a302b"></script>
 <script src="../assets/js/xendit-pay.js?v=f65a795c12"></script>
-<script src="../assets/js/stay-booking.js?v=b98313eacf"></script>
+<script src="../assets/js/stay-calendar.js?v=afd4d196f5"></script>
+<script src="../assets/js/stay-booking.js?v=3af620d678"></script>
 <footer class="site-footer">
   <div class="wrap">
     <div class="footer-grid">
