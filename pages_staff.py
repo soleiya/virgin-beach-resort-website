@@ -404,6 +404,50 @@ html = """<!doctype html>
   #sumList.compact .sum-l3, #sumList.compact .sum-chips span:not(.k):not(.warn) { display: none; }
   #sumList.compact .sum-card { padding: 8px 10px; }
   @media (max-width: 700px) { .sum-tiles { grid-template-columns: 1fr 1fr; } .sum-range { flex-basis: 100%; order: -1; } }
+  /* Accounting view (staff-accounting.js) */
+  #accView { display: none; }
+  body.accv #accView { display: block; max-width: 1400px; margin: 0 auto; padding: 0; }
+  body.accv #dashScreen > :not(#accView) { display: none !important; }
+  .acc-head { display: flex; flex-wrap: wrap; gap: 10px; justify-content: space-between; align-items: flex-end; margin-bottom: 12px; }
+  .acc-head h2 { margin: 0; font-size: 1.5rem; }
+  .acc-head p { margin: 2px 0 0; color: var(--ink-soft); font-size: .86rem; }
+  .acc-ctl { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-bottom: 14px; }
+  .acc-dates { display: inline-flex; align-items: center; gap: 6px; font-size: .85rem; color: var(--ink-soft); }
+  .acc-dates input { padding: 6px 8px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); color: var(--ink); font: inherit; }
+  .acc-nav { border: 1px solid var(--line); background: var(--surface); color: var(--ink); border-radius: 999px; width: 32px; height: 32px; font-size: 1.1rem; cursor: pointer; }
+  .acc-tiles { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; margin-bottom: 16px; }
+  .acc-tiles .sum-tile b { font-size: 1.2rem; white-space: nowrap; }
+  .acc-tiles .sum-tile.warn b { color: #b4441c; }
+  .acc-tabs { display: flex; gap: 4px; border-bottom: 2px solid var(--line); margin-bottom: 12px; overflow-x: auto; }
+  .acc-tabs button { border: 0; background: none; color: var(--ink-soft); font: 700 .92rem var(--font-body); padding: 10px 14px; cursor: pointer; border-bottom: 3px solid transparent; margin-bottom: -2px; white-space: nowrap; }
+  .acc-tabs button.on { color: var(--lagoon-deep); border-bottom-color: var(--lagoon); }
+  .acc-bar { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; justify-content: space-between; margin-bottom: 8px; font-size: .85rem; }
+  .acc-chips { justify-content: flex-start; }
+  .acc-chip { border: 1px solid var(--line); background: var(--surface); color: var(--ink); border-radius: 999px; padding: 6px 12px; font: 600 .82rem var(--font-body); cursor: pointer; }
+  .acc-chip.on { background: var(--lagoon); border-color: var(--lagoon); color: #fff; }
+  .acc-note { font-size: .8rem; color: var(--ink-soft); margin: 0 0 10px; }
+  .acc-table-wrap { overflow-x: auto; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; }
+  table.acc-table { width: 100%; border-collapse: collapse; font-size: .82rem; }
+  table.acc-table th { text-align: left; font-size: .66rem; letter-spacing: .05em; text-transform: uppercase; color: var(--ink-soft); padding: 9px 10px; border-bottom: 1px solid var(--line); white-space: nowrap; position: sticky; top: 0; background: var(--surface); }
+  table.acc-table td { padding: 8px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  table.acc-table .num { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+  table.acc-table .rel { display: block; font-size: .72rem; color: var(--ink-soft); }
+  table.acc-table tr.acc-rejected td { opacity: .5; text-decoration: line-through; }
+  table.acc-table tr.acc-pending td { background: rgba(214, 160, 60, .08); }
+  table.acc-table tfoot td { font-weight: 700; background: var(--lagoon-tint); border-bottom: 0; }
+  table.acc-table tfoot tr.acc-sub td { font-weight: 600; background: transparent; border-bottom: 1px solid var(--line); }
+  table.acc-table td.acc-none { text-align: center; color: var(--ink-soft); padding: 28px; }
+  table.acc-table a { color: var(--lagoon-deep); font-weight: 600; }
+  .acc-empty { text-align: center; color: var(--ink-soft); padding: 30px; }
+  .acc-foot { font-size: .74rem; color: var(--ink-soft); margin-top: 14px; }
+  @media (max-width: 900px) { .acc-tiles { grid-template-columns: 1fr 1fr; } table.acc-table { min-width: 860px; } }
+  @media (max-width: 600px) { .dash-head .view-toggle { max-width: 100%; overflow-x: auto; margin-left: 0; } .view-toggle button { white-space: nowrap; } .acc-dates input { width: 122px; padding: 6px 4px; } }
+  /* View-only (accounting) accounts: no editing controls — the database refuses their changes too */
+  body.ro-staff #addBtn, body.ro-staff .row-actions .log-btn[title="Edit this booking"], body.ro-staff .pay-record,
+  body.ro-staff .pay-verify, body.ro-staff .pay-reject, body.ro-staff #saveBookingBtn, body.ro-staff #bdEdit,
+  body.ro-staff [data-p="edit"], body.ro-staff #vSave, body.ro-staff #blkSave, body.ro-staff #blkCabSave, body.ro-staff #cdSave,
+  body.ro-staff #dcalPopSave, body.ro-staff #bwSave, body.ro-staff #nmSave { display: none !important; }
+  body.ro-staff .pay-amt { pointer-events: none; border-color: transparent; background: transparent; }
   /* v74: the bookings list fits the screen — no sideways scrolling */
   table.bk-table { min-width: 0; table-layout: auto; }
   table.bk-table thead th { padding: 9px 7px; font-size: 0.64rem; letter-spacing: 0.04em; }
@@ -1712,6 +1756,7 @@ html = """<!doctype html>
 <script src="../assets/js/staff-codes.js?v=__V_CODES__"></script>
 <script src="../assets/js/staff-daycal.js?v=__V_DCAL__"></script>
 <script src="../assets/js/staff-summary.js?v=__V_SUMJS__"></script>
+<script src="../assets/js/staff-accounting.js?v=__V_ACCJS__"></script>
 <script src="../assets/js/staff-find.js?v=__V_FINDJS__"></script>
 <script src="../assets/js/staff-alerts.js?v=__V_ALERTJS__"></script>
 <script src="../assets/js/staff-insights.js?v=__V_INSJS__"></script>
@@ -1737,6 +1782,7 @@ html = (html.replace("__V_CSS__", v("assets/css/style.css"))
             .replace("__V_CBCSS__", v("assets/css/staff-cloudbeds.css"))
             .replace("__V_CBJS__", v("assets/js/staff-cloudbeds.js"))
             .replace("__V_SUMJS__", v("assets/js/staff-summary.js"))
+            .replace("__V_ACCJS__", v("assets/js/staff-accounting.js"))
             .replace("__V_FINDJS__", v("assets/js/staff-find.js"))
             .replace("__V_ALERTJS__", v("assets/js/staff-alerts.js"))
             .replace("__V_INSJS__", v("assets/js/staff-insights.js"))
