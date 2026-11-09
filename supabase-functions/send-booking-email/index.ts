@@ -357,6 +357,9 @@ export type Quote = {
   serviceCharge: number;
   websiteTotal: number | null;
   mismatch: boolean;
+  // v58: what today's rate sheet gives, when it differs from the booked total
+  // (the booked total is then what the quote shows — see honorBooked)
+  rateSheetTotal?: number;
   // Overnight website bookings: price when paying by card / e-wallet instead
   // of bank transfer (i.e. without the book-direct Convenience Discount).
   cardTotal?: number;
@@ -906,7 +909,7 @@ export function staffNewEmail(r: Any, cabanas: Any[], q: Quote | null, c: Return
   if (!guestSent.ok && !guestSent.monitor && mode !== "none") flag(`<strong>Guest email FAILED to send</strong> (${esc(guestSent.error || "unknown error")}). Send the ${mode === "confirmed" ? "confirmation" : "quotation"} manually.`, "red");
   const needDocs = docsNeeded(r);
   if (needDocs.any) flag(`Guest still has to upload ${[needDocs.seniors ? "Senior/PWD ID(s)" : "", needDocs.pets ? "pet vaccination card(s)" : ""].filter(Boolean).join(" and ")} — the quotation email links to the upload page.`);
-  if (q?.mismatch && !r.cb_owned) flag(`${isStaffMade(r) ? "The dashboard saved" : "Website showed the guest"} <strong>${peso(q.websiteTotal)}</strong>, but the rate sheet${Number(r.discount_amount) > 0 ? " (less the discount)" : ""} gives <strong>${peso(q.total)}</strong> (the amount emailed). Double-check before accepting payment.`, "red");
+  if (q?.mismatch && !r.cb_owned) flag(...mismatchFlag(r, q));
   if (d !== null && d <= 1) flag(`Trip is <strong>${d <= 0 ? "today" : "tomorrow"}</strong> — past the usual payment cut-off. Call the guest now: either accept with a same-day payment deadline, or send the walk-in reply.`, "red");
   else if (d !== null && d <= 7) flag(`Trip is <strong>${d <= 0 ? "today or past" : `in ${plural(d, "day")}`}</strong> — inside the 7-day non-refundable window. Follow up by phone.`, "red");
   else if (d !== null && d <= 14) flag(`Trip is in ${plural(d, "day")} — inside the 14-day (50% forfeit) window.`);
@@ -1323,7 +1326,7 @@ export function staffNewEmailOvernight(r: Any, villas: Any[], q: Quote | null, c
     flags.push(`<li style="margin:0 0 6px;color:${tone === "red" ? C.red : C.warn};">${t}</li>`);
   const mode = staffSentMode(r);
   if (!guestSent.ok && !guestSent.monitor && mode !== "none") flag(`<strong>Guest email FAILED to send</strong> (${esc(guestSent.error || "unknown error")}). Send the ${mode === "confirmed" ? "confirmation" : "quotation"} manually.`, "red");
-  if (q?.mismatch && !r.cb_owned) flag(`${isStaffMade(r) ? "The dashboard saved" : "Website showed the guest"} <strong>${peso(q.websiteTotal)}</strong>, but the rate sheet${Number(r.discount_amount) > 0 ? " (less the discount)" : ""} gives <strong>${peso(q.total)}</strong> (the amount emailed). Double-check before accepting payment.`, "red");
+  if (q?.mismatch && !r.cb_owned) flag(...mismatchFlag(r, q));
   if (!villas.length) flag(r.cb_owned ? "No casita assigned yet — assign one in Cloudbeds." : "No casita assigned — assign one in the dashboard before taking payment.", "red");
   if (d !== null && d <= 1) flag(`Arrival is <strong>${d <= 0 ? "today" : "tomorrow"}</strong> — call the guest now to arrange payment.`, "red");
   else if (d !== null && d <= 7) flag(`Arrival is in ${plural(d, "day")} — inside the 7-day non-refundable window. Follow up by phone.`, "red");
@@ -1600,10 +1603,43 @@ async function loadUnits(r: Any): Promise<Any[]> {
 }
 
 async function quoteFor(r: Any, units: Any[]): Promise<Quote | null> {
-  if (!isOvernight(r)) return buildQuote(r, units);
+  if (!isOvernight(r)) return honorBooked(r, buildQuote(r, units));
   const res = await db("rpc/quote_booking_overnight", { method: "POST", body: JSON.stringify({ p_booking_id: r.id }) });
   if (!res.ok) { console.error("quote_booking_overnight", res.status, await res.text()); return null; }
-  return quoteFromOvernight(r, await res.json());
+  return honorBooked(r, quoteFromOvernight(r, await res.json()));
+}
+
+// v58: a booking's price is the one saved when it was made — what the pay page
+// and Xendit charge. Emails re-price the booking from today's rate sheet to
+// itemise it; if that gives a different total (rates or the senior rule changed
+// since, or the party was changed outside the website), the guest still sees
+// the booked total, with the gap as one line, and staff get a flag. Before
+// this, the guest could be emailed one amount and asked to pay another.
+export function honorBooked(r: Any, q: Quote | null): Quote | null {
+  if (!q || !q.mismatch || r.cb_owned || r.stay_type === "corporate") return q;
+  const booked = q.websiteTotal;
+  if (booked === null || !(booked > 0)) return q;
+  const diff = r2(booked - q.total);
+  const lines = [...q.lines, { desc: "Adjustment to your booked price", rate: diff, qty: 1, amount: diff, vatExempt: false }];
+  const total = r2(booked);
+  const gross = Math.max(0, r2(total - q.vatExemptSales));
+  const vatableSales = r2(gross / 1.17);
+  const vat = r2(vatableSales * 0.12);
+  return {
+    ...q, lines, subtotal: total, total, vatableSales, vat, serviceCharge: r2(gross - vatableSales - vat),
+    cardTotal: q.onlineDiscount ? r2(total + q.onlineDiscount) : total, rateSheetTotal: q.total,
+  };
+}
+// Staff flag for honorBooked: a small gap is usually a rate change since the
+// booking; a big one means the guest count / casitas / extras need a look.
+export function mismatchFlag(r: Any, q: Quote): [string, "warn" | "red"] {
+  const sheet = q.rateSheetTotal ?? q.total, booked = Number(q.websiteTotal) || 0, gap = r2(booked - sheet);
+  const big = Math.abs(gap) > Math.max(500, booked * 0.03);
+  const who = isStaffMade(r) ? "saved in the dashboard" : "booked on the website";
+  return [`Price ${who}: <strong>${peso(booked)}</strong>; today's rate sheet gives <strong>${peso(sheet)}</strong> (${gap > 0 ? "+" : "−"}${peso(Math.abs(gap))}). ` +
+    `Guest emails show the booked price. ` + (big
+      ? "That's a big gap — check the guest count, casitas and extras against the booking before accepting payment."
+      : "Usually a rate change since the booking — no action needed."), big ? "red" : "warn"];
 }
 
 async function paySummary(id: string): Promise<PaySummary | null> {
