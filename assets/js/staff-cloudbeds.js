@@ -56,7 +56,7 @@
   toggle.className = "view-toggle";
   toggle.setAttribute("role", "group");
   toggle.setAttribute("aria-label", "Dashboard view");
-  toggle.innerHTML = '<button type="button" data-view="cloudbeds">Cloudbeds view</button><button type="button" data-view="new">New version</button><button type="button" data-view="summary">Summary</button>';
+  toggle.innerHTML = '<button type="button" data-view="cloudbeds">Cloudbeds view</button><button type="button" data-view="new">New version</button><button type="button" data-view="summary">Summary</button><button type="button" data-view="accounting">Accounting</button>';
   toggle.addEventListener("click", function (e) {
     var b = e.target.closest("button[data-view]");
     if (b) setView(b.getAttribute("data-view"));
@@ -579,6 +579,7 @@
     store(KEY, v);
     var cb = v === "cloudbeds";
     if (window.VBRSummary) window.VBRSummary.show(v === "summary");
+    if (window.VBRAccounting) window.VBRAccounting.show(v === "accounting");
     body.classList.toggle("cbv", cb);
     Array.prototype.forEach.call(toggle.querySelectorAll("button"), function (b) {
       var on = b.getAttribute("data-view") === v;
@@ -600,7 +601,7 @@
   }
   var ready = false;
   var savedView = store(KEY);
-  setView(savedView === "cloudbeds" || savedView === "summary" ? savedView : "new");
+  setView(savedView === "cloudbeds" || savedView === "summary" || savedView === "accounting" ? savedView : "new");
   ready = true;
-  window.VBRView = { set: setView, go: goPage, page: function () { return page; } };
+  window.VBRView = { set: setView, go: goPage, page: function () { return page; }, current: function () { return store(KEY) || "new"; } };
 })();

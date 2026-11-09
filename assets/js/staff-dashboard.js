@@ -33,6 +33,7 @@
     "msnikka@virginbeachresort.com": "Ms. Nikka",
     "fo@staff.local": "FO",
     "sugar@staff.local": "Sugar",
+    "mae@staff.local": "Mae (Accounting)",
     "fo@virginbeachresort.com": "FO",
   };
   var currentStaffName = null;
@@ -426,9 +427,40 @@
       populateBookedByOptions();
       render();
       if (cbLastRun === null) loadCbStatus();
+      if (deepLinkQ) { var dq = deepLinkQ; deepLinkQ = null; setTimeout(function () { openDeepLink(dq); }, 0); }
     }, function (err) {
       countLine.textContent = "Couldn't load bookings: " + (err && err.message ? err.message : err);
     });
+  }
+
+  // ?q=VBR-1042 from an alert email: show that booking whatever view, section
+  // or filters were left on — clear the filters, switch to its section (and
+  // to the Reservations / Day Trips page in the Cloudbeds view), search it and
+  // open it. The ?q stays out of the address bar afterwards so a refresh
+  // doesn't reopen it.
+  function openDeepLink(q) {
+    var key = String(q).trim().toLowerCase();
+    var row = allRows.filter(function (r) {
+      return (r.order_code && r.order_code.toLowerCase() === key) || (r.cb_reservation_id && String(r.cb_reservation_id).toLowerCase() === key);
+    })[0];
+    try { var u = new URL(location.href); u.searchParams.delete("q"); history.replaceState(null, "", u.pathname + u.search + u.hash); } catch (e) {}
+    var V = window.VBRView;
+    if (V && V.current && V.current() !== "cloudbeds" && V.current() !== "new") V.set("new");
+    clearFiltersBtn.click();
+    if (row) {
+      var sec = isVillaRow(row) ? "villas" : "daytrip";
+      if (activeSection !== sec) {
+        var t = document.querySelector('#sectionTabs .sec-tab[data-section="' + sec + '"]');
+        if (t) t.click();
+      }
+    }
+    var cbv = document.body.classList.contains("cbv");
+    if (cbv && V) V.go(row && !isVillaRow(row) ? "daytrips" : "reservations", true);
+    searchBox.value = q;
+    searchBox.dispatchEvent(new Event("input"));
+    if (!row) return;
+    if (cbv && window.VBRPanel) window.VBRPanel.open(row);
+    else openBreakdown(row);
   }
 
   function dateOnly(d) {
@@ -2807,7 +2839,7 @@
     cbUrl: cbUrl, loadCbStatus: loadCbStatus,
     STATUS_LABELS: STATUS_LABELS, SOURCE_LABELS: SOURCE_LABELS,
     TYPE_LABELS: TYPE_LABELS, statusLabel: statusLabel, villaStatusKey: villaStatusKey, openModal: openModal,
-    openBreakdown: openBreakdown, listRows: function () { return renderQueue; },
+    openBreakdown: openBreakdown, payMethodName: payMethodName, listRows: function () { return renderQueue; },
     section: function () { return activeSection; }, sort: function () { return { field: sortField, dir: sortDir }; }, cabanaLabel: function (id) { return cabanasById[id] ? cabanasById[id].label : ""; },
     cabanas: function () { return cabanasList; }, cabanaById: function (id) { return cabanasById[id]; },
     cabKind: cabKind, cabShort: cabShort, countsOf: countsOf, cabanasFreeOn: cabanasFreeOn, blocksForDate: blocksForDate,
