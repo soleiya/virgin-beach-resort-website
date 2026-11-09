@@ -34,6 +34,7 @@
     "fo@staff.local": "FO",
     "sugar@staff.local": "Sugar",
     "mae@staff.local": "Mae (Accounting)",
+    "miguel@staff.local": "Miguel",
     "fo@virginbeachresort.com": "FO",
   };
   var currentStaffName = null;
