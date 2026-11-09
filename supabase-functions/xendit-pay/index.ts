@@ -21,7 +21,7 @@
 //   XENDIT_FORWARD_URL     the webhook URL that was set in Xendit before this one
 //                          (e.g. MECX Tech's) — callbacks for invoices that aren't
 //                          ours are passed on to it unchanged
-//   SITE_URL               where guests come back to (defaults to the GitHub Pages site)
+//   SITE_URL               where guests come back to (defaults to https://virginbeachresort.com — v55)
 // SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are provided automatically.
 //
 // Deploy with "Verify JWT" OFF (the guest's browser and Xendit call it).
@@ -38,7 +38,17 @@ const env = (k: string, d = "") => {
 };
 const SB_URL = () => env("SUPABASE_URL");
 const SR = () => env("SUPABASE_SERVICE_ROLE_KEY");
-const SITE = () => env("SITE_URL", "https://soleiya.github.io/virgin-beach-resort-website").replace(/\/+$/, "");
+const SITE = () => env("SITE_URL", "https://virginbeachresort.com").replace(/\/+$/, "");
+
+// v55: only the official website may call this from a browser. A copy of the
+// site on another domain gets a 403 (server-to-server calls send no Origin).
+const ALLOWED_ORIGINS = () =>
+  env("ALLOWED_ORIGINS", "https://virginbeachresort.com,https://www.virginbeachresort.com")
+    .split(",").map((s) => s.trim().toLowerCase().replace(/\/+$/, "")).filter(Boolean);
+function foreignOrigin(req: Request): boolean {
+  const o = (req.headers.get("origin") || "").trim().toLowerCase().replace(/\/+$/, "");
+  return !!o && o !== "null" && !ALLOWED_ORIGINS().includes(o);
+}
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
@@ -249,6 +259,7 @@ async function webhook(req: Request, body: Any) {
 export async function handle(req: Request): Promise<Response> {
   if (req.method === "OPTIONS") return new Response(null, { headers: CORS });
   if (req.method !== "POST") return json({ error: "POST only" }, 405);
+  if (foreignOrigin(req)) return json({ error: "Please pay on our official website, virginbeachresort.com." }, 403);
   let body: Any = {};
   try { body = await req.json(); } catch { return json({ error: "bad request" }, 400); }
   try {
