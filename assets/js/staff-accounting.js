@@ -87,6 +87,7 @@
     if ((b = e.target.closest("[data-rf]"))) { recFilter = b.getAttribute("data-rf"); draw(); return; }
     if ((b = e.target.closest("[data-pay]"))) { e.preventDefault(); openPay(b.getAttribute("data-pay")); return; }
     if ((b = e.target.closest("[data-bd]"))) { e.preventDefault(); openBd(b.getAttribute("data-bd")); return; }
+    if ((b = e.target.closest("[data-proof]"))) { e.preventDefault(); if (D.openSignedUrl) D.openSignedUrl("payment-proofs", b.getAttribute("data-proof")); return; }
   });
   el.addEventListener("change", function (e) {
     if (e.target.id === "accShowRej") { showRejected = e.target.checked; draw(); return; }
@@ -158,10 +159,20 @@
     return { transfer: "Bank transfer", cash: "Cash", card: "Card at resort" }[p.method] || "Other";
   }
   var GROUPS = ["Online (Xendit)", "Bank transfer", "Cash", "Card at resort", "Other"];
+  // Xendit notes read "Xendit · GCASH · EWALLET · invoice 65f0…"
+  function xenditInvoice(p) { var m = /invoice\s+([A-Za-z0-9_-]+)/.exec(String(p.note || "")); return p.method === "xendit" && m ? m[1] : ""; }
+  function xenditUrl(id) { return "https://dashboard.xendit.co/invoices/" + encodeURIComponent(id); }
   function refOf(p) {
     var n = String(p.note || "");
-    if (p.method === "xendit") { var parts = n.split("·").map(function (x) { return x.trim(); }); return parts[0] || n; }
+    if (p.method === "xendit") return xenditInvoice(p) ? "Xendit invoice " + xenditInvoice(p) + (/TEST MODE/.test(n) ? " (test)" : "") : n;
     return n;
+  }
+  // Evidence for the payment: the Xendit invoice, and/or the guest's uploaded proof.
+  function proofHtml(p) {
+    var out = [], inv = xenditInvoice(p);
+    if (inv) out.push('<a href="' + esc(xenditUrl(inv)) + '" target="_blank" rel="noopener" title="Open invoice ' + esc(inv) + ' in the Xendit dashboard">Open in Xendit ↗</a>');
+    if (p.proof_path) out.push('<a href="#" data-proof="' + esc(p.proof_path) + '">View proof of payment</a>');
+    return out.join("");
   }
   function who(e) { return e ? (D.staffLabel ? D.staffLabel(e) : e) : ""; }
   function typeShort(r) { return isVilla(r) ? "Villa" : ({ day_trip: "Day trip", half_day: "Half-day", corporate: "Corporate" })[r.stay_type] || r.stay_type_label || "Day trip"; }
@@ -250,21 +261,23 @@
   function drawPayments(pays) {
     var list = pays.filter(function (p) { return showRejected || p.status !== "rejected"; });
     var head = [{ t: "Paid on" }, { t: "Booking #" }, { t: "Guest" }, { t: "Type" }, { t: "Stay" }, { t: "For" }, { t: "Method" }, { t: "Reference / note" },
-      { t: "Amount", n: 1 }, { t: "Status" }, { t: "Recorded / verified by" }, { t: "Cloudbeds" }];
+      { t: "Amount", n: 1 }, { t: "Status" }, { t: "Recorded / verified · proof" }, { t: "Cloudbeds" }];
     var csv = [];
     var rows = list.map(function (p) {
       var r = bookings[p.booking_id];
       var st = p.status === "verified" ? "Verified" : p.status === "pending" ? "To verify" : "Rejected";
-      var whoTxt = [p.created_by ? "Recorded: " + who(p.created_by) : "Guest (online / upload)", p.verified_by ? "Verified: " + who(p.verified_by) + " " + manilaDay(p.verified_at) : ""].filter(Boolean).join(" · ");
+      var xen = p.method === "xendit";
+      var whoTxt = xen ? "Paid online · confirmed by Xendit " + manilaDay(p.verified_at || p.created_at)
+        : [p.created_by ? "Recorded: " + who(p.created_by) : "Guest upload", p.verified_by ? "Verified: " + who(p.verified_by) + " " + manilaDay(p.verified_at) : ""].filter(Boolean).join(" · ");
       var cb = p.cb_posted_at ? "Posted " + manilaDay(p.cb_posted_at) : p.cb_post_error ? "Error" : r && isVilla(r) && p.status === "verified" ? "Not posted" : "—";
       csv.push([manilaDay(p.created_at), manilaTime(p.created_at), r ? r.order_code : "", r ? r.guest_name : "", r ? typeShort(r) : "", r ? r.check_in : "", r && isVilla(r) ? r.check_out : "",
-        KIND[p.kind] || p.kind || "", methodOf(p), refOf(p), num(p.amount).toFixed(2), st, whoTxt, cb, r && r.cb_reservation_id || ""]);
+        KIND[p.kind] || p.kind || "", methodOf(p), refOf(p), num(p.amount).toFixed(2), st, xenditInvoice(p) ? xenditUrl(xenditInvoice(p)) : "", p.proof_path ? "Yes" : "", whoTxt, cb, r && r.cb_reservation_id || ""]);
       return '<tr class="acc-' + p.status + '">' +
         td(esc(fmt(manilaDay(p.created_at), { month: "short", day: "numeric", year: "numeric" })) + '<span class="rel">' + esc(manilaTime(p.created_at)) + "</span>") +
         td(codeLink(r, p.booking_id)) + td(guestLink(r)) + td(esc(r ? typeShort(r) : "")) + td(esc(r ? stayText(r) : "")) +
         td(esc(KIND[p.kind] || p.kind || "")) + td(esc(methodOf(p))) + td(esc(refOf(p)) || '<span class="muted">—</span>') +
         td(esc(money(p.amount)), 1) + td('<span class="pay-st pay-st-' + esc(p.status) + '">' + st + "</span>") +
-        td('<span class="rel">' + esc(whoTxt) + "</span>") + td('<span class="rel' + (cb === "Error" || cb === "Not posted" ? " cb-warn" : "") + '">' + esc(cb) + "</span>") + "</tr>";
+        td('<span class="rel">' + esc(whoTxt) + "</span>" + proofHtml(p), 0, "acc-who") + td('<span class="rel' + (cb === "Error" || cb === "Not posted" ? " cb-warn" : "") + '">' + esc(cb) + "</span>") + "</tr>";
     });
     // subtotals by method (verified only)
     var by = {};
@@ -275,7 +288,7 @@
     }).join("") + '<tr class="acc-total"><td colspan="8">Total collected (verified)</td>' + td(esc(money(totalOk)), 1) + '<td colspan="3"></td></tr>';
     $("accBody").innerHTML = '<div class="acc-bar"><label class="inline-check"><input type="checkbox" id="accShowRej"' + (showRejected ? " checked" : "") + "> <span>Show rejected payments</span></label>" +
       '<span class="muted">' + plural(list.length, "payment") + "</span></div>" + tableHtml(head, rows, foot);
-    table = { name: "payments", head: ["Paid on", "Time", "Booking #", "Guest", "Type", "Check-in / date", "Check-out", "For", "Method", "Reference / note", "Amount", "Status", "Recorded / verified by", "Cloudbeds", "Cloudbeds res #"], rows: csv };
+    table = { name: "payments", head: ["Paid on", "Time", "Booking #", "Guest", "Type", "Check-in / date", "Check-out", "For", "Method", "Reference / note", "Amount", "Status", "Xendit invoice link", "Proof uploaded", "Recorded / verified by", "Cloudbeds", "Cloudbeds res #"], rows: csv };
   }
 
   // ---- Receivables (as of today)
