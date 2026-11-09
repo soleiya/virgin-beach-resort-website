@@ -123,7 +123,7 @@ function deadlineHours() {
 }
 
 function cfg() {
-  const site = env("SITE_URL", "https://soleiya.github.io/virgin-beach-resort-website").replace(/\/+$/, "");
+  const site = env("SITE_URL", "https://virginbeachresort.com").replace(/\/+$/, "");
   return {
     site,
     testMode: env("TEST_MODE") === "true",
