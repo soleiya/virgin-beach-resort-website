@@ -682,14 +682,94 @@ export function guestSubject(r: Any, c: ReturnType<typeof cfg>) {
 // "⚠ 2 to check · " in front of the subject, and a one-line summary as the
 // inbox preview, whenever a new-booking alert has "Needs attention" items.
 const plainFlag = (h: string) => h.replace(/<[^>]+>/g, "").replace(/&mdash;/g, "—").replace(/&amp;/g, "&").replace(/\s+/g, " ").trim();
-export function attentionPrefix(flags: string[]) { return flags.length ? `⚠ ${flags.length} to check · ` : ""; }
+export function attentionPrefix(flags: string[]) { return flags.length ? "⚠ " : ""; }
 export function attentionSummary(flags: string[]) {
   if (!flags.length) return "";
   return "Needs attention: " + flags.map((f) => plainFlag(f).replace(/\.\s.*$/, "").slice(0, 90)).join(" · ");
 }
+// Staff alerts (v56): facts first, nothing repeated. The sender name says what
+// happened (staffSender), the subject says who / when / what (staffSubject),
+// the preview says money, status, where from and the phone (staffPreview).
+// The subject uses only fields that rarely change, so the follow-up alerts
+// ("Re: …") stay in the same Gmail thread.
+const MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+const WD = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+function ymd(v: unknown) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(v || ""));
+  if (!m) return null;
+  const d = new Date(Date.UTC(+m[1], +m[2] - 1, +m[3]));
+  return { y: +m[1], m: MON[+m[2] - 1], d: +m[3], w: WD[d.getUTCDay()] };
+}
+export function shortWhen(r: Any, now = new Date()) {
+  const a = ymd(r.check_in);
+  if (!a) return "no date";
+  const thisYear = Number(now.toLocaleDateString("en-CA", { timeZone: "Asia/Manila" }).slice(0, 4));
+  const yr = a.y !== thisYear ? ` ${a.y}` : "";
+  const b = isOvernight(r) ? ymd(r.check_out) : null;
+  if (!b) return `${a.w} ${a.m} ${a.d}${yr}`;
+  const n = nightsOf(r);
+  return `${a.w} ${a.m} ${a.d}–${b.m === a.m ? "" : b.m + " "}${b.d}${yr}${n ? ` (${n}N)` : ""}`;
+}
+export function paxOf(r: Any) { return int(r.adults) + int(r.children_6_12) + int(r.children_0_5); }
+const SHORT_TYPES: Record<string, string> = {
+  day_trip: "Day trip", half_day: "Half-day", all_inclusive_family: "All-in Family", all_inclusive_barkada: "All-in Barkada",
+  corporate: "Corporate", flash_sale: "Flash sale",
+};
 export function staffSubject(r: Any, c: ReturnType<typeof cfg>) {
-  const kind = r.stay_type === "corporate" ? "Corporate Inquiry" : isOvernight(r) ? "Overnight Booking" : "Day Trip Booking";
-  return `${c.testMode ? "[TEST] " : ""}New ${kind} from ${r.guest_name || "Guest"} — ${r.order_code || ""} (${fmtDate(r.check_in, "short").replace(/^\w+, /, "")})`;
+  const parts: string[] = [r.guest_name || "Guest", shortWhen(r)];
+  if (isOvernight(r)) {
+    if (r.room_name) parts.push(String(r.room_name).replace(/ Casitas?\b/g, "").replace(/\s*×\s*/g, "× "));
+  } else {
+    parts.push(SHORT_TYPES[r.stay_type] || r.stay_type_label || "Day trip");
+    const n = cabanaCounts(r);
+    const cab = [n.dining ? `${n.dining} dining` : "", n.lounge ? `${n.lounge} lounge` : ""].filter(Boolean).join(" + ");
+    if (cab) parts.push(cab);
+  }
+  const pax = paxOf(r);
+  if (pax) parts.push(`${pax} pax`);
+  if (r.order_code) parts.push(r.order_code);
+  return `${c.testMode ? "[TEST] " : ""}${parts.join(" · ")}`;
+}
+// Sender name on staff alerts = what happened. Same mailbox, so replies and
+// filters keep working; Gmail shows it where "Virgin Beach Resort Reservations" was.
+export function staffSender(kind: string, r: Any) {
+  const k = kind.split(":")[0];
+  if (k === "staff_new" || k === "staff_new_monitor") {
+    if (r.cb_owned) return "VBR · Cloudbeds booking";
+    if (r.stay_type === "corporate") return "VBR · Corporate inquiry";
+    return isOvernight(r) ? "VBR · New villa stay" : "VBR · New day trip";
+  }
+  return ({
+    staff_inquiry: "VBR · Booking request", proof_staff: "VBR · Payment proof", docs_staff: "VBR · Docs uploaded",
+    balance_overdue_staff: "VBR · Balance overdue", overpaid: "VBR · Overpaid", staff_expired: "VBR · Auto-cancelled",
+  } as Record<string, string>)[k] || "VBR · Staff alert";
+}
+// Links in staff alerts. The dashboard opens straight on the booking. Gmail
+// opens the reservations@ mailbox by address (so it works whichever Google
+// account is first in the browser) and searches the Booking ID or guest email.
+export function staffLinks(r: Any, c: ReturnType<typeof cfg>) {
+  const dash = `${c.site}/staff/index.html?q=${encodeURIComponent(r.order_code || "")}`;
+  const terms = [r.order_code ? `"${r.order_code}"` : "", r.guest_email ? String(r.guest_email).trim() : ""].filter(Boolean);
+  const query = terms.length > 1 ? `{${terms.join(" ")}}` : terms[0] || "";
+  const gmail = `https://mail.google.com/mail/u/${MAILBOX}/#search/${encodeURIComponent(query)}`;
+  return { dash, gmail };
+}
+// Preview line of a new-booking alert.
+const pesoShort = (n: number) => peso(n).replace(/\.00$/, "");
+function shortDue(d: Date) {
+  const t = d.toLocaleString("en-US", { timeZone: "Asia/Manila", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+  return t.replace(":00 ", " ");
+}
+function staffPreview(r: Any, q: Quote | null, flags: string[], c: ReturnType<typeof cfg>) {
+  const dl = paymentDeadline(r, c.deadlineHours);
+  const bits = [
+    q ? `${pesoShort(q.total)}${staffSentMode(r) === "quote" && dl.date ? ` due by ${shortDue(dl.date)}` : ""}` : "Quote needed",
+    statusLabel(r),
+    r.cb_owned ? `Cloudbeds${r.cb_info?.source ? ` (${r.cb_info.source})` : ""}` : isStaffMade(r) ? `Staff${r.booked_by ? ` (${r.booked_by})` : ""}` : "Website",
+    r.guest_phone || r.guest_email || "",
+  ].filter(Boolean);
+  const notes = flags.map((f) => plainFlag(f).split(/ — |\. /)[0].replace(/\.$/, "").slice(0, 60));
+  return bits.join(" · ") + (notes.length ? ` · ⚠ ${notes.join("; ")}` : "");
 }
 // ---------- staff-edited guest emails ------------------------------------------
 // Staff can rewrite the opening message (and the subject of the first email in
@@ -842,8 +922,7 @@ export function staffNewEmail(r: Any, cabanas: Any[], q: Quote | null, c: Return
   if (r.stay_type === "corporate" && !(Number(r.total_amount) > 0)) flag("Corporate request — no automatic quote was sent. Prepare a tailored quotation.");
 
   const tel = String(r.guest_phone || "").replace(/[^\d+]/g, "");
-  const dash = `${c.site}/staff/index.html?q=${encodeURIComponent(r.order_code || "")}`;
-  const gmail = `https://mail.google.com/mail/u/?authuser=${encodeURIComponent(MAILBOX)}#search/${encodeURIComponent('"' + (r.order_code || "") + '"')}`;
+  const { dash, gmail } = staffLinks(r, c);
 
   const body = `${statusBox([
     ["Booking ID", esc(r.order_code || "—")],
@@ -878,7 +957,7 @@ ${button(dash, "Open in staff dashboard")}${button(gmail, "Find guest thread in 
 
   return {
     subject: attentionPrefix(flags) + staffSubject(r, c),
-    html: shell({ preheader: attentionSummary(flags) || `${r.guest_name} · ${fmtDate(r.check_in, "short")} · ${q ? peso(q.total) : "quote needed"}`, body, c, internal: true }),
+    html: shell({ preheader: staffPreview(r, q, flags, c), body, c, internal: true }),
   };
 }
 
@@ -887,7 +966,7 @@ export function staffProofEmail(r: Any, q: Quote | null, c: ReturnType<typeof cf
   const urgent = d !== null && d <= 2
     ? `<p style="margin:0 0 12px;padding:10px 14px;background:${C.redBg};color:${C.red};border-radius:8px;font-weight:bold;">${isOvernight(r) ? "Arrival" : "Trip"} is ${d <= 0 ? "TODAY" : d === 1 ? "TOMORROW" : "in 2 days"} — please validate and confirm right away.</p>`
     : "";
-  const dash = `${c.site}/staff/index.html?q=${encodeURIComponent(r.order_code || "")}`;
+  const { dash } = staffLinks(r, c);
   const body = `${statusBox([
     ["Booking ID", esc(r.order_code || "—")],
     ["Guest says", ps?.last ? `${esc(KIND_WORDS[ps.last.kind] || "payment")}: ${esc(peso(ps.last.amount))}` : (q ? esc(peso(q.total)) : "—")],
@@ -1258,8 +1337,7 @@ export function staffNewEmailOvernight(r: Any, villas: Any[], q: Quote | null, c
   if (r.occasion) flag(`Occasion: <strong>${esc(label(r.occasion))}</strong> — consider a welcome touch.`);
 
   const tel = String(r.guest_phone || "").replace(/[^\d+]/g, "");
-  const dash = `${c.site}/staff/index.html?q=${encodeURIComponent(r.order_code || "")}`;
-  const gmail = `https://mail.google.com/mail/u/?authuser=${encodeURIComponent(MAILBOX)}#search/${encodeURIComponent('"' + (r.order_code || "") + '"')}`;
+  const { dash, gmail } = staffLinks(r, c);
   const body = `${statusBox([
     ["Booking ID", esc(r.order_code || "—")],
     ["Amount due", q ? esc(peso(q.total)) : "Quote needed"],
@@ -1294,7 +1372,7 @@ ${h2("Follow-up checklist")}
 ${button(dash, "Open in staff dashboard")}${button(gmail, "Find guest thread in Gmail")}`;
   return {
     subject: attentionPrefix(flags) + staffSubject(r, c),
-    html: shell({ preheader: attentionSummary(flags) || `${r.guest_name} · ${stayRange(r)} · ${q ? peso(q.total) : "quote needed"}`, body, c, internal: true }),
+    html: shell({ preheader: staffPreview(r, q, flags, c), body, c, internal: true }),
   };
 }
 
@@ -1359,7 +1437,7 @@ ${signature(c)}`;
 }
 
 export function staffBalanceOverdueEmail(r: Any, ps: PaySummary, c: ReturnType<typeof cfg>) {
-  const dash = `${c.site}/staff/index.html?q=${encodeURIComponent(r.order_code || "")}`;
+  const { dash } = staffLinks(r, c);
   const body = `${statusBox([
     ["Booking ID", esc(r.order_code || "—")],
     ["Balance", esc(peso(ps.balance))],
@@ -1423,7 +1501,7 @@ ${signature(c)}`;
 
 // v34: the booking was paid more than its total — staff refund it in Xendit.
 export function staffOverpaidEmail(r: Any, ps: PaySummary | null, excess: number, payments: Any[], c: ReturnType<typeof cfg>) {
-  const dash = `${c.site}/staff/index.html?q=${encodeURIComponent(r.order_code || "")}`;
+  const { dash } = staffLinks(r, c);
   const rows = payments.map((x: Any) => [`${esc(KIND_WORDS[x.kind] || "payment")} · ${esc(fmtDateTime(new Date(x.verified_at || x.created_at)))}`,
     `${esc(peso(Number(x.amount) || 0))} — ${esc(String(x.note || x.method || ""))}`] as [string, string]);
   const body = `${p(`<strong>${esc(r.order_code)}</strong> (${esc(r.guest_name || "")}) has been paid <strong>${esc(peso(excess))} more</strong> than its total of ${esc(peso(Number(r.total_amount) || 0))} through online payments.`)}
@@ -1609,7 +1687,7 @@ async function send(opts: {
   try {
     const t = await smtp();
     await t.sendMail({
-      from: FROM,
+      from: opts.thread === "staff" ? `${staffSender(opts.kind, opts.booking)} <${MAILBOX}>` : FROM,
       to,
       ...(opts.cc ? { cc: opts.cc } : {}),
       // monitor copy: staff alerts only (new booking, proofs, overdue…), not the guest's copy
@@ -1743,6 +1821,7 @@ ${signature(c)}`;
 }
 
 function staffInquiryEmail(r: Any, c: ReturnType<typeof cfg>, guest: Any) {
+  const links = staffLinks(r, c);
   const guests = (Number(r.adults) || 0) + (Number(r.children_6_12) || 0) + (Number(r.children_0_5) || 0);
   const body = `${p(`<strong>New booking REQUEST from the website &mdash; not a reservation.</strong> No casita is held, nothing was sent to Cloudbeds and no payment was asked for.`)}
 <div style="margin:16px 0;">${kv([
@@ -1758,10 +1837,16 @@ function staffInquiryEmail(r: Any, c: ReturnType<typeof cfg>, guest: Any) {
     ["Notes", esc(r.notes || "—")],
     ["Guest email", guest?.ok ? "Request-received note sent" : esc(String(guest?.error || "not sent"))],
   ])}</div>
-${p("Check availability and the 2027 rate in Cloudbeds, then reply to the guest. If they go ahead, create the booking in the dashboard or Cloudbeds; otherwise set this request to Cancelled (no email is sent to the guest for a request).")}`;
+${p("Check availability and the 2027 rate in Cloudbeds, then reply to the guest (replying to this email goes to them). If they go ahead, create the booking in the dashboard or Cloudbeds; otherwise set this request to Cancelled (no email is sent to the guest for a request).")}
+${button(links.dash, "Open in staff dashboard")}${button(links.gmail, "Find guest emails in Gmail")}`;
+  const est = Number(r.total_amount) || 0;
   return {
-    subject: `Booking request (inquiry) — ${stayRange(r)} — ${r.guest_name || "Guest"}`,
-    html: shell({ preheader: "New booking request — review availability and 2027 rate", body, c, internal: true }),
+    subject: staffSubject(r, c),
+    html: shell({
+      preheader: [est ? `Est. ${pesoShort(est)} at 2026 rates` : "", "Not held — needs a reply", r.guest_phone || "", r.guest_email || "",
+        r.notes ? `Notes: ${String(r.notes).slice(0, 80)}` : ""].filter(Boolean).join(" · "),
+      body, c, internal: true,
+    }),
   };
 }
 
@@ -1836,7 +1921,7 @@ async function onProof(r: Any) {
 }
 
 export function staffDocsEmail(r: Any, seniorIds: number, petCards: number, c: ReturnType<typeof cfg>, hasAttachment: boolean) {
-  const dash = `${c.site}/staff/index.html?q=${encodeURIComponent(r.order_code || "")}`;
+  const { dash } = staffLinks(r, c);
   const what = [seniorIds ? plural(seniorIds, "Senior/PWD ID photo") : "", petCards ? plural(petCards, "pet vaccination card") : ""].filter(Boolean).join(" and ");
   const body = `${p(`<strong>${esc(r.guest_name)}</strong> uploaded ${esc(what)} for <strong>${esc(r.order_code)}</strong> (${esc(fmtDate(r.check_in))}) on the website.${hasAttachment ? " They're attached to this email." : ""}`)}
 ${petCards && r.pet_policy_agreed_at ? p("The guest agreed to the Pet Policy online.") : ""}
@@ -2064,7 +2149,7 @@ ${signature(c)}`;
 }
 
 export function staffExpiredEmail(r: Any, c: ReturnType<typeof cfg>, guestNote: string) {
-  const dash = `${c.site}/staff/index.html?q=${encodeURIComponent(r.order_code || "")}`;
+  const { dash } = staffLinks(r, c);
   const body = `${statusBox([
     ["Booking ID", esc(r.order_code || "—")],
     [isOvernight(r) ? "Stay" : "Date", esc(isOvernight(r) ? stayRange(r) : fmtDate(r.check_in, "short"))],
