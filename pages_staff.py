@@ -438,6 +438,7 @@ html = """<!doctype html>
   table.acc-table tfoot tr.acc-sub td { font-weight: 600; background: transparent; border-bottom: 1px solid var(--line); }
   table.acc-table td.acc-none { text-align: center; color: var(--ink-soft); padding: 28px; }
   table.acc-table a { color: var(--lagoon-deep); font-weight: 600; }
+  table.acc-table td.acc-who a { display: block; margin-top: 4px; font-size: .78rem; }
   .acc-empty { text-align: center; color: var(--ink-soft); padding: 30px; }
   .acc-foot { font-size: .74rem; color: var(--ink-soft); margin-top: 14px; }
   @media (max-width: 900px) { .acc-tiles { grid-template-columns: 1fr 1fr; } table.acc-table { min-width: 860px; } }
