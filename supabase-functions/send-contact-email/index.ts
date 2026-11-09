@@ -28,6 +28,16 @@ const TYPES = ["General Inquiry", "Feedback on your stay", "Weddings", "Corporat
 const EVENTS_TYPES = ["Weddings", "Corporate"];
 const MAX_PER_HOUR_PER_IP = 5;
 
+// v55: only the official website may call this from a browser. A copy of the
+// site on another domain gets a 403 (server-to-server calls send no Origin).
+const ALLOWED_ORIGINS = () =>
+  env("ALLOWED_ORIGINS", "https://virginbeachresort.com,https://www.virginbeachresort.com")
+    .split(",").map((s) => s.trim().toLowerCase().replace(/\/+$/, "")).filter(Boolean);
+function foreignOrigin(req: Request): boolean {
+  const o = (req.headers.get("origin") || "").trim().toLowerCase().replace(/\/+$/, "");
+  return !!o && o !== "null" && !ALLOWED_ORIGINS().includes(o);
+}
+
 const CORS = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
@@ -114,6 +124,7 @@ ${row("Received", esc(when))}
 export async function handle(req: Request): Promise<Response> {
   if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
   if (req.method !== "POST") return json({ error: "Method not allowed" }, 405);
+  if (foreignOrigin(req)) return json({ error: "Please use the contact form on our official website, virginbeachresort.com." }, 403);
 
   let b: Any;
   try { b = await req.json(); } catch { return json({ error: "Bad request" }, 400); }
