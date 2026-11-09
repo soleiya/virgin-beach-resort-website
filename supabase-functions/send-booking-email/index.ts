@@ -1726,11 +1726,12 @@ export function guestInquiryEmail(r: Any, c: ReturnType<typeof cfg>) {
   const guests = (Number(r.adults) || 0) + (Number(r.children_6_12) || 0) + (Number(r.children_0_5) || 0);
   const body = `${p(`Hi ${first},`)}
 ${p(`Thank you for your interest in Virgin Beach Resort! We've received your <strong>booking request</strong> for <strong>${esc(stayRange(r))}</strong>${guests ? ` for ${guests} guest${guests === 1 ? "" : "s"}` : ""}. It's now <strong>under review</strong> by our reservations team.`)}
-${statusBox([
+<div style="margin:16px 0;">${kv([
+    ["Stay", esc(stayRange(r))],
     ["Casitas requested", esc(r.room_name || "—")],
-    ["Estimated total", `${esc(peso(Number(r.total_amount) || 0))}<br><span style="color:#6b6559;font-weight:normal;">at 2026 rates</span>`],
-    ["Status", "Inquiry &mdash; not yet booked"],
-  ])}
+    ["Estimated total", `<strong>${esc(peso(Number(r.total_amount) || 0))}</strong> <span style="color:#6b6559;">at 2026 rates</span>`],
+    ["Status", "<strong>Inquiry &mdash; not yet booked</strong>"],
+  ])}</div>
 ${p(`<strong>Please note: this is an inquiry only, not a confirmed reservation.</strong> No casita has been reserved for you yet and nothing has been charged.`)}
 ${p(`The estimated total above uses our <strong>2026 rates</strong> as a guide. <strong>2027 rates are subject to change</strong>, so your final price may be different.`)}
 ${p("Our reservations team will review your request and reply to this email to confirm availability and the final rate. Please don't send any payment until we've confirmed your booking.")}
@@ -1744,7 +1745,7 @@ ${signature(c)}`;
 function staffInquiryEmail(r: Any, c: ReturnType<typeof cfg>, guest: Any) {
   const guests = (Number(r.adults) || 0) + (Number(r.children_6_12) || 0) + (Number(r.children_0_5) || 0);
   const body = `${p(`<strong>New booking REQUEST from the website &mdash; not a reservation.</strong> No casita is held, nothing was sent to Cloudbeds and no payment was asked for.`)}
-${statusBox([
+<div style="margin:16px 0;">${kv([
     ["Reference", esc(r.order_code || "—")],
     ["Guest", esc(r.guest_name || "—")],
     ["Email", r.guest_email ? `<a href="mailto:${esc(r.guest_email)}">${esc(r.guest_email)}</a>` : "—"],
@@ -1756,7 +1757,7 @@ ${statusBox([
     ["Estimate shown", `${esc(peso(Number(r.total_amount) || 0))} at 2026 rates (guest told 2027 rates are subject to change)`],
     ["Notes", esc(r.notes || "—")],
     ["Guest email", guest?.ok ? "Request-received note sent" : esc(String(guest?.error || "not sent"))],
-  ])}
+  ])}</div>
 ${p("Check availability and the 2027 rate in Cloudbeds, then reply to the guest. If they go ahead, create the booking in the dashboard or Cloudbeds; otherwise set this request to Cancelled (no email is sent to the guest for a request).")}`;
   return {
     subject: `Booking request (inquiry) — ${stayRange(r)} — ${r.guest_name || "Guest"}`,
