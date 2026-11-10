@@ -16,7 +16,7 @@
   var D = window.VBRDash;
   if (!D || !D.sb) return;
   var sb = D.sb, esc = D.esc;
-  var EXEC_STAFF = ["miguel@staff.local"];
+  var EXEC_STAFF = ["miguel@staff.local", "nicho@staff.local"];
   var dashScreen = document.getElementById("dashScreen");
   var $ = function (id) { return document.getElementById(id); };
   function store(k, v) { try { if (v === undefined) return localStorage.getItem(k); localStorage.setItem(k, v); } catch (e) { return null; } }
