@@ -5,7 +5,8 @@
 // Called with header x-webhook-secret (the same vault secret the booking
 // emails use) and a JSON body { action, ... }:
 //   pull     every 5 min (pg_cron): reservations changed in Cloudbeds since the
-//            last run → booking_requests; then retries website bookings that
+//            last run → booking_requests (plus any in cb_resync_queue, v59);
+//            then retries website bookings that
 //            haven't reached Cloudbeds yet.
 //   full     nightly: every stay checking out from yesterday on (in pages).
 //   push     { booking_id } a villa booked on the website → new Cloudbeds
@@ -176,10 +177,17 @@ export function normalize(d: Any) {
   };
 }
 
-async function syncOne(id: string): Promise<Any> {
+async function syncOne(id: string, depth = 0): Promise<Any> {
   try {
     const r = await cb("GET", "getReservation", { reservationID: id });
-    return await rpc("cb_apply_reservation", { p: normalize(r.data) });
+    const res = await rpc("cb_apply_reservation", { p: normalize(r.data) });
+    // v59: this reservation took its casita over from another Cloudbeds reservation
+    // still holding it on the website (the other half of a room swap) — re-sync
+    // that one now so it lands on its new casita (the pull retries it otherwise).
+    if (depth < 2 && Array.isArray(res?.displaced)) {
+      for (const other of res.displaced) await syncOne(String(other), depth + 1).catch(() => null);
+    }
+    return res;
   } catch (e) {
     const msg = String((e as Error).message || e);
     if (/not found|does not exist|invalid reservation/i.test(msg)) {
@@ -311,7 +319,7 @@ async function pull() {
   // Overlap generously: Cloudbeds may read the time as Manila or UTC.
   const from = st?.at ? new Date(new Date(st.at).getTime() - 30 * 60_000) : new Date(Date.now() - 2 * 86_400_000);
   const params = { modifiedFrom: fmtUtc(from), modifiedTo: fmtUtc(new Date(Date.now() + 86_400_000)) };
-  const totals = { applied: 0, skipped: 0, failed: 0, pushed: 0, push_failed: 0 };
+  const totals = { applied: 0, skipped: 0, failed: 0, pushed: 0, push_failed: 0, resynced: 0 };
   const errors: string[] = [];
   let complete = true;
   for (let page = 1; page <= 20; page++) {
@@ -321,6 +329,15 @@ async function pull() {
     totals.applied += r.applied; totals.skipped += r.skipped; totals.failed += r.failed; errors.push(...r.errors);
     if (r.stopped) { complete = false; break; }
     if (items.length < 100) break;
+  }
+  // v59: reservations whose casita couldn't be held on the website last time
+  // (e.g. half of a room swap) — Cloudbeds won't report them as changed again,
+  // so fetch them again until they apply cleanly (cb_resync_queue)
+  const again: string[] = (await rpc("cb_resync_take", { p_limit: 25 }).catch(() => [])) || [];
+  for (const id of again) {
+    if (Date.now() > deadline) break;
+    try { await syncOne(String(id)); totals.resynced++; }
+    catch (e) { errors.push(`resync ${id}: ${(e as Error).message}`); }
   }
   const blocks = await syncBlocks(105).catch((e) => { errors.push("room blocks: " + (e as Error).message); return null; });
   // website bookings still waiting for Cloudbeds
