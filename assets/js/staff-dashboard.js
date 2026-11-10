@@ -1986,8 +1986,9 @@
       $("addStatus").disabled = false;
       $("addStatusLock").hidden = true;
       $("addName").value = r.guest_name || "";
-      $("addName").readOnly = true;
-      $("addNameLock").hidden = false;
+      // v62: staff can correct the guest name (logged); not on a Cloudbeds reservation
+      $("addName").readOnly = !!r.cb_reservation_id;
+      $("addNameLock").hidden = !r.cb_reservation_id;
       $("addBookedBy").value = r.booked_by || "—";
       $("addPhone").value = r.guest_phone || "";
       $("addEmail").value = r.guest_email || "";
@@ -2208,7 +2209,8 @@
       var patch = {};
       Object.keys(vals).forEach(function (k) {
         if (k === "stay_type_label") return; // only follows a real type change (below)
-        if (k === "guest_name" || k === "booked_by") return; // locked once the booking exists
+        if (k === "booked_by") return; // locked once the booking exists (v62: the guest name can be corrected)
+        if (k === "guest_name" && (r.cb_reservation_id || !vals.guest_name)) return;
         if (!sameValue(vals[k], r[k])) patch[k] = vals[k];
       });
       if (patch.stay_type) patch.stay_type_label = vals.stay_type_label;

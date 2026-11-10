@@ -116,8 +116,9 @@
     $("vStatusLock").hidden = !!editing;
     $("vBookedBy").value = editing ? (r.booked_by || "—") : (D.staffName() || "");
     $("vName").value = r.guest_name || "";
-    $("vName").readOnly = !!editing;
-    $("vNameLock").hidden = !editing;
+    // v62: staff can correct the guest name (logged); a Cloudbeds reservation's comes from Cloudbeds
+    $("vName").readOnly = !!(editing && r.cb_reservation_id);
+    $("vNameLock").hidden = !(editing && r.cb_reservation_id);
     $("vPhone").value = r.guest_phone || "";
     $("vEmail").value = r.guest_email || "";
     $("vCountry").value = r.country || "Philippines";
