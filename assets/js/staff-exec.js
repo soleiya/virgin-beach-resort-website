@@ -4,10 +4,12 @@
 //     booking they are, and a feed of booking-funnel activity (every 15 s)
 //   • Today so far vs the same time yesterday: visitors, website bookings,
 //     money paid online, visits by hour
-//   • A period (7 / 30 / 90 days, this month): traffic, website sales vs the
-//     previous period, both booking funnels with drop-offs, sources, landing
-//     pages, devices and why bookings were blocked
-//   • A plain-language executive summary at the top
+//   • A date range (today, yesterday, 7 / 30 / 90 days, this month, or custom
+//     dates): traffic, website sales vs the same number of days before, both
+//     booking funnels with drop-offs, sources, landing pages, devices and why
+//     bookings were blocked
+//   • A plain-language executive summary at the top: who's on the site right
+//     now, then insights about the chosen date range
 // Data: site_live() and site_sales() (booking-v58), site_insights() (v44).
 // Shown only to EXEC_STAFF accounts, who land on it when they sign in.
 // =============================================================================
@@ -72,11 +74,44 @@
 
   // ---------------------------------------------------------------- state
   var shown = false, period = store("vbr.exPeriod") || "30", live = null, ins = null, sales = null, liveAt = 0, liveErr = "", perErr = "";
-  if (["7", "30", "90", "month"].indexOf(period) === -1) period = "30";
+  if (["today", "yday", "7", "30", "month", "90", "custom"].indexOf(period) === -1) period = "30";
+  var TRACK_FROM = "2026-11-06";   // the site's own visit tracking starts here
+  var MAX_DAYS = 366;
+  var custom = { from: store("vbr.exFrom") || "", to: store("vbr.exTo") || "" };
+  function validDay(s) { return /^\d{4}-\d{2}-\d{2}$/.test(String(s || "")); }
+  function daysBetween(a, b) { return Math.round((Date.parse(b + "T00:00:00Z") - Date.parse(a + "T00:00:00Z")) / 864e5); }
+  // the chosen range, inclusive, in Manila dates (always ends today or earlier)
   function range() {
     var t = todayStr();
+    if (period === "today") return { from: t, to: t };
+    if (period === "yday") return { from: addDays(t, -1), to: addDays(t, -1) };
     if (period === "month") return { from: t.slice(0, 8) + "01", to: t };
+    if (period === "custom") {
+      var f = validDay(custom.from) ? custom.from : addDays(t, -6), to = validDay(custom.to) ? custom.to : t;
+      if (to > t) to = t;
+      if (f > to) f = to;
+      if (daysBetween(f, to) >= MAX_DAYS) f = addDays(to, -(MAX_DAYS - 1));
+      return { from: f, to: to };
+    }
     return { from: addDays(t, -(+period - 1)), to: t };
+  }
+  function nDays(r) { return daysBetween(r.from, r.to) + 1; }
+  // "Today", "Last 7 days", "Nov 3 – Nov 9"…
+  function rangeName(r) {
+    r = r || range();
+    if (period === "today") return "Today";
+    if (period === "yday") return "Yesterday";
+    if (period === "month") return "This month";
+    if (period === "custom") return r.from === r.to ? fmtDay(r.from, { weekday: "short", month: "short", day: "numeric" }) : fmtDay(r.from) + " – " + fmtDay(r.to);
+    return "Last " + period + " days";
+  }
+  // what the range is compared with
+  function prevName(r) {
+    r = r || range();
+    var n = nDays(r);
+    if (period === "today") return "all of yesterday";
+    if (n === 1) return "the day before";
+    return "the " + n + " days before";
   }
 
   // ---------------------------------------------------------------- shell
@@ -84,7 +119,11 @@
   el.id = "exView";
   el.innerHTML =
     '<div class="ex-head"><div><h2>Website — executive view</h2><p><span class="ex-live"><i></i><span id="exUpdated">Connecting…</span></span></p></div>' +
-    '<div class="sum-seg" id="exPeriod"><button type="button" data-p="7">7 days</button><button type="button" data-p="30">30 days</button><button type="button" data-p="month">This month</button><button type="button" data-p="90">90 days</button></div></div>' +
+    '<style>#exView .ex-range{max-width:100%}#exPeriod{max-width:100%;overflow-x:auto}#exPeriod button{white-space:nowrap;padding:7px 12px}</style>' +
+    '<div class="ex-range"><div class="sum-seg" id="exPeriod"><button type="button" data-p="today">Today</button><button type="button" data-p="yday">Yesterday</button><button type="button" data-p="7">7 days</button><button type="button" data-p="30">30 days</button><button type="button" data-p="month">This month</button><button type="button" data-p="90">90 days</button><button type="button" data-p="custom">Custom</button></div>' +
+    '<div id="exCustom" hidden style="margin-top:8px;display:flex;flex-wrap:wrap;gap:6px;align-items:center;justify-content:flex-end;font-size:13px">' +
+    '<label>From <input type="date" id="exFrom" style="font:inherit;padding:3px 6px"></label><label>To <input type="date" id="exTo" style="font:inherit;padding:3px 6px"></label>' +
+    '<button type="button" id="exApply" class="btn btn-sm" style="padding:4px 12px">Apply</button><span class="muted" id="exCustomMsg"></span></div></div></div>' +
     '<div class="ex-summary" id="exSummary"></div>' +
     '<h3 class="ex-h">Today so far <small>vs the same time yesterday</small></h3><div class="ex-tiles" id="exToday"></div>' +
     '<div class="ex-grid2"><div class="ex-card"><div class="ex-card-h"><h4>Visits by hour</h4><span class="ex-legend"><i class="s1"></i>Today <i class="s2"></i>Yesterday</span></div><div id="exHours" class="ex-chart"></div></div>' +
@@ -106,7 +145,23 @@
 
   el.addEventListener("click", function (e) {
     var b = e.target.closest("[data-p]");
-    if (b) { period = b.getAttribute("data-p"); store("vbr.exPeriod", period); loadPeriod(); }
+    if (b) {
+      period = b.getAttribute("data-p"); store("vbr.exPeriod", period);
+      ins = sales = null;               // don't describe the old range while the new one loads
+      drawSummary(); loadPeriod();
+      return;
+    }
+    if (e.target.closest("#exApply")) {
+      var f = $("exFrom").value, t = $("exTo").value, today = todayStr();
+      if (!validDay(f) || !validDay(t)) { $("exCustomMsg").textContent = "Pick both dates."; return; }
+      if (f > t) { var x = f; f = t; t = x; }
+      if (t > today) t = today;
+      if (daysBetween(f, t) >= MAX_DAYS) { $("exCustomMsg").textContent = "Up to " + MAX_DAYS + " days at a time."; return; }
+      $("exCustomMsg").textContent = "";
+      custom = { from: f, to: t }; store("vbr.exFrom", f); store("vbr.exTo", t);
+      period = "custom"; store("vbr.exPeriod", period);
+      ins = sales = null; drawSummary(); loadPeriod();
+    }
   });
 
   // ---------------------------------------------------------------- charts (SVG)
@@ -202,10 +257,12 @@
   function loadPeriod() {
     if (!shown || perBusy) return;
     perBusy = true;
-    var r = range();
+    var r = range(), key = r.from + "|" + r.to;
     drawPeriodChrome();
     Promise.all([sb.rpc("site_insights", { p_from: r.from, p_to: r.to }), sb.rpc("site_sales", { p_from: r.from, p_to: r.to })]).then(function (res) {
       perBusy = false;
+      var now = range();
+      if (now.from + "|" + now.to !== key) { loadPeriod(); return; }   // the range changed while loading
       var err = res[0].error || res[1].error;
       if (err) { perErr = err.message; drawPeriod(); return; }
       perErr = ""; ins = res[0].data; sales = res[1].data; drawPeriod(); drawSummary();
@@ -259,7 +316,13 @@
   function drawPeriodChrome() {
     Array.prototype.forEach.call($("exPeriod").querySelectorAll("button"), function (b) { b.classList.toggle("on", b.getAttribute("data-p") === period); });
     var r = range();
-    $("exPerH").innerHTML = (period === "month" ? "This month" : "Last " + period + " days") + " <small>" + esc(fmtDay(r.from)) + " – " + esc(fmtDay(r.to, { month: "short", day: "numeric", year: "numeric" })) + " · vs the " + (period === "month" ? "same number of days before" : "previous " + period + " days") + "</small>";
+    var box = $("exCustom");
+    box.hidden = period !== "custom";
+    box.style.display = period === "custom" ? "flex" : "none";
+    if (period === "custom") { $("exFrom").value = r.from; $("exTo").value = r.to; $("exFrom").max = $("exTo").max = todayStr(); }
+    var dates = r.from === r.to ? fmtDay(r.to, { weekday: "short", month: "short", day: "numeric", year: "numeric" })
+      : fmtDay(r.from) + " – " + fmtDay(r.to, { month: "short", day: "numeric", year: "numeric" });
+    $("exPerH").innerHTML = esc(period === "custom" ? "Custom range" : rangeName(r)) + " <small>" + esc(dates) + " · vs " + esc(prevName(r)) + "</small>";
   }
   function drawPeriod() {
     if (!shown) return;
@@ -302,28 +365,70 @@
   }
 
   // ---------------------------------------------------------------- executive summary
+  // Always first: who's on the site right now (live). Then everything is about
+  // the chosen date range — today, yesterday, a preset or custom dates.
+  function chg(cur, prev) {
+    cur = num(cur); prev = num(prev);
+    if (!prev) return null;
+    return Math.round((cur - prev) / prev * 100);
+  }
+  // "today" / "yesterday" / "on Nov 4" / "in this range"
+  function whenWords(r) {
+    if (period === "today") return "today";
+    if (period === "yday") return "yesterday";
+    if (r.from === r.to) return "on " + fmtDay(r.from, { weekday: "short", month: "short", day: "numeric" });
+    return "in this range";
+  }
+  function chgText(d, vs) { return d === null ? "" : " (" + (d >= 0 ? "+" : "") + d + "% vs " + vs + ")"; }
   function drawSummary() {
     if (!shown) return;
-    var out = [];
+    var out = [], r = range(), name = rangeName(r), n = nDays(r), isToday = period === "today";
     if (live && !liveErr) {
-      var t = live.today || {}, y = live.yday_same_time || {}, st = live.sales_today || {}, pt = live.paid_today || {};
       var onForm = (live.sessions || []).filter(function (s) { return Date.now() - new Date(s.last_at).getTime() < 5 * 60e3 && num(s.stage) >= 1 && num(s.stage) <= 5; }).length;
       out.push("<b>Right now</b> " + (num(live.active_5) ? plural(live.active_5, "person is", "people are") + " on the site" + (onForm ? ", " + n0(onForm) + " in a booking form" : "") : "the site is quiet") + ".");
-      var dv = num(y.visitors) ? Math.round((num(t.visitors) - num(y.visitors)) / num(y.visitors) * 100) : null;
-      out.push("<b>Today so far</b> " + plural(t.visitors, "visitor") + (dv !== null ? " (" + (dv >= 0 ? "+" : "") + dv + "% vs this time yesterday)" : "") + ", " +
-        plural(st.bookings, "website booking") + (num(st.value) ? " worth " + money(st.value) : "") + (num(pt.amount) ? " and " + money(pt.amount) + " paid online" : "") + ".");
     }
-    if (ins && sales && !perErr) {
-      var tt = ins.totals || {}, c = sales.cur || {}, p = sales.prev || {};
-      var lbl = period === "month" ? "This month" : "Last " + period + " days";
-      var dvv = num(p.value) ? Math.round((num(c.value) - num(p.value)) / num(p.value) * 100) : null;
-      out.push("<b>" + lbl + "</b> " + plural(tt.visitors, "visitor") + ", " + plural(c.live, "website booking") + " worth " + moneyShort(c.value) +
-        (dvv !== null ? " (" + (dvv >= 0 ? "+" : "") + dvv + "% vs the period before)" : "") + " — " + pct(c.live, tt.visits) + "% of visits booked.");
+    if (isToday && live && !liveErr) {
+      // today: compare with the same time yesterday (the live figures), not all of yesterday
+      var t = live.today || {}, y = live.yday_same_time || {}, st = live.sales_today || {}, sy = live.sales_yday_same_time || {}, pt = live.paid_today || {};
+      out.push("<b>Today so far</b> " + plural(t.visitors, "visitor") + chgText(chg(t.visitors, y.visitors), "this time yesterday") + ", " +
+        plural(st.bookings, "website booking") + (num(st.value) ? " worth " + money(st.value) : "") + chgText(chg(st.value, sy.value), "this time yesterday") +
+        (num(pt.amount) ? ", " + money(pt.amount) + " paid online" : "") + " — " + pct(st.bookings, t.visits) + "% of visits booked.");
+    }
+    if (!ins || !sales) {
+      if (!isToday || !live) out.push('<span class="muted">Loading ' + esc(name.toLowerCase()) + "…</span>");
+    } else if (!perErr) {
+      var tt = ins.totals || {}, c = sales.cur || {}, p = sales.prev || {}, vs = prevName(r);
+      if (!isToday || !live || liveErr) {
+        out.push("<b>" + esc(name) + "</b> " + plural(tt.visitors, "visitor") + ", " + plural(c.live, "website booking") + " worth " + moneyShort(c.value) +
+          chgText(chg(c.value, p.value), vs) + (num(c.paid_online) ? ", " + moneyShort(c.paid_online) + " paid online" : "") +
+          " — " + pct(c.live, tt.visits) + "% of visits booked." + (num(c.requests) ? " Plus " + plural(c.requests, "booking request") + "." : ""));
+      }
+      if (num(c.live)) {
+        var mix = [];
+        if (num(c.villa)) mix.push(plural(c.villa, "casita stay") + " (" + moneyShort(c.villa_value) + ")");
+        if (num(c.daytrip)) mix.push(plural(c.daytrip, "day trip") + " (" + moneyShort(c.daytrip_value) + ")");
+        out.push("Bookings " + whenWords(r) + ": " + mix.join(" and ") + ", average " + money(num(c.value) / num(c.live)) +
+          (c.lead_days !== null && c.lead_days !== undefined ? ", made " + plural(c.lead_days, "day") + " ahead of the visit on average" : "") +
+          (num(c.cancelled) ? "; " + n0(c.cancelled) + " expired or cancelled" : "") + ".");
+      } else if (num(tt.visits)) {
+        out.push("No website bookings " + (isToday ? "yet today" : whenWords(r)) + (num(p.live) ? " (" + plural(p.live, "booking") + " in " + vs + ")" : "") + ".");
+      }
+      if (n > 1) {
+        var vd = (ins.by_day || []).slice().sort(function (a, b) { return num(b.visitors) - num(a.visitors); })[0];
+        var sd = (sales.by_day || []).slice().sort(function (a, b) { return num(b.value) - num(a.value); })[0];
+        var peak = [];
+        if (vd && num(vd.visitors)) peak.push("busiest day " + fmtDay(vd.day, { weekday: "short", month: "short", day: "numeric" }) + " (" + plural(vd.visitors, "visitor") + ")");
+        if (sd && num(sd.value)) peak.push("best sales day " + fmtDay(sd.day, { weekday: "short", month: "short", day: "numeric" }) + " (" + moneyShort(sd.value) + ")");
+        if (peak.length) out.push(peak.join("; ").replace(/^b/, "B") + ".");
+      }
       var srcs = (ins.sources || []).filter(function (s) { return num(s.visits) >= 5; });
       if (srcs.length) {
         var topS = srcs[0], best = srcs.slice().sort(function (a, b) { return num(b.booked) / num(b.visits) - num(a.booked) / num(a.visits); })[0];
         out.push(esc(topS.name) + " brings the most visits (" + pct(topS.visits, tt.visits) + "%)" + (best && num(best.booked) && best.name !== topS.name ? "; " + esc(best.name) + " converts best (" + pct(best.booked, best.visits) + "%)" : "") + ".");
       }
+      var dv = ins.devices || [], dvt = dv.reduce(function (s, d) { return s + num(d.visits); }, 0);
+      var mob = dv.filter(function (d) { return /mobile|phone/i.test(d.name); }).reduce(function (s, d) { return s + num(d.visits); }, 0);
+      if (dvt >= 20 && mob) out.push(pct(mob, dvt) + "% of visits were on phones.");
       var worst = null;
       [["casita", ins.funnel_villas], ["day-trip", ins.funnel_daytrip]].forEach(function (f) {
         var s = f[1] || [];
@@ -335,6 +440,7 @@
       if (worst && worst.loss > 0.2) out.push("Biggest leak: " + worst.name + " funnel, “" + esc(worst.from) + "” → “" + esc(worst.to) + "” (" + Math.round(worst.loss * 100) + "% don't continue).");
       var bl = (ins.blocked || [])[0];
       if (bl && num(bl.times) >= 3) out.push("Most common block: “" + esc(String(bl.reason).slice(0, 90)) + "” (" + plural(bl.times, "time") + ").");
+      if (r.from < TRACK_FROM) out.push('<span class="muted">Visits are only counted from ' + esc(fmtDay(TRACK_FROM, { month: "short", day: "numeric", year: "numeric" })) + ", so visitor and conversion figures for earlier days are incomplete. Bookings and sales are complete.</span>");
     }
     $("exSummary").innerHTML = out.length ? out.map(function (s) { return "<p>" + s + "</p>"; }).join("") : '<p class="muted">Loading…</p>';
   }
