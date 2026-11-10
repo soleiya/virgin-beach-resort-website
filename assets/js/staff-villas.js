@@ -75,7 +75,7 @@
     if (cbLock === "dates") { lockEl($("vIn")); lockEl($("vOut")); }
     if (cbLock === "all") {
       Array.prototype.forEach.call(form.querySelectorAll("input, select, textarea, button"), function (el) {
-        if (el.id === "vStaffNotes" || el.id === "vCancel" || el.id === "vSave" || el.id === "vLogBtn" || el.closest(".mail-panel") || el.closest("#vNoPayCancel")) return;
+        if (el.id === "vStaffNotes" || el.id === "vCancel" || el.id === "vSave" || el.id === "vLogBtn" || el.closest(".mail-panel") || el.closest("#vNoPayCancel") || el.closest("#vCx")) return;
         // companions' names can still be corrected here (not their age group — that's pricing, done in Cloudbeds)
         if (el.closest("#vGuests") && el.tagName === "INPUT" && !el.readOnly) return;
         lockEl(el);
@@ -104,6 +104,7 @@
     var r = editing || {};
     if (D.renderEmailLog) D.renderEmailLog("vMailLogField", "vMailLog", editing ? r.id : null);
     renderNoPayCancel(editing);
+    renderCancel(editing);
     $("villaModalTitle").textContent = editing ? "Edit Villa Booking" + (r.order_code ? " · " + r.order_code : "") : "New Villa Booking";
     $("villaModalSub").textContent = editing ? "Changes are saved to the activity log under your name." : "Overnight stay in one or more casitas. Priced from the same rate sheet as the website.";
     saveBtn.textContent = editing ? "Save Changes" : "Save Booking";
@@ -162,6 +163,7 @@
     var mp = mailPanel();
     if (mp) mp.reset();
     applyCbLock(r);
+    if (D.renderStatusStory) D.renderStatusStory(editing, "vStatus");
     if (!editing) $("villaModalSub").textContent = "Overnight stay in one or more casitas. Priced from the same rate sheet as the website. Saved bookings are created in Cloudbeds automatically, on the same casita.";
     backdrop.classList.add("open");
   }
@@ -313,6 +315,92 @@
       close(); D.reload();
     });
   });
+
+  // ---------------- v61: "Cancel reservation" — any villa booking that is in Cloudbeds ----------------
+  // Made on the website or in Cloudbeds: staff_cancel_villa() cancels it here and
+  // cloudbeds-sync cancels it in Cloudbeds (retried every 5 min; a sync alert if it
+  // doesn't go through). Cloudbeds emails the guest only if ticked.
+  var CX_REASONS = [["guest_cancelled", "Guest cancelled"], ["correction", "Correction — re-booked or entered by mistake"],
+                    ["test", "Test booking"], ["other", "Other"]];
+  (function buildCancelBox() {
+    var anchor = $("vNoPayCancel");
+    if (!anchor) return;
+    var box = document.createElement("div");
+    box.className = "modal-field npc";
+    box.id = "vCx";
+    box.hidden = true;
+    box.innerHTML = "<label>Cancel this reservation</label>" +
+      '<p class="npc-rule" id="vCxRule"></p>' +
+      '<button type="button" class="btn-sm ghost npc-open" id="vCxOpen">Cancel reservation&hellip;</button>' +
+      '<div class="npc-box" id="vCxBox" hidden>' +
+        '<label>Why is it cancelled?</label><div id="vCxReasons">' +
+        CX_REASONS.map(function (x) { return '<label class="modal-check"><input type="radio" name="vCxReason" value="' + x[0] + '"> ' + esc(x[1]) + "</label>"; }).join("") +
+        "</div>" +
+        '<label for="vCxNote">Note <span class="muted">(optional &middot; needed for &ldquo;Other&rdquo;)</span></label><textarea id="vCxNote" rows="2"></textarea>' +
+        '<label class="modal-check"><input type="checkbox" id="vCxEmail"> Email the guest Cloudbeds&rsquo; cancellation notice</label>' +
+        '<p class="modal-hint">The reservation becomes <b>Canceled</b> here and in Cloudbeds (#<span id="vCxNo"></span>) and the casita is released. Logged under your name.</p>' +
+        '<div class="npc-actions"><button type="button" class="btn-sm ghost" id="vCxBack">Keep the reservation</button> <button type="button" class="btn-sm primary npc-go" id="vCxGo">Cancel reservation now</button></div>' +
+        '<p class="modal-error" id="vCxErr"></p>' +
+      "</div>" +
+      '<p class="modal-hint" id="vCxDone" hidden></p>';
+    anchor.parentNode.insertBefore(box, anchor.nextSibling);
+
+    $("vCxOpen").addEventListener("click", function () {
+      $("vCxBox").hidden = false; $("vCxOpen").hidden = true; $("vCxErr").textContent = "";
+    });
+    $("vCxBack").addEventListener("click", function () { $("vCxBox").hidden = true; $("vCxOpen").hidden = false; });
+    $("vCxReasons").addEventListener("change", function (e) {
+      if (e.target.name !== "vCxReason") return;
+      // a real cancellation usually tells the guest; a correction or a test never should
+      $("vCxEmail").checked = e.target.value === "guest_cancelled";
+    });
+    $("vCxGo").addEventListener("click", function () {
+      var r = editing; if (!r) return;
+      var picked = box.querySelector('input[name="vCxReason"]:checked');
+      var note = $("vCxNote").value.trim(), notify = $("vCxEmail").checked;
+      if (!picked) { $("vCxErr").textContent = "Choose why it's cancelled."; return; }
+      if (picked.value === "other" && !note) { $("vCxErr").textContent = "Add a short note for “Other”."; return; }
+      if (!confirm("Cancel " + (r.order_code || "this reservation") + " here and in Cloudbeds (#" + r.cb_reservation_id + ")?\n\n" +
+                   (notify ? "Cloudbeds will email the guest a cancellation notice." : "The guest will NOT be emailed."))) return;
+      var btn = $("vCxGo"); btn.disabled = true; $("vCxErr").textContent = "";
+      sb.rpc("staff_cancel_villa", { p_booking_id: r.id, p_reason: picked.value, p_note: note || null, p_notify: notify }).then(function (res) {
+        if (res.error) {
+          btn.disabled = false;
+          $("vCxErr").textContent = /staff_cancel_villa|function/.test(res.error.message) && !/view-only|Staff only|Cloudbeds|closed|Choose|note/i.test(res.error.message)
+            ? "Needs the database update booking-v61." : "Couldn't cancel: " + res.error.message;
+          return;
+        }
+        $("vCxBox").hidden = true; $("vCxOpen").hidden = true;
+        var done = $("vCxDone"); done.hidden = false;
+        done.innerHTML = "<b>Canceled on the website.</b> Cancelling #" + esc(r.cb_reservation_id) + " in Cloudbeds&hellip;";
+        D.reload();
+        // watch for Cloudbeds to confirm (the sync updates cb_info within seconds)
+        var tries = 0;
+        (function poll() {
+          sb.from("booking_requests").select("cb_info").eq("id", r.id).single().then(function (q) {
+            var st = q && q.data && q.data.cb_info && q.data.cb_info.status;
+            if (st === "canceled") { done.innerHTML = "<b>Canceled here and in Cloudbeds ✓</b>" + (notify ? " Cloudbeds is emailing the guest." : " The guest wasn't emailed."); D.reload(); return; }
+            if (++tries < 15) { setTimeout(poll, 3000); return; }
+            done.innerHTML = "<b>Canceled on the website.</b> Cloudbeds hasn&rsquo;t confirmed it yet &mdash; it&rsquo;s retried every 5 minutes, and you&rsquo;ll get a sync alert if it doesn&rsquo;t go through. You can also cancel #" + esc(r.cb_reservation_id) + " in Cloudbeds directly.";
+          });
+        })();
+      });
+    });
+  })();
+  function renderCancel(r) {
+    var box = $("vCx"); if (!box) return;
+    var cbs = r && r.cb_info && r.cb_info.status;
+    var active = !!(r && r.id && r.stay_type === "overnight" && r.cb_reservation_id &&
+      ["pending", "pending_payment", "confirmed"].indexOf(r.status) >= 0 && ["checked_in", "checked_out"].indexOf(cbs) === -1);
+    box.hidden = !active;
+    $("vCxBox").hidden = true; $("vCxOpen").hidden = false; $("vCxErr").textContent = ""; $("vCxDone").hidden = true;
+    $("vCxGo").disabled = false; $("vCxNote").value = ""; $("vCxEmail").checked = false;
+    Array.prototype.forEach.call(box.querySelectorAll('input[name="vCxReason"]'), function (i) { i.checked = false; });
+    if (!active) return;
+    $("vCxNo").textContent = r.cb_reservation_id;
+    $("vCxRule").innerHTML = (r.cb_owned ? "Made in Cloudbeds" : "Booked on the website, now in Cloudbeds") +
+      " (#" + esc(r.cb_reservation_id) + "). Cancelling here cancels it in Cloudbeds too &mdash; use it for real cancellations, corrections and test bookings.";
+  }
 
   // ---------------- guests ----------------
   function renderGuests() {

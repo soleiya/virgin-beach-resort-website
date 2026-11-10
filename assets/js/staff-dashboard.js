@@ -71,6 +71,7 @@
   var VILLA_LABELS = { pending: "Confirmation Pending", confirmed: "Confirmed", checked_in: "In-House",
     checked_out: "Checked Out", canceled: "Canceled", no_show: "No-Show",
     inquiry: "Booking Request (inquiry)" }; // v51: not a reservation — review, then book or cancel
+  var CANCEL_REASONS = { guest_cancelled: "Guest cancelled", correction: "Correction", test: "Test", other: "Other" };
   function villaStatusKey(r) {
     var cbs = r.cb_info && r.cb_info.status;
     switch (r.status) {
@@ -1034,9 +1035,14 @@
       var tr = document.createElement("tr");
 
       var tdOrder = document.createElement("td");
-      tdOrder.innerHTML = '<span class="order-code">' + esc(r.order_code || "—") + "</span>" +
+      tdOrder.innerHTML = '<a href="#" class="order-code" style="color:inherit;text-decoration:underline dotted;text-underline-offset:3px;cursor:pointer" title="Open this booking">' + esc(r.order_code || "—") + "</a>" +
         '<span class="bk-meta" title="Entered ' + esc(fmtDateTime(r.created_at)) + '">' + esc(fmtShortDate(r.created_at)) + "</span>" +
         (r.booked_by ? '<span class="bk-meta" title="Entered by staff">by ' + esc(r.booked_by) + "</span>" : "");
+      // the booking number opens the booking, like ✎
+      tdOrder.querySelector(".order-code").addEventListener("click", function (e) {
+        e.preventDefault();
+        if (r.stay_type === "overnight" && window.VBRVillas) window.VBRVillas.openBooking(r); else openModal(r);
+      });
       tr.appendChild(tdOrder);
 
       var tdGuest = document.createElement("td");
@@ -1101,6 +1107,14 @@
       if (isVillaRow(r) && r.status === "pending_payment") statusBadge.title = "Proof of payment received — verify it under Payments";
       statusBadge.title = "Change the status with ✎ Edit";
       tdStatus.appendChild(statusBadge);
+      // v61: why staff cancelled it (from the dashboard's Cancel reservation)
+      if (r.status === "declined" && r.cancel_reason) {
+        var cx = document.createElement("span");
+        cx.className = "payby";
+        cx.textContent = (CANCEL_REASONS[r.cancel_reason] || r.cancel_reason) + (r.cancelled_by ? " · by " + String(r.cancelled_by).replace(/@.*/, "") : "");
+        cx.title = "Cancelled " + fmtDateTime(r.cancelled_at) + (r.cancel_note ? " — " + r.cancel_note : "") + (r.cancel_notify ? " · guest emailed by Cloudbeds" : " · guest not emailed");
+        tdStatus.appendChild(cx);
+      }
       if (isVillaRow(r) && r.cb_info && r.cb_info.status && (CB_STATUS[r.cb_info.status] || r.cb_info.status) !== statusLabel(r) &&
           !(r.cb_info.status === "not_confirmed" && statusLabel(r) === "Confirmation Pending")) {
         var cbs = document.createElement("span");
@@ -1880,6 +1894,78 @@
   ["addDining", "addLounge"].forEach(function (id) { $(id).addEventListener("input", renderModalMap); });
   ["addType", "addDiscountType"].forEach(function (id) { $(id).addEventListener("change", renderModalBill); });
 
+  // ---------- "How it got this status" — shown under Status in a booking ----------
+  // From the activity log: the latest status change and who made it (a staff
+  // member on the dashboard, Cloudbeds through the sync, or the system — online
+  // payment, unpaid deadline…), plus the cancel reason when staff gave one.
+  var EXPIRE_WHY = {
+    trip_day_unpaid: "cancelled automatically — not paid by 5 PM on the day of the trip",
+    balance_unpaid: "cancelled automatically — the balance wasn't paid in time",
+    manual_unpaid: "cancelled for non-payment",
+  };
+  function renderStatusStory(r, selectId) {
+    var sel = document.getElementById(selectId);
+    if (!sel) return;
+    var box = document.getElementById(selectId + "Why");
+    if (!box) {
+      box = document.createElement("p");
+      box.id = selectId + "Why";
+      box.className = "modal-hint";
+      box.style.margin = "6px 0 0";
+      sel.parentNode.insertBefore(box, sel.nextSibling);
+    }
+    if (!r || !r.id) { box.hidden = true; return; }
+    box.hidden = false;
+    box.textContent = "Checking how it got this status…";
+    var want = r.id;
+    Promise.all([
+      sb.from("booking_audit_log").select("logged_at,action,changed_by_email,changes").eq("booking_id", r.id).order("logged_at", { ascending: false }).limit(100),
+      sb.from("booking_payments").select("method,status,verified_at,amount").eq("booking_id", r.id).eq("status", "verified").order("verified_at", { ascending: false }).limit(1),
+    ]).then(function (res) {
+      if (box.getAttribute("data-for") && box.getAttribute("data-for") !== want) return;
+      var log = (res[0] && res[0].data) || [], pay = (res[1] && res[1].data && res[1].data[0]) || null;
+      var ch = log.filter(function (e) { return e.action === "update" && e.changes && e.changes.status; })[0];
+      var made = log.filter(function (e) { return e.action === "insert"; })[0];
+      var cur = statusLabel(r), html;
+      var asLabel = function (st) { return statusLabel(Object.assign({}, r, { status: st, cb_info: null })); };
+      if (!ch) {
+        var how = r.cb_owned || originOf(r) === "cloudbeds" ? "came in from Cloudbeds"
+          : originOf(r) === "site_guest" ? "booked by the guest on the website"
+          : r.booked_by ? "entered by " + r.booked_by : made && made.changed_by_email ? "entered by " + staffLabelForLogEmail(made.changed_by_email) : "created";
+        html = "<b>" + esc(cur) + "</b> since the booking was made (" + esc(fmtDateTime(r.created_at)) + ") — " + esc(how) + ".";
+      } else {
+        var who = ch.changed_by_email || "", nw = ch.changes.status.new, old = ch.changes.status.old, why;
+        if (who === "Cloudbeds") {
+          why = "changed in Cloudbeds" + (r.cb_info && r.cb_info.status ? " (Cloudbeds: " + (CB_STATUS[r.cb_info.status] || r.cb_info.status) + ")" : "") + ", synced here";
+        } else if (who && who.indexOf("@") > 0) {
+          why = "changed by " + staffLabelForLogEmail(who) + " on the dashboard";
+          if (nw === "declined" && r.cancel_reason) why += " — " + (CANCEL_REASONS[r.cancel_reason] || r.cancel_reason) + (r.cancel_note ? ": “" + r.cancel_note + "”" : "") + (r.cb_reservation_id ? (r.cancel_notify ? "; guest emailed by Cloudbeds" : "; guest not emailed") : "");
+          else if (nw === "expired") why += " — " + (EXPIRE_WHY[r.expire_reason] || "cancelled for non-payment");
+        } else if (who) {
+          why = "changed by “" + who + "”";
+        } else if (nw === "expired") {
+          why = EXPIRE_WHY[r.expire_reason] || "cancelled automatically — not paid by the payment deadline";
+        } else if (nw === "confirmed" && pay) {
+          why = pay.method === "xendit" ? "confirmed automatically when the guest paid online (" + peso(pay.amount) + ")" : "confirmed when the payment of " + peso(pay.amount) + " was verified";
+        } else if (nw === "pending_payment") {
+          why = "the guest uploaded a proof of payment";
+        } else if (nw === "completed") {
+          why = "marked completed automatically after the stay";
+        } else {
+          why = "changed automatically by the system";
+        }
+        html = "<b>" + esc(cur) + "</b> since " + esc(fmtDateTime(ch.logged_at)) + " — from " + esc(asLabel(old)) + ", " + esc(why) + ".";
+      }
+      // the select may show an unsaved choice: say what's saved
+      box.innerHTML = html + ' <a href="#" class="status-why-log">Full history</a>';
+      box.querySelector(".status-why-log").addEventListener("click", function (e) {
+        e.preventDefault();
+        openLogModal(r.id, (r.guest_name || "This booking") + (r.order_code ? " (" + r.order_code + ")" : ""));
+      });
+    }, function () { box.textContent = ""; box.hidden = true; });
+    box.setAttribute("data-for", want);
+  }
+
   function openModal(row) {
     addForm.reset();
     addError.style.display = "none";
@@ -1951,6 +2037,7 @@
     updateNotifyState();
     var mp = mailPanel();
     if (mp) mp.reset();
+    renderStatusStory(editingRow, "addStatus");
     addModalBackdrop.classList.add("open");
   }
   function closeModal() {
@@ -2839,7 +2926,7 @@
     villaRows: villaRows, billRow: billRow,
     esc: esc, peso: peso, fmtDate: fmtDate, fmtDateTime: fmtDateTime,
     proofLinks: proofLinks, openSignedUrl: openSignedUrl, uploadProof: uploadProof, attachProof: attachProof,
-    cbUrl: cbUrl, loadCbStatus: loadCbStatus,
+    cbUrl: cbUrl, loadCbStatus: loadCbStatus, renderStatusStory: renderStatusStory,
     STATUS_LABELS: STATUS_LABELS, SOURCE_LABELS: SOURCE_LABELS,
     TYPE_LABELS: TYPE_LABELS, statusLabel: statusLabel, villaStatusKey: villaStatusKey, openModal: openModal,
     openBreakdown: openBreakdown, payMethodName: payMethodName, listRows: function () { return renderQueue; },
