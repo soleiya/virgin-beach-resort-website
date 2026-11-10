@@ -11,7 +11,8 @@
 //   full     nightly: every stay checking out from yesterday on (in pages).
 //   push     { booking_id } a villa booked on the website → new Cloudbeds
 //            reservation on the same casita(s).
-//   status   { booking_id } website confirmed / cancelled it → same in Cloudbeds.
+//   status   { booking_id } website confirmed / cancelled it → same in Cloudbeds
+//            (v61: also a staff cancellation of a booking made in Cloudbeds).
 //   payments verified website payments → Cloudbeds folio (postPayment), and
 //            their proof screenshots → the reservation's Documents
 //            (postReservationDocument).
@@ -67,7 +68,7 @@ export async function rpc(name: string, args: Record<string, unknown> = {}): Pro
 }
 
 async function bookingRow(id: string): Promise<Any> {
-  const res = await fetch(`${SB_URL()}/rest/v1/booking_requests?id=eq.${encodeURIComponent(id)}&select=id,status,cb_reservation_id,cb_owned,cb_info`, {
+  const res = await fetch(`${SB_URL()}/rest/v1/booking_requests?id=eq.${encodeURIComponent(id)}&select=id,status,cb_reservation_id,cb_owned,cb_info,cancel_notify,cancelled_at`, {
     headers: { apikey: SR(), Authorization: `Bearer ${SR()}` },
   });
   const rows = await res.json();
@@ -319,9 +320,17 @@ async function pull() {
   // Overlap generously: Cloudbeds may read the time as Manila or UTC.
   const from = st?.at ? new Date(new Date(st.at).getTime() - 30 * 60_000) : new Date(Date.now() - 2 * 86_400_000);
   const params = { modifiedFrom: fmtUtc(from), modifiedTo: fmtUtc(new Date(Date.now() + 86_400_000)) };
-  const totals = { applied: 0, skipped: 0, failed: 0, pushed: 0, push_failed: 0, resynced: 0 };
+  const totals = { applied: 0, skipped: 0, failed: 0, pushed: 0, push_failed: 0, resynced: 0, cancels_sent: 0 };
   const errors: string[] = [];
   let complete = true;
+  // v61: staff cancellations Cloudbeds hasn't taken yet — send them before reading
+  // Cloudbeds' changes, so the sync doesn't bring the reservation back
+  const cancels: string[] = (await rpc("cb_pending_cancel_pushes").catch(() => [])) || [];
+  for (const id of cancels) {
+    if (Date.now() > deadline) break;
+    try { const r = await pushStatus(String(id)); if (r?.reservation_id) totals.cancels_sent++; }
+    catch (e) { errors.push(`cancel ${id}: ${(e as Error).message}`); }
+  }
   for (let page = 1; page <= 20; page++) {
     const res = await listPage(params, page);
     const items = Array.isArray(res.data) ? res.data : [];
@@ -894,16 +903,22 @@ export function cbStatusFor(status: string): string | null {
 async function pushStatus(bookingId: string) {
   if (!(await rpc("cb_push_enabled"))) return { skipped: "test mode — website changes aren't sent to Cloudbeds" };
   const b = await bookingRow(bookingId);
-  if (!b?.cb_reservation_id || b.cb_owned) return { skipped: "not a website booking in Cloudbeds" };
+  if (!b?.cb_reservation_id) return { skipped: "not in Cloudbeds" };
   const want = cbStatusFor(b.status);
   if (!want) return { skipped: "status " + b.status };
+  // v61: a booking made in Cloudbeds only takes a staff cancellation from the website
+  // (its other status changes come from Cloudbeds)
+  const staffCancel = b.status === "declined" && !!b.cancelled_at;
+  if (b.cb_owned && !(want === "canceled" && staffCancel)) return { skipped: "made in Cloudbeds" };
   // already that in Cloudbeds (e.g. "Payment Under Review" is still Confirmation Pending there): nothing to send
   if (b.cb_info?.status === want) return { skipped: "already " + want + " in Cloudbeds" };
   try {
     // Cloudbeds sends its own Confirmed / Cancelled email (the website only sent the quotation)
     // an unpaid booking cancelled by the website (24 h rule or staff "Cancel — not paid") gets the
     // website's own cancellation email (with the staff's message) — no second email from Cloudbeds
-    await cb("PUT", "putReservation", { reservationID: b.cb_reservation_id, status: want, sendStatusChangeEmail: b.status === "expired" ? "false" : "true" });
+    // v61: a staff cancellation from the dashboard emails the guest only if staff ticked it
+    const email = b.status === "expired" ? false : staffCancel ? !!b.cancel_notify : true;
+    await cb("PUT", "putReservation", { reservationID: b.cb_reservation_id, status: want, sendStatusChangeEmail: email ? "true" : "false" });
   } catch (e) {
     await stateSet("last_error", { at: new Date().toISOString(), errors: [`status ${b.cb_reservation_id} → ${want}: ${(e as Error).message}`] });
     throw e;
