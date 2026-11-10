@@ -97,11 +97,18 @@
   function BW() { return window.VBRBookingWindow || null; }
   function requestMode() {
     var w = BW();
-    return !!(w && w.isRequest && checkInEl.value && checkOutEl.value && w.isRequest(checkInEl.value, checkOutEl.value));
+    if (w && w.isRequest && checkInEl.value && checkOutEl.value && w.isRequest(checkInEl.value, checkOutEl.value)) return true;
+    // v63: a night closed in Cloudbeds that can still be requested (e.g. a 2027 weekend)
+    var c = cal();
+    if (!c || !c.status || !datesReady()) return false;
+    for (var n = checkInEl.value; n < checkOutEl.value; n = addDays(n, 1)) if (c.status(n) === "request") return true;
+    return false;
   }
+  var lastReq = null; // v63: mode last applied (calendar data can switch it)
   function submitLabel() { return requestMode() ? "Send Request" : "Book Now"; }
   function applyMode() {
     var req = requestMode(), w = BW();
+    lastReq = req;
     form.classList.toggle("is-request", req);
     if (requestBanner) requestBanner.hidden = !req;
     if (req && w && w.stayLimitText) {
@@ -146,7 +153,9 @@
   document.addEventListener("vbr:booking-window", function () { if (datesReady()) onDates(); });
   // v52: closed-night data arrived → refresh the "Blocked" labels
   document.addEventListener("vbr:calendar-data", function () {
-    if (!datesReady() || requestMode()) return;
+    if (!datesReady()) return;
+    if (requestMode() !== lastReq) { onDates(); return; } // v63: e.g. a 2027 weekend night → request
+    if (requestMode()) return;
     renderTypes();
     var free = villas.filter(function (v) { return !heldIds.has(v.id); }).length;
     if (!free && anyNightBlocked()) availStatus.textContent = "These dates are blocked for online booking. Please pick other dates — available nights are the ones you can click in the calendar.";
@@ -458,6 +467,11 @@
                       : "Pay 50% or 100% within 24 hours to secure it.";
   }
 
+  // v63: subtle early-bird line on online bookings for 2027 stays (message only)
+  function earlyBirdStay() {
+    var w = BW();
+    return !!(w && w.earlyBird && w.earlyBird() && checkOutEl.value && addDays(checkOutEl.value, -1) >= "2027-01-01");
+  }
   function renderBill(q) {
     var rows = (q.lines || []).map(function (l) {
       var qty = Number(l.qty) || 0;
@@ -475,7 +489,8 @@
       (q.error ? '<p class="bill-warning">' + esc(q.error) + "</p>" : "") +
       '<div class="bill-total"><span>' + (req ? "Estimated total" : "Total") + '</span><span>' + peso(q.total) + "</span></div>" +
       '<p class="bill-sub">' + esc(nightsTxt) + " · " + q.guests + " guest" + (q.guests === 1 ? "" : "s") + " · full-board meals included. " +
-      (req ? "Final price confirmed by our reservations team." : payTerms()) + "</p>";
+      (req ? "Final price confirmed by our reservations team." : payTerms()) + "</p>" +
+      (!req && earlyBirdStay() ? '<p class="bill-sub bill-earlybird">' + esc(BW().earlyBird()) + "</p>" : "");
   }
 
   // ---------------------------------------------------------------- add-ons

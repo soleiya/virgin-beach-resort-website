@@ -10,8 +10,10 @@
                   every casita type closed that night, e.g. 2027 weekends,
                   holidays). Not clickable.
        full     — every casita booked. Not clickable.
-       request  — past the casita booking window (VBRBookingWindow): can be
-                  sent as a booking REQUEST (subject to review). Clickable.
+       request  — past the casita booking window (VBRBookingWindow), or (v63)
+                  closed in Cloudbeds on/after VBRBookingWindow.requestFrom
+                  (e.g. 2027 weekends): can be sent as a booking REQUEST
+                  (subject to review). Clickable.
        off      — past, or more than 18 months ahead.
    * The real <input type="date"> boxes stay in the form (read-only) and get a
      "change" event, so stay-booking.js works exactly as before.
@@ -100,7 +102,10 @@
     if (!vs.length) return "loading";
     var closed = S.closed[n] || new Set();
     var tt = types();
-    if (tt.length && tt.every(function (t) { return closed.has(t); })) return "blocked";
+    if (tt.length && tt.every(function (t) { return closed.has(t); })) {
+      var w = BW(); // v63: closed in Cloudbeds but on/after requestFrom → still requestable
+      return w && w.requestFrom && n >= w.requestFrom ? "request" : "blocked";
+    }
     var free = vs.filter(function (v) { return !S.held[n].has(v.id) && !closed.has(v.room_type); }).length;
     return free > 0 ? "open" : "full";
   }
@@ -148,7 +153,7 @@
       m = nextMonth(m);
     }
     html += '</div><div class="sc-legend"><span><i class="lg lg-open"></i>Available</span><span><i class="lg lg-off"></i>Blocked / full &mdash; not bookable</span>' +
-      (stayLimit() ? '<span><i class="lg lg-req"></i>Booking request only (' + fmtShort(addDays(stayLimit(), 1)) + " \u2013 " + fmtShort(farLimit()) + ")</span>" : "") +
+      (stayLimit() ? '<span><i class="lg lg-req"></i>Booking request only' + (BW() && BW().requestFrom && BW().requestFrom <= stayLimit() ? "" : " (" + fmtShort(addDays(stayLimit(), 1)) + " \u2013 " + fmtShort(farLimit()) + ")") + "</span>" : "") +
       (a ? '<button type="button" class="sc-clear">Clear dates</button>' : "") + "</div>";
     S.host.innerHTML = html;
   }

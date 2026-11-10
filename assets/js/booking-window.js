@@ -6,12 +6,16 @@
    same limit on every website booking.
    v51: casita dates (checkin / checkout) past the casita window are NOT
    cleared — book-stay/ turns them into a booking REQUEST (subject to review,
-   2026 rates as a guide). Day-trip dates keep the hard limit. */
+   2026 rates as a guide). Day-trip dates keep the hard limit.
+   v63: inside the casita window, nights closed in Cloudbeds on/after
+   booking_settings.cloudbeds_rates_from (e.g. 2027 weekends) can still be
+   sent as a booking request (W.requestFrom; see stay-calendar.js status()).
+   A subtle early-bird line is shown once online booking reaches 2027. */
 (function () {
   "use strict";
   var FALLBACK = "2026-12-31"; // used until the live setting loads (or if it can't)
   var cfg = window.SUPABASE_CONFIG || {};
-  var W = (window.VBRBookingWindow = { until: FALLBACK, stayUntil: null, requestUntil: null });
+  var W = (window.VBRBookingWindow = { until: FALLBACK, stayUntil: null, requestUntil: null, requestFrom: null });
   // v36: casitas (data-booking-date checkin/checkout) can have their own, later
   // window (booking_settings.villa_bookings_open_until); day trips use until.
   function untilFor(kind) { return (kind === "checkin" || kind === "checkout") && W.stayUntil ? W.stayUntil : W.until; }
@@ -103,10 +107,15 @@
   //   Day trips: the upcoming rate increase, until RATE_NOTE_UNTIL (Manila date).
   var RATE_NOTE_UNTIL = "2026-12-31";
   var RATE_NOTE = "2027 rates are scheduled to increase. Book early to secure today\u2019s rates.";
+  // v63: early-bird line (message only; nothing changes in the price)
+  var EARLY_BIRD_FROM = "2027-01-01"; // shown once online booking reaches this night
+  var EARLY_BIRD = "Early-bird discount applies when you book and pay early.";
+  W.earlyBird = function () { var u = untilFor("checkin"); return u && u >= EARLY_BIRD_FROM && manilaToday() <= u ? EARLY_BIRD : ""; };
   function stayNote() {
     var u = untilFor("checkin");
     if (!u || manilaToday() > u) return "";
-    return "Online booking is open for stays through " + fmt(u) + ". For stays up to " + fmt(W.requestLimit()) + ", you can send us a booking request \u2014 2027 rates are subject to change.";
+    return "Online booking is open for stays through " + fmt(u) + ". For other dates up to " + fmt(W.requestLimit()) + ", you can send us a booking request." +
+      (W.earlyBird() ? " " + W.earlyBird() : "");
   }
   function noteText(kind) {
     if (isStayKind(kind)) return stayNote();
@@ -171,6 +180,7 @@
         W.until = rows[0].bookings_open_until || null;
         W.stayUntil = rows[0].villa_bookings_open_until || null;
         W.requestUntil = rows[0].requests_open_until || null;
+        W.requestFrom = rows[0].cloudbeds_rates ? rows[0].cloudbeds_rates_from || null : null; // v63
         applyMax();
         refreshRateNote();
         recheckPrefilled();
