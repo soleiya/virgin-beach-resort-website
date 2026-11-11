@@ -1893,6 +1893,14 @@
   });
   ["addDining", "addLounge"].forEach(function (id) { $(id).addEventListener("input", renderModalMap); });
   ["addType", "addDiscountType"].forEach(function (id) { $(id).addEventListener("change", renderModalBill); });
+  // Package "Other" = other charges (sunscreen, items, fees): a new one starts with no guests,
+  // so it isn't counted as an extra adult on the Day Trip calendar.
+  $("addType").addEventListener("change", function () {
+    if (editingRow || $("addType").value !== "other") return;
+    ["addAdults", "addSeniors", "addKids", "addPwdKids", "addKids05"].forEach(function (id) { setInt(id, 0); });
+    if (window.VBRRenderPartyLine) window.VBRRenderPartyLine();
+    renderModalBill();
+  });
 
   // ---------- "How it got this status" — shown under Status in a booking ----------
   // From the activity log: the latest status change and who made it (a staff

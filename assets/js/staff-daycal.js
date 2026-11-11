@@ -136,6 +136,9 @@
   }
   function matches(r) { return !st.q || hay(r).indexOf(st.q) >= 0; }
   function guestsOf(r) { return int(r.adults) + int(r.children_6_12) + int(r.children_0_5); }
+  // "Other" rows with no guests are other charges (sunscreen, items sold, fees):
+  // shown in their own column and never counted as guests.
+  function otherCharge(r) { return r.stay_type === "other" && !guestsOf(r) ? Number(r.total_amount) || 0 : 0; }
   function isExclusive(r) { return /exclusive/i.test(String(r.stay_type_label || "") + " " + String(r.staff_notes || "")) && !D.releasesCabanas(r.status); }
   function assignedIds(r) { return (r.booking_cabanas || []).map(function (bc) { return bc.cabana_id; }); }
   function level(left, stock) { return left <= 0 ? "full" : left <= Math.max(1, Math.floor(stock * 0.25)) ? "low" : "ok"; }
@@ -180,11 +183,11 @@
       });
       var active = list.filter(function (r) { return !D.releasesCabanas(r.status); });
       var free = D.cabanasFreeOn(ds) || { dining: stock.dining, lounge: stock.lounge, stock: stock, blocked: { dining: 0, lounge: 0 } };
-      var sum = { adults: 0, kids: 0, k05: 0, sr: 0, pets: 0, dining: 0, lounge: 0, total: 0, guests: 0 };
+      var sum = { adults: 0, kids: 0, k05: 0, sr: 0, pets: 0, dining: 0, lounge: 0, other: 0, total: 0, guests: 0 };
       active.forEach(function (r) {
         var n = D.countsOf(r), sr = int(r.senior_count);
         sum.adults += Math.max(int(r.adults) - sr, 0); sum.sr += sr; sum.kids += int(r.children_6_12); sum.k05 += int(r.children_0_5);
-        sum.pets += int(r.pet_count); sum.dining += n.dining; sum.lounge += n.lounge; sum.total += int(r.total_amount);
+        sum.pets += int(r.pet_count); sum.dining += n.dining; sum.lounge += n.lounge; sum.other += otherCharge(r); sum.total += int(r.total_amount);
         sum.guests += guestsOf(r);
         if (r.status === "confirmed" || r.status === "completed") mon.paid += int(r.total_amount); else mon.unpaid++;
       });
@@ -235,7 +238,7 @@
           (left <= 0 ? (left < 0 ? "over by " + -left : "FULL") : left + " left") + "</b> / " + stock + "</span>";
       };
       html.push('<tr class="dcal-day' + (x.ds === t ? " is-today" : "") + (x.excl ? " is-excl" : "") + (h.dow === 0 || h.dow === 6 ? " is-wkend" : "") +
-        '" data-date="' + x.ds + '"><td colspan="14"><div class="dcal-dayhead">' +
+        '" data-date="' + x.ds + '"><td colspan="15"><div class="dcal-dayhead">' +
         '<span class="dcal-date"><b>' + h.day + "</b> " + esc(h.mon) + " <span>" + esc(h.wd) + "</span></span>" +
         (x.excl ? '<span class="pill-av excl">Exclusive booking</span>' : "") +
         pill("Dining", f.dining, f.stock.dining, f.blocked.dining) + pill("Lounge", f.lounge, f.stock.lounge, f.blocked.lounge) +
@@ -243,15 +246,15 @@
         '<button type="button" class="btn-sm ghost dcal-add" data-date="' + x.ds + '">+ Add</button></div></td></tr>');
       shown.forEach(function (r) { html.push(rowHtml(r)); shownRows++; });
       if (addDate === x.ds) html.push(addRowHtml(x));
-      else if (!shown.length) html.push('<tr class="dcal-empty"><td colspan="14">No bookings — <button type="button" class="linklike dcal-add" data-date="' + x.ds + '">add one</button></td></tr>');
+      else if (!shown.length) html.push('<tr class="dcal-empty"><td colspan="15">No bookings — <button type="button" class="linklike dcal-add" data-date="' + x.ds + '">add one</button></td></tr>');
       if (x.active.length > 1 || (x.active.length && showOff && x.list.length > x.active.length)) {
         var s = x.sum;
         html.push('<tr class="dcal-tot"><td></td><td>TOTAL</td><td class="num">' + s.adults + '</td><td class="num">' + s.kids + '</td><td class="num">' + s.k05 +
           '</td><td class="num">' + s.sr + '</td><td class="num">' + s.pets + '</td><td class="num">' + s.dining + '</td><td class="num">' + s.lounge +
-          '</td><td></td><td class="num">' + esc(peso(s.total)) + '</td><td colspan="3">' + s.guests + " guests</td></tr>");
+          '</td><td></td><td class="num">' + (s.other ? esc(peso(s.other)) : "") + '</td><td class="num">' + esc(peso(s.total)) + '</td><td colspan="3">' + s.guests + " guests</td></tr>");
       }
     });
-    $("dcalBody").innerHTML = html.join("") || '<tr class="dcal-empty"><td colspan="14">' +
+    $("dcalBody").innerHTML = html.join("") || '<tr class="dcal-empty"><td colspan="15">' +
       (st.q ? "No match for “" + esc(st.q) + "” in " + esc(mName) + (Object.keys(hits).length ? " — the highlighted month tabs have matches." : " this year.")
         : "No day trips this month" + (showEmpty ? "" : " (tick “Empty days” to see every day)") + ".") + "</td></tr>";
     if (addDate) { var nf = $("dnName"); if (nf && document.activeElement !== nf && !addFocused) { nf.focus(); addFocused = true; } }
@@ -278,6 +281,7 @@
       '<td class="num cab-d">' + (n.dining || "") + "</td>" +
       '<td class="num cab-l">' + (n.lounge || "") + "</td>" +
       "<td>" + esc(PKG[r.stay_type] || r.stay_type_label || r.stay_type || "") + "</td>" +
+      '<td class="num">' + (otherCharge(r) ? esc(peso(otherCharge(r))) : "") + "</td>" +
       '<td class="num">' + (r.total_amount == null ? "—" : esc(peso(r.total_amount))) + "</td>" +
       '<td><span class="status-badge readonly status-' + esc(r.status) + '">' + esc(D.statusLabel(r)) + "</span></td>" +
       '<td class="dcal-remarks">' + esc(remarks(r)) + "</td>" +
@@ -301,6 +305,7 @@
       '<td><select id="dnType">' + ["day_trip", "half_day", "flash_sale", "all_inclusive_family", "all_inclusive_barkada", "corporate", "other"].map(function (k) {
         return '<option value="' + k + '">' + esc(PKG[k]) + "</option>";
       }).join("") + "</select></td>" +
+      '<td></td>' +
       '<td class="num"><input id="dnTotal" type="number" min="0" step="0.01" placeholder="₱"></td>' +
       '<td><span class="status-badge readonly status-pending">Pending</span></td>' +
       '<td><input id="dnRemarks" type="text" placeholder="Remarks (payment, requests…)"></td>' +
@@ -343,7 +348,8 @@
     var sr = dnVal("dnSr"), adults = dnVal("dnAdults") + sr, kids = dnVal("dnKids"), k05 = dnVal("dnK05");
     var dining = dnVal("dnDining"), lounge = dnVal("dnLounge"), type = $("dnType").value;
     if (!name) { err.textContent = "Type the guest's name."; $("dnName").focus(); return; }
-    if (!adults && !kids && !k05 && type.indexOf("all_inclusive") !== 0) { err.textContent = "Add at least one guest."; return; }
+    if (!adults && !kids && !k05 && type.indexOf("all_inclusive") !== 0 && type !== "other") { err.textContent = "Add at least one guest — or pick Package “Other” for charges like sunscreen (no guests)."; return; }
+    if (type === "other" && !adults && !kids && !k05 && !(Number($("dnTotal").value) > 0)) { err.textContent = "Type the amount of the other charge in Total."; $("dnTotal").focus(); return; }
     var free = D.cabanasFreeOn(ds);
     if (free && (dining > free.dining || lounge > free.lounge) && !addOverOk) {
       err.textContent = "Only " + Math.max(free.dining, 0) + " dining and " + Math.max(free.lounge, 0) + " lounge cabanas are left that day. Click “Save anyway” to overbook.";
