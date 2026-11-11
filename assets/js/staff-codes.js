@@ -116,7 +116,7 @@
     function load() {
       $("codesBody").innerHTML = '<tr><td colspan="9" style="padding:24px;text-align:center;color:var(--ink-soft);">Loading&hellip;</td></tr>';
       Promise.all([
-        sb.from("discount_codes").select("*").order("created_at"),
+        sb.from("discount_codes").select("*").is("campaign_id", null).order("created_at"),
         sb.rpc("discount_code_usage"),
         roomTypes ? Promise.resolve(null) : sb.from("villas").select("room_type, room_type_name, sort").order("sort"),
       ]).then(function (res) {

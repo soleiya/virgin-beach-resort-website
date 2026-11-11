@@ -56,7 +56,7 @@
   toggle.className = "view-toggle";
   toggle.setAttribute("role", "group");
   toggle.setAttribute("aria-label", "Dashboard view");
-  toggle.innerHTML = '<button type="button" data-view="cloudbeds">Cloudbeds view</button><button type="button" data-view="new">New version</button><button type="button" data-view="summary">Summary</button><button type="button" data-view="accounting">Accounting</button><button type="button" data-view="executive">Executive</button>';
+  toggle.innerHTML = '<button type="button" data-view="cloudbeds">Cloudbeds view</button><button type="button" data-view="new">New version</button><button type="button" data-view="summary">Summary</button><button type="button" data-view="accounting">Accounting</button><button type="button" data-view="executive">Executive</button><button type="button" data-view="campaigns">Campaigns</button>';
   toggle.addEventListener("click", function (e) {
     var b = e.target.closest("button[data-view]");
     if (b) setView(b.getAttribute("data-view"));
@@ -581,6 +581,7 @@
     if (window.VBRSummary) window.VBRSummary.show(v === "summary");
     if (window.VBRAccounting) window.VBRAccounting.show(v === "accounting");
     if (window.VBRExec) window.VBRExec.show(v === "executive");
+    if (window.VBRCampaigns) window.VBRCampaigns.show(v === "campaigns");
     body.classList.toggle("cbv", cb);
     Array.prototype.forEach.call(toggle.querySelectorAll("button"), function (b) {
       var on = b.getAttribute("data-view") === v;
@@ -602,7 +603,7 @@
   }
   var ready = false;
   var savedView = store(KEY);
-  setView(savedView === "cloudbeds" || savedView === "summary" || savedView === "accounting" || savedView === "executive" ? savedView : "new");
+  setView(savedView === "cloudbeds" || savedView === "summary" || savedView === "accounting" || savedView === "executive" || savedView === "campaigns" ? savedView : "new");
   ready = true;
   window.VBRView = { set: setView, go: goPage, page: function () { return page; }, current: function () { return store(KEY) || "new"; } };
 })();

@@ -185,6 +185,9 @@
     });
     codeEl.addEventListener("keydown", function (e) { if (e.key === "Enter") { e.preventDefault(); document.getElementById("dtCodeApply").click(); } });
     codeEl.addEventListener("input", function () { if (!codeEl.value.trim() && appliedCode) { appliedCode = ""; checkCode(); } });
+    // v65: offer emails link here with ?code=… — fill it in for the guest
+    var preCode = (params.get("code") || "").trim().toUpperCase();
+    if (/^[A-Z0-9][A-Z0-9_-]{1,29}$/.test(preCode) && !codeEl.value) { codeEl.value = preCode; setTimeout(function () { document.getElementById("dtCodeApply").click(); }, 0); }
   }
 
   // ---------- live bill ----------

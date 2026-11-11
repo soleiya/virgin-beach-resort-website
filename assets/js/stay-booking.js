@@ -449,12 +449,15 @@
     $("applyCode").addEventListener("click", applyCode);
     codeEl.addEventListener("keydown", function (e) { if (e.key === "Enter") { e.preventDefault(); applyCode(); } });
     codeEl.addEventListener("input", function () { if (!codeEl.value.trim() && appliedCode) applyCode(); });
+    // v65: offer emails link here with ?code=… — fill it in for the guest
+    var preCode = (params.get("code") || "").trim().toUpperCase();
+    if (/^[A-Z0-9][A-Z0-9_-]{1,29}$/.test(preCode) && !codeEl.value) { codeEl.value = preCode; appliedCode = preCode; }
   }
   function showCode(q) {
     if (!codeMsg || !appliedCode) { if (codeMsg) codeMsg.hidden = true; return; }
     codeMsg.hidden = false;
     if (q.code_error) { codeMsg.className = "code-msg is-bad"; codeMsg.textContent = q.code_error; }
-    else { codeMsg.className = "code-msg is-ok"; codeMsg.textContent = "Code " + q.discount_code + " applied — you save " + peso(q.code_discount) + "."; }
+    else { codeMsg.className = "code-msg is-ok"; var perkLine = Number(q.code_discount) > 0 ? null : (q.lines || []).filter(function (l) { return l.kind === "code_discount"; })[0]; codeMsg.textContent = perkLine ? perkLine.desc + " ✓" : "Code " + q.discount_code + " applied — you save " + peso(q.code_discount) + "."; }
   }
 
   // Bookings 15+ days out can pay 50% now (balance 15 days before arrival);
