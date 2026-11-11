@@ -949,7 +949,7 @@ html = """<!doctype html>
         <table class="dcal-table">
           <thead><tr>
             <th>Booker</th><th>Guest</th><th class="num">Adult</th><th class="num">Kids</th><th class="num">0&ndash;5</th><th class="num">PWD | Sr</th><th class="num">Pet</th>
-            <th class="num cab-d">Dining</th><th class="num">Lounge</th><th>Package</th><th class="num">Total</th><th>Status</th><th>Remarks</th><th title="Internal use only">Cabana no. <span style="font-weight:400;text-transform:none;letter-spacing:0;">(internal)</span></th>
+            <th class="num cab-d">Dining</th><th class="num">Lounge</th><th>Package</th><th class="num" title="Other charges (sunscreen, items, fees) — Package “Other” with no guests; not counted as guests">Other ₱</th><th class="num">Total</th><th>Status</th><th>Remarks</th><th title="Internal use only">Cabana no. <span style="font-weight:400;text-transform:none;letter-spacing:0;">(internal)</span></th>
           </tr></thead>
           <tbody id="dcalBody"></tbody>
         </table>
