@@ -954,7 +954,7 @@ ${h2("Follow-up checklist")}
 <ol style="margin:0 0 14px;padding-left:20px;font-size:14px;">
 <li>Watch the guest thread (search the Booking ID) for proof of payment, the signed agreement and one valid ID. Website uploads also alert this inbox.</li>
 <li>Verify the deposit against the bank statement, then click <strong>Verify</strong> on the payment in the dashboard (Payments) — that confirms the booking and emails the guest.</li>
-<li>Not paid? The guest gets a payment reminder, then an &ldquo;expecting you today&rdquo; email at 8:00 AM on the trip day. If it's still unpaid (or the balance isn't recorded) by <strong>5:00 PM on the trip day</strong>, the booking closes automatically and the guest is emailed. Record gate payments before 5 PM.</li>
+<li>Not paid? The guest gets a payment reminder, then an &ldquo;expecting you today&rdquo; email at 8:00 AM on the trip day. If nothing has been paid by <strong>5:00 PM on the trip day</strong>, the booking closes automatically and the guest is emailed. A part-paid booking is never closed automatically — it stays under &ldquo;Action needed&rdquo; until the balance is recorded.</li>
 </ol>
 ${button(dash, "Open in staff dashboard")}${button(gmail, "Find guest thread in Gmail")}`;
 
@@ -1145,7 +1145,23 @@ export type Change = { label: string; before: string; after: string };
 export const CABANA_MOVED_NOTE =
   "Cabana numbers are subject to change due to privacy and group concerns — if we ever need to move your group, it'll be to a comparable cabana and we'll email you again. Everything else about your day trip stays the same.";
 
-export function guestChangedEmail(r: Any, cabanas: Any[], changes: Change[], c: ReturnType<typeof cfg>, threadRecord: Any, source = "") {
+// v64: a change that raises the total of a booking already (part-)paid shows
+// what's paid, the balance, and how to pay it.
+function changeBalanceDue(r: Any, ps: PaySummary | null) {
+  return ps && ps.balance_due ? fmtDate(ps.balance_due) : isOvernight(r) ? "" : "on or before your visit (" + fmtDate(r.check_in) + ")";
+}
+function changeBalanceRows(r: Any, ps: PaySummary | null): [string, string][] {
+  if (!ps || !(ps.paid > 0) || ps.fully_paid || !(ps.balance > 0.5)) return [];
+  const due = changeBalanceDue(r, ps);
+  return [["Amount paid", `<strong>${esc(peso(ps.paid))}</strong>`], ["Balance due", `<strong>${esc(peso(ps.balance))}</strong>${due && ps.balance_due ? " by " + esc(fmtDate(ps.balance_due, "short")) : ""}`]];
+}
+function changeBalanceNote(r: Any, ps: PaySummary | null, c: ReturnType<typeof cfg>) {
+  if (!ps || !(ps.paid > 0) || ps.fully_paid || !(ps.balance > 0.5)) return "";
+  const due = changeBalanceDue(r, ps);
+  return p(`Thank you for your payment of <strong>${esc(peso(ps.paid))}</strong>. With these changes, the remaining balance is <strong>${esc(peso(ps.balance))}</strong>${due ? `, due ${ps.balance_due ? "by " : ""}<strong>${esc(due)}</strong>` : ""}.${paysOnline(r) ? " You can pay it online with the button below." : " When you've paid it, upload the proof using the same link:"}`, `background:${C.tint};border-radius:8px;padding:10px 14px;font-size:14px;margin-top:12px;`) +
+    `<p style="margin:0 0 16px;">${button(uploadUrl(r, c), paysOnline(r) ? "Pay balance now" : "Upload balance payment")}</p>`;
+}
+export function guestChangedEmail(r: Any, cabanas: Any[], changes: Change[], c: ReturnType<typeof cfg>, threadRecord: Any, source = "", ps: PaySummary | null = null) {
   const first = esc(String(r.guest_name || "there").trim().split(/\s+/)[0]);
   const td = `padding:8px 8px;border-bottom:1px solid ${C.line};font-size:13.5px;vertical-align:top;`;
   const rows = changes.map((ch) =>
@@ -1163,7 +1179,9 @@ ${!isOvernight(r) && changes.some((ch) => /cabana no/i.test(ch.label)) ? p(esc(C
 ${h2("Your updated reservation")}${kv([
     ...reservationRows(r, cabanas),
     ...(r.total_amount !== null && r.total_amount !== undefined ? [["Total", `<strong>${esc(peso(Number(r.total_amount)))}</strong>`] as [string, string]] : []),
+    ...changeBalanceRows(r, ps),
   ])}
+${changeBalanceNote(r, ps, c)}
 ${p("If anything here doesn't look right, or you didn't ask for this change, simply reply to this email and we'll sort it out.", "margin-top:16px;")}
 ${signature(c)}`;
   return {
@@ -2155,7 +2173,7 @@ ${statusBox([
     [unpaid ? "To pay" : "Balance", `<strong>${esc(peso(owe))}</strong>`],
   ])}
 ${button(uploadUrl(r, c), "Pay now online")}
-${p(`<strong>Not able to make it?</strong> Please reply to let us know. If you don't arrive and the booking is still ${unpaid ? "unpaid" : "not fully paid"} by <strong>5:00 PM today</strong>, it will be cancelled and your cabana(s) may be released to other guests.`, "margin-top:14px;")}
+${unpaid ? p(`<strong>Not able to make it?</strong> Please reply to let us know. If you don't arrive and the booking is still unpaid by <strong>5:00 PM today</strong>, it will be cancelled and your cabana(s) may be released to other guests.`, "margin-top:14px;") : p(`<strong>Not able to make it?</strong> Please reply to let us know.`, "margin-top:14px;")}
 ${signature(c)}`;
   return {
     subject: "Re: " + guestSubject(r, c),
@@ -2298,7 +2316,8 @@ async function onChanged(r: Any, payload: Any) {
   const threadRecord = { ...r, check_in: payload.old_check_in || r.check_in };
   const custom = payload.message ? { message: String(payload.message).slice(0, 5000) } : null;
   const rc = custom ? { ...r, email_custom: { ...(r.email_custom || {}), change: custom } } : r;
-  const g = guestChangedEmail(rc, cabanas, changes, c, threadRecord, String(payload.source || ""));
+  const ps = await paySummary(r.id);
+  const g = guestChangedEmail(rc, cabanas, changes, c, threadRecord, String(payload.source || ""), ps);
   const kind = `guest_changed:${String(payload.change_id || Date.now())}`;
   return await send({ booking: r, kind, to: String(r.guest_email).trim(), subject: g.subject, html: g.html, thread: "guest" });
 }
@@ -2368,7 +2387,13 @@ export async function preview(req: Request): Promise<Response> {
   if (kind === "change") {
     const raw = Array.isArray(b.changes) ? b.changes.slice(0, 30) : [];
     const changes: Change[] = raw.map((x: Any) => ({ label: String(x?.label ?? "").slice(0, 80), before: String(x?.before ?? "").slice(0, 300), after: String(x?.after ?? "").slice(0, 300) })).filter((x: Change) => x.label);
-    out = guestChangedEmail(r, units, changes.length ? changes : [{ label: "(no changes yet)", before: "—", after: "—" }], c, r, String(b.source || ""));
+    // v64: the preview shows the balance against the total being saved
+    let pps = b.booking_id ? await paySummary(String(b.booking_id)) : null;
+    if (pps && r.total_amount !== null && r.total_amount !== undefined) {
+      const bal = Math.round((Number(r.total_amount) - Number(pps.paid || 0)) * 100) / 100;
+      pps = { ...pps, total: Number(r.total_amount), balance: bal, fully_paid: bal <= 0.5 };
+    }
+    out = guestChangedEmail(r, units, changes.length ? changes : [{ label: "(no changes yet)", before: "—", after: "—" }], c, r, String(b.source || ""), pps);
   } else if (kind === "confirmed") {
     out = guestConfirmedEmail(r, units, q, c);
   } else if (kind === "cancelled") {
