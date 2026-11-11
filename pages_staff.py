@@ -1834,6 +1834,7 @@ html = """<!doctype html>
 <script src="../assets/js/staff-summary.js?v=__V_SUMJS__"></script>
 <script src="../assets/js/staff-accounting.js?v=__V_ACCJS__"></script>
 <script src="../assets/js/staff-exec.js?v=__V_EXJS__"></script>
+<script src="../assets/js/staff-campaigns.js?v=__V_CMJS__"></script>
 <script src="../assets/js/staff-find.js?v=__V_FINDJS__"></script>
 <script src="../assets/js/staff-alerts.js?v=__V_ALERTJS__"></script>
 <script src="../assets/js/staff-insights.js?v=__V_INSJS__"></script>
@@ -1861,6 +1862,7 @@ html = (html.replace("__V_CSS__", v("assets/css/style.css"))
             .replace("__V_SUMJS__", v("assets/js/staff-summary.js"))
             .replace("__V_ACCJS__", v("assets/js/staff-accounting.js"))
             .replace("__V_EXJS__", v("assets/js/staff-exec.js"))
+            .replace("__V_CMJS__", v("assets/js/staff-campaigns.js"))
             .replace("__V_FINDJS__", v("assets/js/staff-find.js"))
             .replace("__V_ALERTJS__", v("assets/js/staff-alerts.js"))
             .replace("__V_INSJS__", v("assets/js/staff-insights.js"))
