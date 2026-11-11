@@ -37,7 +37,7 @@
     var today = todayStr(), now = manilaNow(), hour = now.getHours() + now.getMinutes() / 60;
     var groups = [
       { key: "proof", level: "high", title: "Payment proofs to check", step: "Open → check the screenshot against GCash / the bank → Verify (or Reject).", items: [] },
-      { key: "today", level: "high", title: "Day trips today not fully paid", step: "Collect at the gate and click Record payment in the booking. Online bookings still unpaid at 5:00 PM are cancelled automatically; staff-entered bookings are not.", items: [] },
+      { key: "today", level: "high", title: "Day trips today not fully paid", step: "Collect at the gate and click Record payment in the booking. Online bookings with nothing paid by 5:00 PM are cancelled automatically; part-paid and staff-entered bookings are not.", items: [] },
       { key: "cb", level: "high", title: "Website villas not in Cloudbeds", step: "Add the booking in Cloudbeds by hand (or ask Claude to resend it).", items: [] },
       { key: "villa14", level: "med", title: "Villas booked within 14 days — not paid in full", step: "Full payment is required. The guest was reminded at 24 h; call or message, then record the payment or use “Cancel booking — not paid”.", items: [] },
       { key: "balance", level: "med", title: "Villa balances overdue", step: "Balance was due 15 days before arrival. Follow up, record the payment, or cancel under the policy.", items: [] },

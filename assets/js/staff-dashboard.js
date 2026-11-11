@@ -1435,7 +1435,9 @@
     var active = ["pending", "pending_payment", "confirmed"].indexOf(r.status) >= 0;
     ruleEl.innerHTML = !active ? "" : proofWaiting ? "<b>A payment proof is waiting to be checked</b> — verify it below, or the booking stays Payment Under Review."
       : owe > 0.5 ? (r.booking_origin === "site_guest" && r.source !== "walk_in"
-          ? "Booked online, not fully paid: if still unpaid at <b>5:00 PM on " + esc(fmtDate(r.check_in)) + "</b> it is cancelled automatically and the guest emailed. Record gate payments before 5 PM."
+          ? (paid > 0
+            ? "Booked online, balance still due — <b>never cancelled automatically</b> (something was paid). Record the balance below once received; it shows under Action needed on the trip day."
+            : "Booked online, nothing paid yet: if still unpaid at <b>5:00 PM on " + esc(fmtDate(r.check_in)) + "</b> it is cancelled automatically and the guest emailed. Record gate payments before 5 PM.")
           : "Entered by staff — <b>never cancelled automatically</b>. Record the payment below as soon as it's received.")
       : "Fully paid — nothing to do.";
   }
