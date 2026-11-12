@@ -33,6 +33,9 @@
   var TIERS = [["vip", "VIP (₱150k+ or 4+ visits)"], ["repeat", "Repeat (2–3 visits)"], ["one_time", "One-time"], ["upcoming", "Booked, not yet visited"]];
   var SEG_NAME = {}; SEGMENTS.forEach(function (s) { SEG_NAME[s[0]] = s[1]; });
   var TIER_NAME = { vip: "VIP", repeat: "Repeat", one_time: "One-time", upcoming: "Upcoming" };
+  var SOUNDBITES = ["Exclusive resort in Batangas", "White sand beach, 3 hours from Manila", "Private villa resort", "Virgin white sand beach", "A drive away white sand beach"];
+  var TOPIC_NAME = { atv: "ATV rides", dining: "Food & dining", romance: "Couples", wellness: "Massage", activities: "Activities", celebration: "Celebrations",
+    daytrip: "Day trips", villa: "Villas & casitas", corporate: "Corporate & groups", beach: "Beach & aerial", drive: "The drive" };
   var MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
   var STATUS = { suggested: "AI suggestion", draft: "Draft", sending: "Sending", sent: "Sent", paused: "Paused", declined: "Declined", cancelled: "Cancelled" };
 
@@ -95,6 +98,10 @@
     ".cm-card{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:14px 16px;display:flex;flex-direction:column;gap:8px;min-width:0}" +
     ".cm-card h3{margin:0;font-family:var(--font-display);font-weight:600;font-size:1.08rem}.cm-card .cm-meta{display:flex;flex-wrap:wrap;gap:6px}" +
     ".cm-chip{display:inline-block;font-size:.72rem;font-weight:700;border-radius:999px;padding:3px 9px;background:var(--sand-deep);color:var(--ink-soft);white-space:nowrap}" +
+    ".cm-pgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}.cm-pslot{display:flex;flex-direction:column;gap:6px;min-width:0}" +
+    ".cm-pimg{aspect-ratio:3/2;border-radius:8px;overflow:hidden;background:var(--sand,#efe7da)}.cm-pimg img{width:100%;height:100%;object-fit:cover;display:block}" +
+    ".cm-pslot select{width:100%;font:inherit;font-size:.8rem;padding:5px 6px;border:1px solid var(--line);border-radius:8px;background:#fff}.cm-pslot small{color:var(--ink-soft,#6b7774);font-size:.72rem}" +
+    ".linkish{background:none;border:0;padding:0;color:var(--lagoon-deep,#0f6f68);text-decoration:underline;cursor:pointer;font:inherit}@media(max-width:560px){.cm-pgrid{grid-template-columns:1fr 1fr}}" +
     ".cm-chip.ai{background:#ece4f2;color:#6b4a85}.cm-chip.offer{background:var(--lagoon-tint);color:var(--lagoon-deep)}.cm-chip.st-sending{background:#f6e6cf;color:#94591c}.cm-chip.st-sent{background:#dff1e4;color:#1d6b37}" +
     ".cm-chip.st-declined,.cm-chip.st-cancelled{background:#eef1f4;color:#4a5563}.cm-chip.st-paused{background:#fbe8c2;color:#7f5200}.cm-chip.st-draft{background:#e6eefb;color:#2350a0}" +
     ".cm-card .cm-why{font-size:.84rem;color:var(--ink-soft);line-height:1.45}.cm-card .cm-subj{font-size:.86rem}.cm-card .cm-subj b{font-weight:700}" +
@@ -196,7 +203,9 @@
   }
   function card(c) {
     var st = c.stats || {};
+    var hero = c.offer && c.offer.images && c.offer.images[0];
     return '<div class="cm-card" data-id="' + esc(c.id) + '">' +
+      (hero && /^[a-z0-9-]+$/.test(hero) ? '<div class="cm-pimg" style="margin:-4px 0 2px"><img src="/assets/images/email/' + hero + '.jpg" alt="" loading="lazy"></div>' : "") +
       '<div class="cm-meta">' + (c.source === "ai" ? '<span class="cm-chip ai">✨ AI</span>' : "") + '<span class="cm-chip st-' + esc(c.status) + '">' + esc(STATUS[c.status] || c.status) + "</span>" +
       '<span class="cm-chip offer">' + esc(offerLine(c.offer)) + "</span></div>" +
       "<h3>" + esc(c.name) + "</h3>" +
@@ -363,6 +372,7 @@
 
   var detail = null;
   var ed = null, audTimer = null, prevTimer = null, audSeq = 0, prevSeq = 0;
+  var photoCat = null, shownPhotos = [];
   function blank() {
     return { id: null, name: "", status: "draft", source: "staff", audience: { segments: [], skip_contacted_days: 14 }, audience_label: "",
       offer: { kind: "percent", percent: 10, applies_to: "rooms", booking_kinds: ["overnight"] }, code_prefix: "", expires_on: addDays(todayStr(), 30),
@@ -418,6 +428,10 @@
       '<div class="cm-f"><label for="eCta">Button</label><input id="eCta" maxlength="40" value="' + esc(ed.cta_label || "") + '"></div>' +
       '<p class="cm-note" style="margin:0 0 8px">{first_name} becomes the guest\'s first name. The offer, code, terms and unsubscribe link are added below the message automatically.</p>' +
       '<div class="cm-bar" style="margin:0"><input type="text" class="grow" id="eInstr" placeholder="Ask the AI to rewrite — e.g. shorter, more playful, mention the bonfire"><button type="button" class="btn-sm ghost" id="eRewrite">✨ Rewrite</button></div></div>' +
+      '<div class="cm-sec"><h4>Photos</h4><div id="ePhotos" class="cm-photos"><p class="cm-note">Loading photos…</p></div>' +
+      '<div class="cm-f" style="margin-top:10px"><label for="eTag">Line above the photo</label><select id="eTag"><option value="">Automatic</option>' +
+      SOUNDBITES.map(function (t) { return "<option" + (o.tagline === t ? " selected" : "") + ">" + esc(t) + "</option>"; }).join("") + "</select></div>" +
+      '<p class="cm-note" style="margin:0">The first photo is the big one at the top; the other two sit under the button. Pick photos that match the offer — an ATV ride gets an ATV photo, a food treat gets a food photo.</p></div>' +
       "</div>" +
       '<div class="cm-prev"><div class="cm-sec"><h4>Preview</h4><p class="cm-prevsubj" id="ePrevSubj"></p><div class="cm-prevbox" id="ePrev"></div></div></div></div>' +
       '<div class="cm-mfoot"><span class="cm-msg" id="eMsg"></span>' +
@@ -459,6 +473,8 @@
     if ($("eTo").value) o.stay_to = $("eTo").value;
     if (numv("eMinN")) o.min_nights = numv("eMinN");
     if (numv("eMinT")) o.min_total = numv("eMinT");
+    if (ed.offer && ed.offer.images && ed.offer.images.length) o.images = ed.offer.images.slice(0, 3);
+    if ($("eTag") && $("eTag").value) o.tagline = $("eTag").value;
     return { id: ed.id, name: $("eName").value.trim(), status: ed.status, source: ed.source, rationale: ed.rationale || null, audience: a, audience_label: $("eAudLabel").value.trim() || ruleText(a),
       offer: o, code_prefix: $("ePrefix").value.trim(), expires_on: $("eExp").value, subject: $("eSubj").value.trim(), headline: $("eHead").value.trim(),
       body: $("eBodyT").value, cta_label: $("eCta").value.trim() || "Book with my code" };
@@ -486,11 +502,32 @@
   function preview() {
     var c = collect(); if (!c) return;
     var seq = ++prevSeq;
-    fn({ action: "preview", campaign: c }).then(function (p) {
+    fn({ action: "preview", campaign: c, catalog: !photoCat }).then(function (p) {
       if (seq !== prevSeq || !$("ePrev")) return;
+      if (p.photos) photoCat = p.photos;
+      shownPhotos = p.images || [];
+      drawPhotos();
       $("ePrevSubj").innerHTML = "<b>Subject:</b> " + esc(p.subject || "(none)");
       shadow($("ePrev"), p.html);
     }, function (e) { if ($("ePrev")) $("ePrev").innerHTML = '<p class="cm-err" style="padding:12px">' + esc(e.message) + "</p>"; });
+  }
+  function drawPhotos() {
+    var box = $("ePhotos"); if (!box || !photoCat) return;
+    var topics = []; photoCat.forEach(function (p) { if (topics.indexOf(p.topic) < 0) topics.push(p.topic); });
+    var byKey = {}; photoCat.forEach(function (p) { byKey[p.key] = p; });
+    var auto = !(ed.offer && ed.offer.images && ed.offer.images.length);
+    box.innerHTML = '<div class="cm-pgrid">' + [0, 1, 2].map(function (i) {
+      var k = shownPhotos[i] || "", p = byKey[k];
+      return '<div class="cm-pslot"><div class="cm-pimg">' + (p ? '<img src="' + esc(p.url) + '" alt="' + esc(p.alt) + '" loading="lazy">' : "") + "</div>" +
+        '<select data-photo="' + i + '"><option value="">' + (i ? "No photo" : "Choose…") + "</option>" +
+        topics.map(function (t) {
+          return '<optgroup label="' + esc(TOPIC_NAME[t] || t) + '">' + photoCat.filter(function (x) { return x.topic === t; }).map(function (x) {
+            return '<option value="' + esc(x.key) + '"' + (x.key === k ? " selected" : "") + ">" + esc(x.caption) + "</option>";
+          }).join("") + "</optgroup>";
+        }).join("") + "</select><small>" + (i ? "Under the button" : "Top photo") + "</small></div>";
+    }).join("") + "</div>" +
+      '<p class="cm-note" style="margin:6px 0 0">' + (auto ? "Picked automatically from the offer. Change any photo to choose your own." :
+        'Chosen by hand. <button type="button" class="linkish" id="ePhotoAuto">Pick automatically</button>') + "</p>";
   }
   function edMsg(t, bad) { if ($("eMsg")) { $("eMsg").className = "cm-msg " + (bad ? "cm-err" : "cm-ok"); $("eMsg").textContent = t || ""; } }
   function save() {
@@ -509,7 +546,13 @@
     if (!ed) return;
     if (e.target.name === "eKind") { syncKind(); preview(); }
     if (e.target.matches("input[type=checkbox],select") && e.target.closest(".cm-sec") && e.target.closest(".cm-sec").querySelector("#eAud")) { clearTimeout(audTimer); audTimer = setTimeout(countAudience, 200); }
-    if (e.target.matches("input[data-k],#eOn")) preview();
+    if (e.target.matches("input[data-k],#eOn,#eTag")) preview();
+    if (e.target.matches("select[data-photo]")) {
+      var imgs = shownPhotos.slice(0, 3); imgs[Number(e.target.getAttribute("data-photo"))] = e.target.value;
+      var seen = {}; ed.offer.images = imgs.filter(function (x) { if (!x || seen[x]) return false; seen[x] = 1; return true; });
+      if (!ed.offer.images.length) ed.offer.images = null;
+      preview();
+    }
   });
   $("cmEd").addEventListener("click", function (e) {
     if (!ed) return;
@@ -519,6 +562,7 @@
       edMsg("Saving…");
       save().then(function () { edMsg("Saved as a draft."); loadAll(); }, function (er) { edMsg(er.message, true); });
     }
+    if (e.target.closest("#ePhotoAuto")) { ed.offer.images = null; preview(); return; }
     if (e.target.closest("#eDecline")) { var id = ed.id; closeModal(); decline(id); }
     if (e.target.closest("#eTest")) {
       var to = ($("eTestTo").value || "").trim();
