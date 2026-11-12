@@ -36,8 +36,8 @@
   // ---------------------------------------------------------------- styles
   var css = document.createElement("style");
   css.textContent =
-    ".scx-btn{background:#fbe9e7;color:#9b2c2c;border:1px solid #f1c4bd;margin-right:auto}.scx-btn:hover{background:#f6d9d3}" +
-    "body.ro-staff .scx-btn{display:none!important}" +
+    ".scx-btn{background:#fbe9e7;color:#9b2c2c;border:1px solid #f1c4bd;margin-right:8px}.scx-auto{margin-right:auto;font-size:.78rem;line-height:1.35;color:var(--ink-soft);max-width:440px;align-self:center}.scx-auto b{color:#9b2c2c}.scx-auto.none b{color:var(--ink)}.scx-btn:hover{background:#f6d9d3}" +
+    "body.ro-staff .scx-btn,body.ro-staff .scx-auto{display:none!important}" +
     "#vCxOpen{display:none!important}" + // v61's villa-only button: this one replaces it
     ".scx-back{position:fixed;inset:0;background:rgba(20,28,27,.5);z-index:2000;display:none;align-items:flex-start;justify-content:center;overflow:auto;padding:5vh 12px}" +
     ".scx-back.open{display:flex}.scx-box{background:var(--surface,#fffdf8);border-radius:14px;max-width:560px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,.25);padding:18px 20px}" +
@@ -74,6 +74,37 @@
       .eq("order_code", code).limit(1).then(function (res) { return res.data && res.data[0] ? res.data[0] : null; });
   }
 
+  // ---------------------------------------------------------------- when would it cancel automatically? (v68)
+  function fmtAt(iso) {
+    var d = new Date(iso);
+    return d.toLocaleDateString("en-PH", { timeZone: "Asia/Manila", weekday: "short", month: "short", day: "numeric" }) + " · " +
+      d.toLocaleTimeString("en-PH", { timeZone: "Asia/Manila", hour: "numeric", minute: "2-digit" });
+  }
+  function autoHtml(a) {
+    if (!a) return "";
+    if (a.at) {
+      return a.past
+        ? "⏱ <b>Due to cancel automatically since " + esc(fmtAt(a.at)) + "</b> " + esc(a.rule || "") + " — the next check (every 10 min) will close it."
+        : "⏱ <b>Cancels automatically " + esc(fmtAt(a.at)) + "</b> " + esc(a.rule || "") + ".";
+    }
+    return "<b>No automatic cancellation</b> — " + esc(a.note || "");
+  }
+  var autoSeq = 0;
+  function loadAuto(code, el, cls) {
+    var seq = ++autoSeq;
+    el.innerHTML = '<span class="scx-hint">Checking automatic cancellation…</span>';
+    var known = rowByCode(code);
+    (known && known.id ? Promise.resolve(known) : fetchRow(code)).then(function (r) {
+      if (!r) { el.innerHTML = ""; return; }
+      return sb.rpc("booking_auto_cancel", { p_booking_id: r.id }).then(function (res) {
+        if (seq !== autoSeq && cls === "scx-auto") return;
+        if (res.error) { el.innerHTML = ""; return; }
+        el.className = cls + (res.data && res.data.at ? "" : " none");
+        el.innerHTML = autoHtml(res.data);
+      });
+    });
+  }
+
   // ---------------------------------------------------------------- the button in each booking window
   var WINDOWS = [["addModalBackdrop", "saveBookingBtn"], ["villaModalBackdrop", "vSave"]];
   function place() {
@@ -91,6 +122,12 @@
       }
       var code = codeIn(w[0]), r = rowByCode(code);
       btn.hidden = !code || (r && ACTIVE.indexOf(String(r.status)) === -1);
+      // v68: when it would be cancelled automatically, right next to the button
+      var info = bd.querySelector(".scx-auto");
+      if (!info) { info = document.createElement("span"); info.className = "scx-auto"; btn.parentElement.insertBefore(info, btn.nextSibling); }
+      info.hidden = btn.hidden;
+      if (!btn.hidden && info.getAttribute("data-code") !== code) { info.setAttribute("data-code", code); loadAuto(code, info, "scx-auto"); }
+      if (btn.hidden) info.removeAttribute("data-code");
     });
   }
   WINDOWS.forEach(function (w) {
@@ -144,9 +181,11 @@
       (hasEmail ? " at " + esc(r.guest_email) : " — <i>no valid email on this booking</i>") + "</span></label>" +
       '<div class="scx-f" id="scxMsgWrap"' + (hasEmail ? "" : " hidden") + '><label for="scxMsg">Message to the guest</label><textarea id="scxMsg"></textarea>' +
       '<span class="scx-hint">Opens the cancellation email; the booking details and our contact details are added below it. {first} = guest\'s first name, {order} = booking ID, {date} = date(s).</span></div>' +
+      '<p class="scx-info" id="scxAuto"></p>' +
       '<p class="scx-err" id="scxErr"></p>' +
       '<div class="scx-acts"><button type="button" class="btn-sm ghost" data-x="close">Keep the booking</button><button type="button" class="btn-sm scx-go" id="scxGo">Cancel booking</button></div>';
     back.classList.add("open");
+    loadAuto(r.order_code, $("scxAuto"), "scx-info");
     $("scxReason").focus();
   }
   var msgTouched = false;
