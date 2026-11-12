@@ -2089,6 +2089,18 @@ function guestGate(r: Any, c: ReturnType<typeof cfg>): { skipped: string } | nul
 
 async function onCancelled(r: Any) {
   const c = cfg();
+  // v67: staff "Cancel booking…" (staff_cancel_booking) on ANY booking — villas and day trips,
+  // website, staff or Cloudbeds-made: the website's cancellation email, opening with the
+  // staff's message, only if they ticked "Email the guest" (email_custom.cancelled.skip = false).
+  // Cloudbeds' own email is off for these (cancel_notify = false), so the guest gets one email.
+  const staffCx = r.cancelled_at && Date.now() - Date.parse(String(r.cancelled_at)) < 30 * 60_000 ? customOf(r, "cancelled") : null;
+  if (staffCx) {
+    if (staffCx.skip) return { skipped: "staff chose not to email the guest" };
+    if (r.status !== "declined") return { skipped: "no longer cancelled" };
+    if (!r.guest_email || !EMAIL_RE.test(String(r.guest_email).trim())) return { skipped: "no valid guest email" };
+    const g = guestCancelledEmail(r, c);
+    return await send({ booking: r, kind: "guest_cancelled", to: String(r.guest_email).trim(), subject: g.subject, html: g.html, thread: "guest" });
+  }
   if (inCloudbeds(r)) return CB_SKIP;
   const skip = guestGate(r, c);
   if (skip) return skip;
