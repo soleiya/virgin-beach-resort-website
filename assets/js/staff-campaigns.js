@@ -7,16 +7,19 @@
 //   redeemed, booking value; pause, resume or cancel.
 // • Guests: the guest directory (from the website's bookings + the Cloudbeds
 //   guest list) by segment: family, friends, couple, solo, corporate.
+// • Codes (v70): every code sent — who got it, tries on the website, bookings,
+//   disable / re-enable; plus every attempt to use a code on the booking
+//   pages (also mistyped or unknown codes).
 // • Settings: daily sending limit, test address.
-// Data: booking-v65 (campaign_* functions) + the "campaigns" edge function.
-// Shown only to CAMPAIGN_STAFF; the database refuses everyone else too.
+// Data: booking-v65/v69/v70 (campaign_* functions) + the "campaigns" function.
+// v70: open to every staff account; view-only accounts (Accounting) can look
+// but the buttons that change things are hidden and the database refuses.
 // =============================================================================
 (function () {
   "use strict";
   var D = window.VBRDash;
   if (!D || !D.sb) return;
   var sb = D.sb, esc = D.esc;
-  var CAMPAIGN_STAFF = ["miguel@staff.local"];
   var dashScreen = document.getElementById("dashScreen");
   var $ = function (id) { return document.getElementById(id); };
   function store(k, v) { try { if (v === undefined) return localStorage.getItem(k); localStorage.setItem(k, v); } catch (e) { return null; } }
@@ -98,6 +101,15 @@
     ".cm-card{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:14px 16px;display:flex;flex-direction:column;gap:8px;min-width:0}" +
     ".cm-card h3{margin:0;font-family:var(--font-display);font-weight:600;font-size:1.08rem}.cm-card .cm-meta{display:flex;flex-wrap:wrap;gap:6px}" +
     ".cm-chip{display:inline-block;font-size:.72rem;font-weight:700;border-radius:999px;padding:3px 9px;background:var(--sand-deep);color:var(--ink-soft);white-space:nowrap}" +
+    ".cm-ro-note{display:none;margin:0 0 12px;padding:8px 12px;border-radius:10px;background:#eef1f4;color:#4a5563;font-size:.84rem}body.cm-ro .cm-ro-note{display:block}" +
+    "body.cm-ro #cmAsk,body.cm-ro #cmNew,body.cm-ro [data-decline],body.cm-ro #eSave,body.cm-ro #eLaunch,body.cm-ro #eTest,body.cm-ro #eDecline,body.cm-ro #eRewrite," +
+    "body.cm-ro [data-st],body.cm-ro #cmImport,body.cm-ro #cmRebuild,body.cm-ro #cmSaveSet,body.cm-ro [data-cact],body.cm-ro #cdBulk,body.cm-ro #eInstr,body.cm-ro #eTestTo{display:none!important}" +
+    ".cd-filters{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:0 0 12px}.cd-filters select,.cd-filters input{font:inherit;font-size:.86rem;padding:8px 12px;border:1px solid var(--line);border-radius:999px;background:var(--surface)}" +
+    ".cd-filters input{flex:1;min-width:200px}.cd-chips{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 12px}.cd-chips button{font:inherit;font-size:.8rem;font-weight:700;border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:5px 12px;cursor:pointer}" +
+    ".cd-chips button.on{background:var(--lagoon-deep);border-color:var(--lagoon-deep);color:#fff}.cd-chips b{font-weight:800;opacity:.75;margin-left:4px}" +
+    ".cm-chip.cs-booked{background:#dff1e4;color:#1d6b37}.cm-chip.cs-tried{background:#fbe8c2;color:#7f5200}.cm-chip.cs-disabled,.cm-chip.cs-expired{background:#eef1f4;color:#4a5563}.cm-chip.cs-not_sent{background:#f7dcd6;color:#8a2a1a}" +
+    ".cm-chip.cs-sent,.cm-chip.cs-queued{background:var(--lagoon-tint);color:var(--lagoon-deep)}.cd-ok{color:#1d6b37;font-weight:700}.cd-bad{color:#8a2a1a;font-weight:700}" +
+    ".cm-t tr.cd-row{cursor:pointer}.cm-t tr.cd-row:hover td{background:var(--sand)}.cd-h3{font-family:var(--font-display);font-weight:600;font-size:1.05rem;margin:26px 0 10px}" +
     ".cm-avail{margin:10px 0;padding:10px 12px;border-radius:10px;font-size:.84rem;line-height:1.45;background:var(--lagoon-tint);color:var(--lagoon-deep)}.cm-avail small{display:block;opacity:.8}" +
     ".cm-avail.tight{background:#fbe8c2;color:#7f5200}.cm-avail.full{background:#f7dcd6;color:#8a2a1a}" +
     ".cm-pgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}.cm-pslot{display:flex;flex-direction:column;gap:6px;min-width:0}" +
@@ -141,7 +153,7 @@
     '<div class="cm-head"><div><h2>Offers &amp; Campaigns</h2><p id="cmSub">Personal offers to past guests — suggested by AI, approved by you.</p></div>' +
     '<div><button type="button" class="btn-sm ghost" id="cmNew">+ New campaign</button> <button type="button" class="btn-sm ghost" id="cmRefresh">Refresh</button></div></div>' +
     '<div class="cm-tiles" id="cmTiles"></div>' +
-    '<div class="cm-tabs" id="cmTabs"><button type="button" data-t="suggest">Suggestions</button><button type="button" data-t="campaigns">Campaigns</button><button type="button" data-t="guests">Guests</button><button type="button" data-t="settings">Settings</button></div>' +
+    '<div class="cm-tabs" id="cmTabs"><button type="button" data-t="suggest">Suggestions</button><button type="button" data-t="campaigns">Campaigns</button><button type="button" data-t="codes">Codes</button><button type="button" data-t="guests">Guests</button><button type="button" data-t="settings">Settings</button></div>' +
     '<div id="cmBody"></div>';
   dashScreen.insertBefore(el, dashScreen.firstChild);
 
@@ -180,12 +192,13 @@
     Array.prototype.forEach.call($("cmTabs").querySelectorAll("button"), function (b) {
       var t = b.getAttribute("data-t");
       b.classList.toggle("on", t === tab);
-      b.innerHTML = { suggest: "Suggestions", campaigns: "Campaigns", guests: "Guests", settings: "Settings" }[t] + (t === "suggest" && nSug ? "<b>" + nSug + "</b>" : "");
+      b.innerHTML = { suggest: "Suggestions", campaigns: "Campaigns", codes: "Codes", guests: "Guests", settings: "Settings" }[t] + (t === "suggest" && nSug ? "<b>" + nSug + "</b>" : "");
     });
   }
   function draw() {
     if (tab === "suggest") drawSuggest();
     else if (tab === "campaigns") drawCampaigns();
+    else if (tab === "codes") drawCodes();
     else if (tab === "guests") drawGuests();
     else drawSettings();
   }
@@ -272,7 +285,7 @@
         tile("Offer", esc(offerLine(c.offer)), "until " + esc(fmtDay(c.expires_on))) + "</div>" +
         '<p class="cm-note"><b>Audience:</b> ' + esc(c.audience_label || ruleText(c.audience)) + ' · <b>Subject:</b> ' + esc(c.subject || "") + "</p>" +
         (c.rationale ? '<div class="cm-why-box">' + esc(c.rationale) + "</div>" : "") +
-        '<div class="cm-bar">' + acts + '<button type="button" class="btn-sm ghost" data-preview="1">See the email</button></div>' +
+        '<div class="cm-bar">' + acts + '<button type="button" class="btn-sm ghost" data-preview="1">See the email</button><button type="button" class="btn-sm ghost" data-codes="' + esc(c.id) + '">Codes &amp; tries</button></div>' +
         '<div class="cm-twrap" style="max-height:52vh;overflow:auto"><table class="cm-t"><thead><tr><th>Guest</th><th>Code</th><th>Email</th><th>Booking with the code</th></tr></thead><tbody>' +
         (c.recipients || []).map(function (r) {
           var b = r.booking;
@@ -627,6 +640,8 @@
       call("campaign_set_status", { p_id: c.id, p_status: to }).then(function () { closeModal(); loadAll(); }, function (er) { alert(er.message); });
       return;
     }
+    var cb2 = e.target.closest("[data-codes]");
+    if (cb2) { window.VBRCampaignCodes.show(cb2.getAttribute("data-codes")); return; }
     if (e.target.closest("[data-preview]")) {
       fn({ action: "preview", campaign: c }).then(function (p) { openModal(c.name + " — email", '<div style="padding:16px 18px"><p class="cm-prevsubj"><b>Subject:</b> ' + esc(p.subject) + '</p><div class="cm-prevbox" id="cmShadow"></div></div>'); shadow($("cmShadow"), p.html); });
     }
@@ -658,6 +673,146 @@
     if (e.target.id === "cmGSeg") { guestSeg = e.target.value; loadGuests(); }
   });
 
+  // ---------------------------------------------------------------- codes (v70)
+  var codesF = { state: store("vbr.cdState") || "", search: "", campaign_id: "" }, codesData = null, attData = null, attOnly = "", cdTimer = null, cdSeq = 0;
+  var CSTATE = { booked: "Booked", tried: "Tried, not booked", sent: "Sent, not tried", queued: "Waiting to send", not_sent: "Not sent", disabled: "Disabled", expired: "Expired" };
+  function drawCodes() {
+    $("cmBody").innerHTML = flash +
+      '<p class="cm-ro-note">View only — this account can look at codes but not change them.</p>' +
+      '<div class="cm-tiles" id="cdTiles"></div>' +
+      '<div class="cd-filters"><input type="search" id="cdQ" placeholder="Search code, guest, email or booking no." value="' + esc(codesF.search) + '">' +
+      '<select id="cdCamp"><option value="">All campaigns</option></select>' +
+      '<button type="button" class="btn-sm ghost" id="cdBulk" hidden>Disable unused codes of this campaign</button></div>' +
+      '<div class="cd-chips" id="cdChips"></div>' +
+      '<div id="cdList"><p class="cm-note">Loading codes…</p></div>' +
+      '<h3 class="cd-h3">Attempts on the website</h3>' +
+      '<p class="cm-note" style="margin-top:-4px">Every time someone applies a code on the booking pages — also codes that don\'t exist (typos or guessing). The email is what was typed on the booking form at the time, if any.</p>' +
+      '<div class="cd-chips" id="atChips"></div><div id="atList"><p class="cm-note">Loading…</p></div>';
+    loadCodes(); loadAttempts();
+  }
+  function loadCodes() {
+    var seq = ++cdSeq;
+    call("campaign_codes", { p: { state: codesF.state || null, search: codesF.search || null, campaign_id: codesF.campaign_id || null, limit: 300 } }).then(function (d) {
+      if (seq !== cdSeq || !$("cdList")) return;
+      codesData = d; drawCodeList();
+    }, function (e) { if ($("cdList")) $("cdList").innerHTML = '<p class="cm-err">' + esc(/campaign_codes|function/.test(e.message) ? "Codes need a one-time database update (booking-v70)." : e.message) + "</p>"; });
+  }
+  function drawCodeList() {
+    var d = codesData || {}, c = d.counts || {};
+    $("cdTiles").innerHTML =
+      tile("Codes sent out", n0(d.all), n0(c.queued || 0) + " waiting · " + n0(c.not_sent || 0) + " not sent") +
+      tile("Tried on the website", n0(d.tried_any), "codes someone entered") +
+      tile("Booked", n0(c.booked || 0), num(d.all) ? (Math.round(num(c.booked) / num(d.all) * 1000) / 10) + "% of codes" : "", num(c.booked) ? "hot" : "") +
+      tile("Booking value", money(d.revenue), "discount given " + money(d.discount)) +
+      tile("Disabled / expired", n0(num(c.disabled) + num(c.expired)), "");
+    var sel = $("cdCamp");
+    if (sel && sel.options.length <= 1) (d.campaigns || []).forEach(function (x) { var o = document.createElement("option"); o.value = x.id; o.textContent = x.name; sel.appendChild(o); });
+    if (sel) sel.value = codesF.campaign_id;
+    if ($("cdBulk")) $("cdBulk").hidden = !codesF.campaign_id;
+    var chips = [["", "All", d.all]].concat(Object.keys(CSTATE).map(function (k) { return [k, CSTATE[k], c[k] || 0]; }));
+    $("cdChips").innerHTML = chips.map(function (x) { return '<button type="button" data-cs="' + x[0] + '" class="' + (codesF.state === x[0] ? "on" : "") + '">' + esc(x[1]) + "<b>" + n0(x[2]) + "</b></button>"; }).join("");
+    var rows = d.rows || [];
+    $("cdList").innerHTML = !rows.length ? '<div class="cm-empty">' + (num(d.all) ? "No codes match." : "No offer codes yet — they're created when a campaign is approved and sent.") + "</div>" :
+      '<div class="cm-twrap"><table class="cm-t"><thead><tr><th>Code</th><th>Guest</th><th>Campaign</th><th>Status</th><th>Tries on the website</th><th>Booking</th><th></th></tr></thead><tbody>' +
+      rows.map(function (r) {
+        return '<tr class="cd-row" data-code="' + esc(r.code) + '"><td><code>' + esc(r.code) + "</code>" + (r.active ? "" : '<span class="cm-sub">switched off</span>') + "</td>" +
+          "<td><b>" + esc(r.guest_name || "—") + '</b><span class="cm-sub">' + esc(r.email || "") + "</span></td>" +
+          "<td>" + esc(r.campaign || "") + '<span class="cm-sub">' + (r.sent_at ? "sent " + esc(fmtTime(r.sent_at)) : esc(r.send_status || "")) + " · until " + esc(fmtDay(r.expires_on)) + "</span></td>" +
+          '<td><span class="cm-chip cs-' + esc(r.state) + '">' + esc(CSTATE[r.state] || r.state) + "</span></td>" +
+          "<td>" + (num(r.tries) ? "<b>" + plural(r.tries, "try", "tries") + "</b>" + '<span class="cm-sub">last ' + esc(fmtTime(r.last_try)) + " · " +
+            (r.last_ok ? '<span class="cd-ok">worked</span>' : '<span class="cd-bad">' + esc(r.last_error || "refused") + "</span>") + "</span>" +
+            (r.other_email ? '<span class="cm-sub cd-bad">tried with a different email</span>' : "") : '<span class="muted">—</span>') + "</td>" +
+          "<td>" + (num(r.bookings) ? "<b>" + esc(r.orders || "") + '</b><span class="cm-sub">' + esc(money(r.revenue)) + " · saved " + esc(money(r.discount)) + "</span>" : '<span class="muted">—</span>') + "</td>" +
+          '<td class="num">' + (r.state === "booked" ? "" : '<button type="button" class="btn-sm ' + (r.active ? "danger" : "ghost") + '" data-cact="' + (r.active ? "off" : "on") + '" data-code="' + esc(r.code) + '">' + (r.active ? "Disable" : "Enable") + "</button>") + "</td></tr>";
+      }).join("") + "</tbody></table></div>" + (num(d.total) > rows.length ? '<p class="cm-note">Showing ' + n0(rows.length) + " of " + n0(d.total) + " — search to narrow it down.</p>" : "");
+  }
+  function loadAttempts() {
+    call("campaign_code_attempts", { p: { only: attOnly || null, days: 60, limit: 150 } }).then(function (d) {
+      attData = d; if ($("atList")) drawAttempts();
+    }, function (e) { if ($("atList")) $("atList").innerHTML = '<p class="cm-err">' + esc(e.message) + "</p>"; });
+  }
+  function attRows(rows, showCode) {
+    return '<div class="cm-twrap"><table class="cm-t"><thead><tr><th>When</th>' + (showCode ? "<th>Code entered</th>" : "") + "<th>Result</th><th>Email on the form</th><th>Where</th></tr></thead><tbody>" +
+      rows.map(function (a) {
+        var stage = a.stage === "booked" ? "Booked " + (a.order_code || "") : a.stage === "refused" ? "Booking refused" : "Applied";
+        return "<tr><td>" + esc(fmtTime(a.at)) + (num(a.repeats) > 1 ? '<span class="cm-sub">' + n0(a.repeats) + " times</span>" : "") + "</td>" +
+          (showCode ? '<td><code>' + esc(a.code) + "</code>" + '<span class="cm-sub">' + (a.known ? esc(a.campaign ? a.campaign + (a.owner ? " · sent to " + a.owner : "") : "discount code") : "not a code we have") + "</span></td>" : "") +
+          "<td>" + (a.ok ? '<span class="cd-ok">' + esc(stage) + " ✓</span>" : '<span class="cd-bad">' + esc(a.stage === "refused" ? "Booking refused" : "Refused") + "</span>" + '<span class="cm-sub">' + esc(a.error || "") + "</span>") + "</td>" +
+          "<td>" + (a.email ? esc(a.email) + (a.matches_owner === false ? '<span class="cm-sub cd-bad">not the address it was sent to</span>' : a.matches_owner ? '<span class="cm-sub cd-ok">the address it was sent to</span>' : "") : '<span class="muted">not typed yet</span>') + "</td>" +
+          "<td>" + esc(a.page === "/book/" ? "Day trip booking" : a.page === "/book-stay/" ? "Villa booking" : (a.page || "")) + '<span class="cm-sub">' + esc([a.kind === "day_trip" ? "day trip" : a.kind, a.check_in ? "for " + fmtDay(a.check_in) : "", a.device, a.browser ? "browser " + a.browser : ""].filter(Boolean).join(" · ")) + "</span></td></tr>";
+      }).join("") + "</tbody></table></div>";
+  }
+  function drawAttempts() {
+    var d = attData || {}, s = d.summary || {};
+    $("atChips").innerHTML = [["", "All", s.attempts], ["failed", "Refused", s.failed], ["unknown", "Unknown codes", s.unknown], ["campaign", "Offer codes only", null]].map(function (x) {
+      return '<button type="button" data-at="' + x[0] + '" class="' + (attOnly === x[0] ? "on" : "") + '">' + esc(x[1]) + (x[2] != null ? "<b>" + n0(x[2]) + "</b>" : "") + "</button>";
+    }).join("") + '<span class="cm-note" style="align-self:center;margin:0 0 0 6px">last 60 days · ' + plural(s.browsers || 0, "browser") + " · " + plural(s.booked || 0, "booking") + " made with a code</span>";
+    var rows = d.rows || [];
+    $("atList").innerHTML = rows.length ? attRows(rows, true) : '<div class="cm-empty">No codes tried on the website yet' + (attOnly ? " for this filter" : "") + ".</div>";
+  }
+  function openCode(code) {
+    openModal("Code " + code, '<div style="padding:24px">Loading…</div>');
+    call("campaign_code_detail", { p_code: code }).then(function (d) {
+      var r = d.code || {}, pl = d.plain || {};
+      var bk = d.bookings || [], at = d.attempts || [];
+      openModal("Code " + code,
+        '<div style="padding:16px 18px">' +
+        '<div class="cm-tiles">' +
+        tile("Sent to", esc(r.guest_name || r.email || "—"), esc(r.email || "") + (r.sent_at ? " · " + esc(fmtTime(r.sent_at)) : "")) +
+        tile("Campaign", esc(r.campaign || pl.label || "—"), "valid until " + esc(fmtDay(r.expires_on || pl.expires_on))) +
+        tile("Status", esc(CSTATE[r.state] || (pl.active ? "Active" : "Disabled")), pl.active ? "the code works" : "switched off — the website refuses it") +
+        tile("Tries", n0(r.tries || 0), num(r.failed_tries) ? n0(r.failed_tries) + " refused" : "") +
+        tile("Bookings", n0(r.bookings || 0), num(r.bookings) ? money(r.revenue) + " · saved " + money(r.discount) : "") + "</div>" +
+        '<div class="cm-bar">' + (r.state === "booked" ? "" : '<button type="button" class="btn-sm ' + (pl.active ? "danger" : "primary") + '" data-cact="' + (pl.active ? "off" : "on") + '" data-code="' + esc(code) + '">' + (pl.active ? "Disable this code" : "Enable this code") + "</button>") + "</div>" +
+        (pl.note ? '<div class="cm-why-box">' + esc(pl.note) + "</div>" : "") +
+        '<h3 class="cd-h3" style="margin-top:6px">Bookings with this code</h3>' +
+        (bk.length ? '<div class="cm-twrap"><table class="cm-t"><thead><tr><th>Booking</th><th>Stay</th><th>Guest email</th><th class="num">Total</th><th class="num">Saved</th></tr></thead><tbody>' +
+          bk.map(function (b) {
+            return "<tr><td><b>" + esc(b.order_code || "") + '</b><span class="cm-sub">' + esc(b.status) + " · made " + esc(fmtTime(b.created_at)) + "</span></td><td>" + esc((b.stay_type === "overnight" ? "Villa " : "Day trip ") + fmtDay(b.check_in)) + "</td><td>" + esc(b.guest_email || "") + '</td><td class="num">' + esc(money(b.total)) + '</td><td class="num">' + esc(money(b.discount)) + "</td></tr>";
+          }).join("") + "</tbody></table></div>" : '<p class="cm-note">No booking yet.</p>') +
+        '<h3 class="cd-h3">Tries on the website</h3>' + (at.length ? attRows(at, false) : '<p class="cm-note">Nobody has entered this code on the website yet.</p>') +
+        "</div>");
+    }, function (e) { openModal("Couldn't load", '<p class="cm-err" style="padding:18px">' + esc(e.message) + "</p>"); });
+  }
+  function setActive(codes, on, after) {
+    if (!on && !confirm(codes.length === 1 ? "Disable code " + codes[0] + "? The website will refuse it from now on (bookings already made keep it)." : "Disable " + plural(codes.length, "unused code") + "?")) return;
+    call("campaign_code_set_active", { p_codes: codes, p_active: on }).then(function (n) {
+      setFlash(n0(n) + " code" + (n === 1 ? "" : "s") + " " + (on ? "re-enabled" : "disabled") + ".");
+      if (after) after();
+      if (tab === "codes") drawCodes();
+    }, function (e) { alert(e.message); });
+  }
+  el.addEventListener("click", function (e) {
+    if (tab !== "codes") return;
+    var b = e.target.closest("[data-cact]");
+    if (b) { e.stopPropagation(); setActive([b.getAttribute("data-code")], b.getAttribute("data-cact") === "on"); return; }
+    var cs = e.target.closest("[data-cs]");
+    if (cs) { codesF.state = cs.getAttribute("data-cs"); store("vbr.cdState", codesF.state); loadCodes(); return; }
+    var at = e.target.closest("[data-at]");
+    if (at) { attOnly = at.getAttribute("data-at"); loadAttempts(); return; }
+    if (e.target.closest("#cdBulk")) {
+      var unused = ((codesData && codesData.rows) || []).filter(function (r) { return r.active && r.state !== "booked"; }).map(function (r) { return r.code; });
+      if (!unused.length) { alert("No active unused codes in this campaign."); return; }
+      setActive(unused, false);
+      return;
+    }
+    var row = e.target.closest("tr.cd-row");
+    if (row) openCode(row.getAttribute("data-code"));
+  });
+  el.addEventListener("input", function (e) {
+    if (e.target.id === "cdQ") { codesF.search = e.target.value.trim(); clearTimeout(cdTimer); cdTimer = setTimeout(loadCodes, 350); }
+  });
+  el.addEventListener("change", function (e) {
+    if (e.target.id === "cdCamp") { codesF.campaign_id = e.target.value; loadCodes(); }
+  });
+  $("cmEd").addEventListener("click", function (e) {
+    var b = e.target.closest("[data-cact]");
+    if (!b || ed) return;
+    var code = b.getAttribute("data-code");
+    setActive([code], b.getAttribute("data-cact") === "on", function () { openCode(code); });
+  });
+  window.VBRCampaignCodes = { show: function (campaignId) { codesF.campaign_id = campaignId || ""; codesF.state = ""; closeModal(); tab = "codes"; store("vbr.cmTab", tab); drawTabs(); draw(); } };
+
   // ---------------------------------------------------------------- campaign accounts
   function whenView(fn2, tries) {
     if (window.VBRView) return fn2(window.VBRView);
@@ -665,11 +820,12 @@
   }
   function checkAccount() {
     if (dashScreen.style.display !== "block") { document.body.classList.remove("cmp-staff"); return; }
+    // v70: every staff account; view-only accounts get the page without the buttons that change things
     sb.auth.getSession().then(function (res) {
-      var email = res.data && res.data.session && res.data.session.user ? String(res.data.session.user.email || "").toLowerCase() : "";
-      var ok = CAMPAIGN_STAFF.indexOf(email) !== -1;
+      var ok = !!(res.data && res.data.session && res.data.session.user);
       document.body.classList.toggle("cmp-staff", ok);
-      if (!ok && shown) whenView(function (V) { V.set("new"); });
+      if (!ok) { if (shown) whenView(function (V) { V.set("new"); }); return; }
+      call("campaign_access").then(function (a) { document.body.classList.toggle("cm-ro", !(a && a.can_edit)); }, function () { document.body.classList.remove("cm-ro"); });
     });
   }
   new MutationObserver(checkAccount).observe(dashScreen, { attributes: true, attributeFilter: ["style"] });

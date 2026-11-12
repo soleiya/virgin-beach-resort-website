@@ -437,6 +437,22 @@
   }
 
   // ---------------------------------------------------------------- discount code
+  // v70: let the resort see codes tried on this page (code, result, the email on the form) — log_code_attempt
+  var codeLogged = {};
+  function logCode(code, ok, error, stage, extra) {
+    try {
+      if (!sb || !code) return;
+      var key = [code, ok, error || "", stage || "apply"].join("|");
+      if (codeLogged[key] && (stage || "apply") === "apply") return;
+      codeLogged[key] = 1;
+      var em = document.getElementById("guestEmail"), vid = null, ua = navigator.userAgent || "";
+      try { vid = localStorage.getItem("vbr.vid"); } catch (e2) {}
+      var p = { code: code, ok: !!ok, error: error || null, stage: stage || "apply", kind: "overnight", email: em ? em.value.trim() : null, vid: vid,
+        page: location.pathname, device: /iPad|Tablet|(Android(?!.*Mobile))/i.test(ua) ? "tablet" : /Mobi|iPhone|Android/i.test(ua) ? "mobile" : "desktop" };
+      for (var k in (extra || {})) p[k] = extra[k];
+      sb.rpc("log_code_attempt", { p: p }).then(function () {}, function () {});
+    } catch (e) {}
+  }
   var appliedCode = "";
   var codeEl = $("discountCode"), codeMsg = $("codeMsg");
   function applyCode() {
@@ -456,6 +472,7 @@
   function showCode(q) {
     if (!codeMsg || !appliedCode) { if (codeMsg) codeMsg.hidden = true; return; }
     codeMsg.hidden = false;
+    logCode(appliedCode, !q.code_error, q.code_error || null, "apply", { check_in: checkInEl.value || null });
     if (q.code_error) { codeMsg.className = "code-msg is-bad"; codeMsg.textContent = q.code_error; }
     else { codeMsg.className = "code-msg is-ok"; var perkLine = Number(q.code_discount) > 0 ? null : (q.lines || []).filter(function (l) { return l.kind === "code_discount"; })[0]; codeMsg.textContent = perkLine ? perkLine.desc + " ✓" : "Code " + q.discount_code + " applied — you save " + peso(q.code_discount) + "."; }
   }
@@ -685,6 +702,7 @@
       return finalRef(row).then(function (r) {
         T("st_booked", { casitas: picked.length, types: picked.map(function (v) { return v.room_type; }), guests: p.total, nights: nights(),
           seniors: p.seniors, pets: pets(), total: r && r.total != null ? Number(r.total) : null, code: payload.discount_code }, r && (r.order_code || r.code));
+        if (payload.discount_code) logCode(payload.discount_code, true, null, "booked", { check_in: checkInEl.value || null, order_code: r && (r.order_code || r.code) });
         showSuccess(payload, r, picked);
       });
     }).catch(function (err) {
@@ -692,6 +710,7 @@
       submitBtn.textContent = submitLabel();
       var msg = err && err.message ? err.message : "";
       T("st_error", { reason: String(msg).slice(0, 120) || "unknown" });
+      if (appliedCode && /code|redeemed|once per guest/i.test(msg)) logCode(appliedCode, false, String(msg).slice(0, 200), "refused", { check_in: checkInEl.value || null });
       if (/just booked|already booked/i.test(msg)) {
         loadAvailability();
         return showError(esc(msg));

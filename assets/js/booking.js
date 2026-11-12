@@ -147,6 +147,24 @@
     renderBill();
   }
 
+
+  // v70: let the resort see codes tried on this page (code, result, the email on the form) — log_code_attempt
+  var codeLogged = {};
+  function logCode(code, ok, error, stage, extra) {
+    try {
+      if (!sb || !code) return;
+      var key = [code, ok, error || "", stage || "apply"].join("|");
+      if (codeLogged[key] && (stage || "apply") === "apply") return;
+      codeLogged[key] = 1;
+      var em = document.getElementById("guestEmail"), vid = null, ua = navigator.userAgent || "";
+      try { vid = localStorage.getItem("vbr.vid"); } catch (e2) {}
+      var p = { code: code, ok: !!ok, error: error || null, stage: stage || "apply", kind: "day_trip", email: em ? em.value.trim() : null, vid: vid,
+        page: location.pathname, device: /iPad|Tablet|(Android(?!.*Mobile))/i.test(ua) ? "tablet" : /Mobi|iPhone|Android/i.test(ua) ? "mobile" : "desktop" };
+      for (var k in (extra || {})) p[k] = extra[k];
+      sb.rpc("log_code_attempt", { p: p }).then(function () {}, function () {});
+    } catch (e) {}
+  }
+
   // ---------- discount code (booking-v28) ----------
   // The server checks the code (quote_daytrip_code) and works out the peso
   // discount from the cabana rental or the whole day trip; it's re-checked
@@ -173,6 +191,7 @@
       var r = res.error ? { ok: false, error: /quote_daytrip_code/.test(res.error.message) ? "Discount codes aren't available for day trips yet." : res.error.message } : res.data;
       codeResult = r && r.ok ? r : null;
       showCodeMsg(!!codeResult, codeResult ? "Code " + r.code + " applied — you save " + peso(r.discount) + "." : (r && r.error) || "That discount code isn't valid.");
+      logCode(appliedCode, !!codeResult, codeResult ? null : (r && r.error) || "That discount code isn't valid.", "apply", { check_in: checkInEl.value || null });
       renderBill(true);
     });
   }
@@ -620,6 +639,7 @@
         var row = Array.isArray(rows) ? rows[0] : rows;
         T("dt_booked", { type: payload.stay_type, guests: bill.totalGuests, total: payload.total_amount, dining: bill.dining, lounge: bill.lounge,
           seniors: bill.seniors, pets: bill.pets, code: payload.discount_code || null }, row && row.order_code);
+        if (payload.discount_code) logCode(payload.discount_code, true, null, "booked", { check_in: payload.check_in || null, order_code: row && row.order_code });
         showSuccess(payload, false, row && row.order_code);
       })
       .catch(function (err) {
@@ -627,6 +647,7 @@
         // plainly and refresh availability instead of "something went wrong".
         var m = err && err.message ? String(err.message) : "";
         T("dt_error", { reason: m.slice(0, 120) || "unknown" });
+        if (appliedCode && /code|redeemed|once per guest/i.test(m)) logCode(appliedCode, false, m.slice(0, 200), "refused", { check_in: checkInEl.value || null });
         if (/cabanas? (is|are) left|Cabana not available/i.test(m)) {
           statusEl.hidden = false;
           statusEl.className = "form-status form-status-error";
