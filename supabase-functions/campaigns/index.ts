@@ -1,7 +1,7 @@
 // =============================================================================
 // campaigns — Offers & Campaigns for the staff dashboard (booking-v65).
 //
-// Staff calls (Authorization: Bearer <staff session>; campaign_admins only):
+// Staff calls (Authorization: Bearer <staff session>; any staff account; view-only accounts may only preview (v70)):
 //   import_guests { page? }   Cloudbeds guest directory (getGuestList) →
 //                             cb_guest_contacts, page by page (continues on its
 //                             own), then rebuilds guest_profiles.
@@ -227,6 +227,9 @@ export function pickPhotos(c: Any): string[] {
   for (const [t, re] of TOPIC_WORDS) if (re.test(text)) topics.push(t);
   // the freebie decides the main photo when there is one
   if (o.kind === "perk") for (const [t, re] of TOPIC_WORDS) if (re.test(String(o.perk || ""))) { topics.unshift(t); break; }
+  // a company audience gets the corporate photo on top
+  const segs: string[] = Array.isArray(c?.audience?.segments) ? c.audience.segments : [];
+  if (segs.length && segs.every((x) => x === "corporate")) topics.unshift("corporate");
   const kinds: string[] = Array.isArray(o.booking_kinds) ? o.booking_kinds : ["overnight"];
   topics.push(kinds.includes("day_trip") && !kinds.includes("overnight") ? "daytrip" : "villa", "beach");
   const out = [...chosen];
@@ -499,6 +502,12 @@ export async function handle(req: Request): Promise<Response> {
   const isCron = !!s && req.headers.get("x-webhook-secret") === s;
   const who = isCron ? "cron" : await staffEmail(req);
   if (!who) return json({ error: "Not allowed" }, 401);
+  // v70: every staff account may open Campaigns; view-only (Accounting) accounts may only preview
+  if (!isCron && body.action !== "preview") {
+    const jwt = (req.headers.get("authorization") || "").replace(/^Bearer\s+/i, "");
+    const acc = await rpc("campaign_access", {}, jwt).catch(() => null);
+    if (!acc?.can_edit) return json({ error: "This account is view-only. Ask the reservations team to make this change." }, 403);
+  }
   try {
     switch (body.action) {
       case "process": return json(await processQueue());
