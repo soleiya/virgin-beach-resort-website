@@ -181,7 +181,7 @@ body = f"""
           <label class="inline-check" style="font-size:0.85rem !important; color:var(--ink-soft) !important;"><input type="checkbox" id="marketingOptIn"> Send me occasional promos and updates from Virgin Beach Resort.</label>
           <div class="form-error-box" id="formError" hidden></div>
           <button class="btn btn-primary" type="submit" id="submitBtn">Book Now</button>
-          <p class="field-hint" id="submitHint">Your casita is held for 24 hours while you pay. Right after booking you can <strong>pay 50% or 100% online</strong> — card, GCash, Maya and more, through our secure payment partner Xendit — and your stay is confirmed as soon as it goes through. The balance is due 15 days before arrival (bookings within 14 days of arrival are paid in full).</p>
+          <p class="field-hint" id="submitHint">Your casita is held for 24 hours while you pay. Right after booking you can <strong>pay in full online</strong> — card, GCash, Maya and more, through our secure payment partner Xendit — and your stay is confirmed as soon as it goes through. The balance is due 15 days before arrival (bookings within 14 days of arrival are paid in full).</p>
         </div>
       </form>
     </div>
