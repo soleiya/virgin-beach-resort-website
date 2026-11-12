@@ -310,7 +310,7 @@
       '<div class="bill-lines">' + (lines.join("") || '<div class="bill-row"><span>Add your party size and cabana(s) above</span><span>—</span></div>') + "</div>" +
       warning +
       '<div class="bill-total"><span>Total</span><span>' + peso(bill.total - codeDisc) + "</span></div>" +
-      '<p class="field-hint">You\'ll pay online on the next step — 50% or the full amount.</p>';
+      '<p class="field-hint">You\'ll pay online on the next step — the full amount.</p>';
   }
 
   [adultsEl, kids612El, kids05El, seniorCountEl, pwdKidCountEl, petCountEl].forEach(function (el) {
@@ -461,7 +461,7 @@
     // Pay online right away (Xendit) when the booking has a price
     var canPay = !viaEmail && orderCode && payload.total_amount > 0 && window.VBRPay;
     var bal = new Date(payload.check_in + "T00:00:00Z"); bal.setUTCDate(bal.getUTCDate() - 15);
-    var half = canPay && bal.toISOString().slice(0, 10) > todayManila();
+    var half = false; // v66: full payment only
     var body = viaEmail
       ? " — our reservations team will follow up with your quotation and payment details at " +
         payload.guest_email + " or " + payload.guest_phone + ".</p>"

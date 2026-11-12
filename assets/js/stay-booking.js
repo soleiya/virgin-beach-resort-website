@@ -460,14 +460,14 @@
     else { codeMsg.className = "code-msg is-ok"; var perkLine = Number(q.code_discount) > 0 ? null : (q.lines || []).filter(function (l) { return l.kind === "code_discount"; })[0]; codeMsg.textContent = perkLine ? perkLine.desc + " ✓" : "Code " + q.discount_code + " applied — you save " + peso(q.code_discount) + "."; }
   }
 
-  // Bookings 15+ days out can pay 50% now (balance 15 days before arrival);
+  // v66: full payment only (was: 15+ days out could pay 50% now).
   // closer than that they're paid in full — same rule as the quotation email.
   function payTerms() {
     var ci = checkInEl && checkInEl.value;
-    if (!ci) return "Pay 50% or 100% within 24 hours to secure it.";
+    if (!ci) return "Pay in full within 24 hours to secure it.";
     var days = Math.round((Date.parse(ci + "T00:00:00Z") - Date.parse(todayManila() + "T00:00:00Z")) / 86400000);
     return days <= 14 ? "Arrival is within 14 days, so it's payable in full within 24 hours to secure it."
-                      : "Pay 50% or 100% within 24 hours to secure it.";
+                      : "Pay in full within 24 hours to secure it.";
   }
 
   // v63: subtle early-bird line on online bookings for 2027 stays (message only)
@@ -751,7 +751,7 @@
     var total = row && row.total != null ? Number(row.total) : null;
     // 50% is allowed while the balance date (15 days before arrival) is still ahead
     var bal = new Date(payload.check_in + "T00:00:00Z"); bal.setUTCDate(bal.getUTCDate() - 15);
-    var half = total != null && bal.toISOString().slice(0, 10) > todayManila();
+    var half = false; // v66: full payment only
     var payUrl = "../pay/index.html?order=" + encodeURIComponent(code) + "&email=" + encodeURIComponent(payload.guest_email);
     st.innerHTML = "<h3>Request received — thank you, " + first + "!</h3>" +
       "<p>Your Booking ID is <strong>" + esc(code || "—") + "</strong>" + (total != null ? " · Total <strong>" + peso(total) + "</strong>" : "") + ".</p>" +
