@@ -308,7 +308,7 @@ export function payTerms(r: Any, total: number | null | undefined, now = new Dat
   const ci = r?.check_in ? String(r.check_in).slice(0, 10) : null;
   const due = ci ? addDaysStr(ci, -BALANCE_DAYS) : null;
   const t = Number(total) || 0;
-  return { half: !!(due && due > manilaToday(now)), total: t, deposit: Math.ceil(t / 2), balanceDue: due, balanceDueLabel: due ? fmtDate(due) : "" };
+  return { half: false /* v66: full payment only */, total: t, deposit: Math.ceil(t / 2), balanceDue: due, balanceDueLabel: due ? fmtDate(due) : "" };
 }
 export type PaySummary = {
   total: number | null; paid: number; claimed: number; pending: number; balance: number; deposit: number;
