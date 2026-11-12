@@ -300,7 +300,8 @@
       '<td><input id="dnName" type="text" placeholder="Guest name" autocomplete="off"><input id="dnPhone" type="tel" placeholder="Contact no." autocomplete="off"><input id="dnEmail" type="email" placeholder="Email — sends the quotation" autocomplete="off">' +
       '<select id="dnVia" title="Came in via"><option value="messenger">via Messenger</option><option value="phone">via Phone</option><option value="email">via Email</option>' +
       '<option value="walk_in">Walk-in</option><option value="other">Other</option></select></td>' +
-      num("dnAdults", "Adults (not counting PWD / Seniors)") + num("dnKids", "Kids 6–12") + num("dnK05", "Kids 0–5") + num("dnSr", "PWD / Seniors") + num("dnPets", "Pets") +
+      num("dnAdults", "Adults (not counting PWD / Seniors)") + '<td class="num"><input class="n" type="number" min="0" step="1" inputmode="numeric" id="dnKids" title="Kids 6–12" placeholder="0">' +
+        '<input class="n" type="number" min="0" step="1" inputmode="numeric" id="dnPwdK" title="PWD kids 6–12 — counted in Kids 6–12 (20% off, VAT-exempt; ID needed)" placeholder="PWD"></td>' + num("dnK05", "Kids 0–5") + num("dnSr", "PWD / Seniors") + num("dnPets", "Pets") +
       num("dnDining", "Dining cabanas") + num("dnLounge", "Lounge cabanas") +
       '<td><select id="dnType">' + ["day_trip", "half_day", "flash_sale", "all_inclusive_family", "all_inclusive_barkada", "corporate", "other"].map(function (k) {
         return '<option value="' + k + '">' + esc(PKG[k]) + "</option>";
@@ -319,7 +320,7 @@
     var P = window.VBRPricing;
     if (!P) return null;
     var type = $("dnType").value, sr = dnVal("dnSr");
-    return P.compute({ type: type, adults: dnVal("dnAdults") + sr, seniors: sr, kids612: dnVal("dnKids"), kids05: dnVal("dnK05"),
+    return P.compute({ type: type, adults: dnVal("dnAdults") + sr, seniors: sr, kids612: dnVal("dnKids"), kids05: dnVal("dnK05"), pwdKids: Math.min(dnVal("dnPwdK"), dnVal("dnKids")),
       pets: dnVal("dnPets"), dining: dnVal("dnDining"), lounge: dnVal("dnLounge") });
   }
   function dnReprice() {
@@ -334,7 +335,7 @@
   $("dcalBody").addEventListener("input", function (e) {
     if (!e.target.closest(".dcal-new")) return;
     if (e.target.id === "dnTotal") { addTotalTouched = e.target.value !== ""; return; }
-    if (/^dn(Adults|Kids|K05|Sr|Pets|Dining|Lounge)$/.test(e.target.id)) dnReprice();
+    if (/^dn(Adults|Kids|PwdK|K05|Sr|Pets|Dining|Lounge)$/.test(e.target.id)) dnReprice();
   });
   $("dcalBody").addEventListener("change", function (e) { if (e.target.id === "dnType") dnReprice(); });
   $("dcalBody").addEventListener("keydown", function (e) {
@@ -362,7 +363,7 @@
     var payload = {
       source: $("dnVia").value, stay_type: type, stay_type_label: TYPE_LABELS[type] || PKG[type], status: "pending",
       guest_name: name, guest_phone: $("dnPhone").value.trim() || null, booked_by: (D.staffName && D.staffName()) || null,
-      check_in: ds, adults: adults, senior_count: sr, children_6_12: kids, children_0_5: k05, pet_count: dnVal("dnPets"),
+      check_in: ds, adults: adults, senior_count: sr, children_6_12: kids, children_0_5: k05, pwd_kid_count: Math.min(dnVal("dnPwdK"), kids), pet_count: dnVal("dnPets"),
       dining_cabanas: dining, lounge_cabanas: lounge, total_amount: total,
       staff_notes: $("dnRemarks").value.trim() || null, email_guest: false, discount_amount: 0,
     };
