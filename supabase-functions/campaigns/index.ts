@@ -96,7 +96,7 @@ async function cb(path: string, params: Record<string, unknown> = {}, version = 
   }
 }
 async function guestPage(page: number) {
-  const params = { pageNumber: page, pageSize: 100, includeGuestInfo: "true", sortBy: "dateCreated" };
+  const params = { pageNumber: page, pageSize: 100 };
   try { return await cb("getGuestList", params); }
   catch (e) {
     if (/not found|unknown|invalid method|404/i.test(String((e as Error).message))) return await cb("getGuestList", params, "v1.2");
@@ -147,6 +147,105 @@ async function importGuests(page = 1) {
 
 // ---------------------------------------------------------------- email
 const esc = (s: unknown) => String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+// ---------------------------------------------------------------- photos
+// Email photos live on the website (assets/images/email/<key>.jpg, 1200×800).
+// The AI picks them by key; staff can change them in the editor. If none are
+// chosen, pickPhotos() matches the offer's words (ATV → an ATV shot, food →
+// a food shot, …).
+const PHOTO_BASE = `${SITE}/assets/images/email/`;
+export const PHOTOS: Record<string, { topic: string; alt: string; caption: string }> = {
+  "atv-beach": { topic: "atv", alt: "ATVs lined up on the white sand beach", caption: "ATV rides along the shore" },
+  "atv-ride": { topic: "atv", alt: "Guests riding ATVs down to the beach", caption: "ATV rides down to the beach" },
+  "dining-restaurant": { topic: "dining", alt: "The open-air beachfront restaurant", caption: "Beachfront dining" },
+  "dining-pizza": { topic: "dining", alt: "Pizza from the wood-fired oven", caption: "Wood-fired pizza" },
+  "dining-kare-kare": { topic: "dining", alt: "Kare-kare with crispy pork", caption: "Kare-kare, our way" },
+  "dining-burger": { topic: "dining", alt: "Burger and fries by the beach", caption: "Lunch by the sea" },
+  "dining-pasta": { topic: "dining", alt: "Seafood pasta on the sand", caption: "Seafood pasta" },
+  "dining-bread": { topic: "dining", alt: "Freshly baked breads", caption: "Fresh from our bakery" },
+  "dining-lanterns": { topic: "dining", alt: "Lantern-lit dinner table", caption: "Dinner by lantern light" },
+  "dinner-beach": { topic: "romance", alt: "Private dinner on the beach with lanterns", caption: "A private dinner on the sand" },
+  "massage": { topic: "wellness", alt: "Massage at the resort", caption: "Massage by the sea" },
+  "kayaking": { topic: "activities", alt: "Kayaking in the bay", caption: "Kayaking in the bay" },
+  "snorkeling": { topic: "activities", alt: "Snorkeling over the reef", caption: "Snorkeling the reef" },
+  "biking": { topic: "activities", alt: "Bicycle on a shaded resort path", caption: "Bike rides under the trees" },
+  "cabana-celebrate": { topic: "celebration", alt: "Canopy cabana on the sand", caption: "A cabana for celebrations" },
+  "wedding": { topic: "celebration", alt: "Pavilion set up for a reception", caption: "Celebrations in the pavilion" },
+  "daytrip-family": { topic: "daytrip", alt: "Families in the day-trip cabanas", caption: "Day-trip cabanas" },
+  "daytrip-cabanas-pools": { topic: "daytrip", alt: "Aerial view of the cabanas, pools and beach", caption: "Cabanas, pools and the beach" },
+  "villa-deluxe": { topic: "villa", alt: "A private villa among the trees", caption: "Your private villa" },
+  "casita-sunset": { topic: "villa", alt: "A casita at sunset", caption: "Casita evenings" },
+  "casita-interior": { topic: "villa", alt: "Inside a bamboo casita", caption: "Inside a bamboo casita" },
+  "corporate-aerial": { topic: "corporate", alt: "Aerial view of the pavilion with a tour bus", caption: "Outings for the whole team" },
+  "aerial-beach-cabanas": { topic: "beach", alt: "Aerial view of the long white sand beach", caption: "Virgin white sand beach" },
+  "aerial-cabanas-beach": { topic: "beach", alt: "Cabanas on the white sand", caption: "Cabanas on the sand" },
+  "aerial-beach-mountains": { topic: "beach", alt: "The beach with the mountains behind", caption: "Sea and mountains" },
+  "aerial-villas-pool": { topic: "beach", alt: "Aerial view of the villas, pool and beach", caption: "Private villas by the sea" },
+  "aerial-pool": { topic: "beach", alt: "The pool beside the beach", caption: "The pool by the beach" },
+  "aerial-reef": { topic: "beach", alt: "The reef along the shore", caption: "Clear water and reef" },
+  "reef-aerial": { topic: "beach", alt: "Turquoise water off the beach", caption: "Turquoise water" },
+  "aerial-beach-trees": { topic: "beach", alt: "Beachfront trees and sand", caption: "Shade right on the beach" },
+  "aerial-forest-path": { topic: "beach", alt: "Shaded path through the trees", caption: "Paths under the trees" },
+  "aerial-coast-road": { topic: "drive", alt: "The coastal road to the resort", caption: "A drive away from Manila" },
+  "aerial-road": { topic: "drive", alt: "Road along the coast", caption: "The road to Laiya" },
+};
+const TOPIC_WORDS: [string, RegExp][] = [
+  ["atv", /\batvs?\b|quad|off-?road/i],
+  ["wellness", /massage|\bspa\b|wellness/i],
+  ["romance", /romantic|couple|anniversary|honeymoon|date night|private dinner/i],
+  ["corporate", /corporate|\bteams?\b|team-?building|company|offsite|colleague|office/i],
+  ["celebration", /birthday|celebrat|wedding|debut|reunion|party/i],
+  ["dining", /food|meal|dinner|lunch|breakfast|dessert|pizza|kare|buffet|dining|\beat\b|feast|\bdrinks?\b|full-?board/i],
+  ["activities", /kayak|snorkel|bike|biking|paddle|adventure|activit/i],
+  ["daytrip", /day ?trip|cabana|day visit/i],
+  ["villa", /casita|villa|overnight|stay|night/i],
+];
+const TOPIC_PHOTOS: Record<string, string[]> = {
+  atv: ["atv-beach", "atv-ride", "aerial-beach-cabanas"],
+  wellness: ["massage", "aerial-beach-trees", "villa-deluxe"],
+  romance: ["dinner-beach", "casita-sunset", "dining-lanterns"],
+  corporate: ["corporate-aerial", "dining-restaurant", "atv-beach"],
+  celebration: ["cabana-celebrate", "dinner-beach", "dining-pizza"],
+  dining: ["dining-restaurant", "dining-pizza", "dining-kare-kare"],
+  activities: ["kayaking", "snorkeling", "atv-beach"],
+  daytrip: ["daytrip-cabanas-pools", "daytrip-family", "dining-burger"],
+  villa: ["aerial-villas-pool", "villa-deluxe", "casita-interior"],
+  beach: ["aerial-beach-cabanas", "aerial-pool", "aerial-reef"],
+};
+export const SOUNDBITES = [
+  "Exclusive resort in Batangas",
+  "White sand beach, 3 hours from Manila",
+  "Private villa resort",
+  "Virgin white sand beach",
+  "A drive away white sand beach",
+];
+const validPhotos = (v: unknown) => Array.isArray(v) ? [...new Set(v.map(String).filter((k) => k in PHOTOS))].slice(0, 3) : [];
+export function pickPhotos(c: Any): string[] {
+  const chosen = validPhotos(c?.offer?.images);
+  const o = c?.offer || {};
+  const text = [o.perk, c?.headline, c?.subject, c?.name, c?.body, c?.audience_label].map((x) => String(x || "")).join(" \n ");
+  const topics: string[] = [];
+  for (const [t, re] of TOPIC_WORDS) if (re.test(text)) topics.push(t);
+  // the freebie decides the main photo when there is one
+  if (o.kind === "perk") for (const [t, re] of TOPIC_WORDS) if (re.test(String(o.perk || ""))) { topics.unshift(t); break; }
+  const kinds: string[] = Array.isArray(o.booking_kinds) ? o.booking_kinds : ["overnight"];
+  topics.push(kinds.includes("day_trip") && !kinds.includes("overnight") ? "daytrip" : "villa", "beach");
+  const out = [...chosen];
+  for (const t of topics) for (const k of TOPIC_PHOTOS[t] || []) { if (out.length >= 3) break; if (!out.includes(k)) out.push(k); }
+  return out.slice(0, 3);
+}
+// "cove" isn't a word the resort uses
+export const noCove = (s: unknown) => String(s ?? "")
+  .replace(/\bprivate[- ]cove(s)?\b/gi, "private beach")
+  .replace(/\b(a|our|the|this)\s+(quiet|hidden|secret|little|private|secluded)?\s*cove\b/gi, (_m, a, adj) => `${a} ${adj ? adj + " " : ""}beach`)
+  .replace(/\bcoves?\b/gi, "beach");
+function soundbite(c: Any) {
+  const t = String(c?.offer?.tagline || "").trim();
+  if (t && !/cove/i.test(t)) return t.slice(0, 70);
+  const s = String(c?.id || c?.name || c?.code_prefix || "");
+  let h = 0; for (const ch of s) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+  return SOUNDBITES[h % SOUNDBITES.length];
+}
+
 const peso = (n: unknown) => "₱" + Number(n || 0).toLocaleString("en-PH", { maximumFractionDigits: 0 });
 const fmtDate = (s: unknown) => s ? new Date(String(s).slice(0, 10) + "T00:00:00Z").toLocaleDateString("en-PH", { timeZone: "UTC", month: "long", day: "numeric", year: "numeric" }) : "";
 const firstName = (n: unknown) => String(n || "").trim().split(/\s+/)[0]?.replace(/[^A-Za-zÀ-ž'-]/g, "") || "";
@@ -182,35 +281,51 @@ function fill(t: unknown, v: Record<string, string>) {
 export function renderEmail(c: Any, r: { name?: string; code: string; unsub?: string }) {
   const o = c.offer || {};
   const v = { first_name: firstName(r.name) || "there", name: String(r.name || ""), code: r.code, expires: fmtDate(c.expires_on), offer: offerLine(o) };
-  const subject = fill(c.subject, v);
-  const headline = fill(c.headline || offerLine(o), v);
-  const paras = fill(c.body, v).split(/\n\s*\n/).map((p) => p.trim()).filter(Boolean);
+  const subject = noCove(fill(c.subject, v));
+  const headline = noCove(fill(c.headline || offerLine(o), v));
+  const paras = noCove(fill(c.body, v)).split(/\n\s*\n/).map((p) => p.trim()).filter(Boolean);
   const url = ctaUrl(o, r.code);
   const unsub = r.unsub ? `${SITE}/unsubscribe/?t=${encodeURIComponent(r.unsub)}` : `${SITE}/unsubscribe/`;
   const terms = offerTerms(o, c.expires_on);
-  const html = `<!doctype html><html><body style="margin:0;padding:0;background:#f4efe6">
+  const photos = pickPhotos(c);
+  const img = (k: string) => PHOTO_BASE + k + ".jpg";
+  const [hero, ...more] = photos;
+  const tag = soundbite(c);
+  const F = "font-family:Arial,Helvetica,sans-serif";
+  const tile = (k: string) => `<td class="tile" width="50%" valign="top" style="padding:0 6px">
+<a href="${esc(url)}" style="text-decoration:none"><img src="${img(k)}" width="264" alt="${esc(PHOTOS[k].alt)}" style="display:block;width:100%;max-width:264px;height:auto;border:0;border-radius:10px"></a>
+<div style="${F};font-size:13px;color:#4c5b58;padding:8px 2px 0">${esc(PHOTOS[k].caption)}</div></td>`;
+  const html = `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<style>@media (max-width:520px){.pad{padding-left:18px!important;padding-right:18px!important}.tile{display:block!important;width:100%!important;padding:0 0 14px!important}.tile img{max-width:100%!important}h1{font-size:23px!important}}</style></head>
+<body style="margin:0;padding:0;background:#f4efe6">
 <div style="display:none;max-height:0;overflow:hidden">${esc(offerLine(o))} — your personal code ${esc(r.code)}</div>
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f4efe6"><tr><td align="center" style="padding:24px 12px">
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:600px;background:#fffdf8;border-radius:14px;overflow:hidden;font-family:Arial,Helvetica,sans-serif;color:#24302e">
-<tr><td style="background:#0f6f68;padding:22px 28px;color:#fff;font-size:13px;letter-spacing:.12em;text-transform:uppercase">Virgin Beach Resort · Laiya, Batangas</td></tr>
-<tr><td style="padding:28px 28px 8px"><h1 style="margin:0 0 16px;font-family:Georgia,'Times New Roman',serif;font-weight:normal;font-size:26px;line-height:1.25;color:#0f4f4a">${esc(headline)}</h1>
-${paras.map((p) => `<p style="margin:0 0 14px;font-size:15px;line-height:1.6">${esc(p).replace(/\n/g, "<br>")}</p>`).join("")}</td></tr>
-<tr><td style="padding:6px 28px 4px"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border:2px dashed #0f6f68;border-radius:12px;background:#eef6f4">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f4efe6"><tr><td align="center" style="padding:24px 10px">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:600px;background:#fffdf8;border-radius:14px;overflow:hidden;${F};color:#24302e">
+<tr><td><a href="${SITE}/"><img src="${img("header-watercolor")}" width="600" alt="Virgin Beach Resort" style="display:block;width:100%;height:auto;border:0"></a></td></tr>
+<tr><td align="center" style="padding:2px 28px 16px;font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:#0f6f68">${esc(tag)} · Laiya, Batangas</td></tr>
+${hero ? `<tr><td><a href="${esc(url)}"><img src="${img(hero)}" width="600" alt="${esc(PHOTOS[hero].alt)}" style="display:block;width:100%;height:auto;border:0"></a></td></tr>` : ""}
+<tr><td class="pad" style="padding:28px 32px 8px"><h1 style="margin:0 0 16px;font-family:Georgia,'Times New Roman',serif;font-weight:normal;font-size:27px;line-height:1.25;color:#0f4f4a">${esc(headline)}</h1>
+${paras.map((p) => `<p style="margin:0 0 14px;font-size:15px;line-height:1.65">${esc(p).replace(/\n/g, "<br>")}</p>`).join("")}</td></tr>
+<tr><td class="pad" style="padding:6px 32px 4px"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border:2px dashed #0f6f68;border-radius:12px;background:#eef6f4">
 <tr><td align="center" style="padding:18px 16px"><div style="font-size:13px;color:#4c5b58;text-transform:uppercase;letter-spacing:.08em">Your offer</div>
 <div style="font-size:20px;font-weight:bold;color:#0f4f4a;margin:6px 0 10px">${esc(offerLine(o))}</div>
 <div style="font-size:12px;color:#4c5b58">Your personal code</div>
 <div style="font-family:'Courier New',monospace;font-size:26px;font-weight:bold;letter-spacing:.12em;color:#24302e;margin-top:4px">${esc(r.code)}</div></td></tr></table></td></tr>
-<tr><td align="center" style="padding:20px 28px 8px"><a href="${esc(url)}" style="display:inline-block;background:#e0763c;color:#fff;text-decoration:none;font-weight:bold;font-size:16px;padding:14px 30px;border-radius:999px">${esc(c.cta_label || "Book with my code")}</a>
+<tr><td align="center" style="padding:20px 28px 10px"><a href="${esc(url)}" style="display:inline-block;background:#e0763c;color:#fff;text-decoration:none;font-weight:bold;font-size:16px;padding:14px 30px;border-radius:999px">${esc(c.cta_label || "Book with my code")}</a>
 <div style="font-size:12px;color:#6b7774;margin-top:10px">The code is filled in for you — or enter it on the booking page.</div></td></tr>
-<tr><td style="padding:14px 28px 24px"><ul style="margin:0;padding-left:18px;font-size:12px;line-height:1.6;color:#6b7774">${terms.map((t) => `<li>${esc(t)}</li>`).join("")}</ul></td></tr>
+${more.length ? `<tr><td style="padding:18px 22px 6px"><table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>${more.map(tile).join("")}${more.length === 1 ? '<td class="tile" width="50%"></td>' : ""}</tr></table></td></tr>` : ""}
+<tr><td class="pad" style="padding:14px 32px 22px"><ul style="margin:0;padding-left:18px;font-size:12px;line-height:1.6;color:#6b7774">${terms.map((t) => `<li>${esc(t)}</li>`).join("")}</ul></td></tr>
+<tr><td align="center" style="padding:0 24px 18px;font-family:Georgia,'Times New Roman',serif;font-size:15px;line-height:1.6;color:#0f4f4a">Private villa resort · Virgin white sand beach<br>Just a drive away — about 3 hours from Manila</td></tr>
+<tr><td><img src="${img("footer-watercolor")}" width="600" alt="" style="display:block;width:100%;height:auto;border:0"></td></tr>
 <tr><td style="background:#f1ebe0;padding:18px 28px;font-size:12px;line-height:1.6;color:#6b7774">
 Questions? Reply to this email or call +63 917 792 0712 · <a href="${SITE}/" style="color:#0f6f68">virginbeachresort.com</a><br>
 You're getting this because you've been our guest. <a href="${esc(unsub)}" style="color:#6b7774">Unsubscribe from offers</a>.<br>
 Virgin Beach Resort, Laiya, San Juan, Batangas, Philippines</td></tr>
 </table></td></tr></table></body></html>`;
   const text = [headline, "", ...paras.flatMap((p) => [p, ""]), `Your offer: ${offerLine(o)}`, `Your personal code: ${r.code}`, `Book: ${url}`, "",
-    ...terms.map((t) => "• " + t), "", "Questions? Reply to this email or call +63 917 792 0712.", `Unsubscribe from offers: ${unsub}`].join("\n");
-  return { subject, html, text, unsub };
+    ...terms.map((t) => "• " + t), "", "Virgin Beach Resort — private villa resort on a virgin white sand beach, about 3 hours from Manila.",
+    "Questions? Reply to this email or call +63 917 792 0712.", `Unsubscribe from offers: ${unsub}`].join("\n");
+  return { subject, html, text, unsub, images: photos };
 }
 
 let transporter: Any = null;
@@ -254,7 +369,7 @@ async function processQueue() {
 // ---------------------------------------------------------------- AI
 const RULE_KEYS = ["segments", "tiers", "kinds", "min_visits", "max_visits", "min_spend", "max_spend", "last_from", "last_to",
   "min_days_since", "max_days_since", "months", "kids", "opt_in_only", "include_upcoming", "countries", "skip_contacted_days"];
-const SYSTEM = `You are the revenue and CRM marketer for Virgin Beach Resort, a quiet private-cove resort in Laiya, San Juan, Batangas, Philippines (18 private casitas with full-board meals; day trips with Dining or Lounge Cabanas; corporate outings, team building and events). Guests are mostly from Metro Manila; families, barkadas (friend groups), couples and companies.
+const SYSTEM = `You are the revenue and CRM marketer for Virgin Beach Resort, an exclusive private villa resort on a virgin white sand beach in Laiya, San Juan, Batangas, Philippines, about 3 hours' drive from Manila (18 private casitas with full-board meals; day trips with Dining or Lounge Cabanas; corporate outings, team building and events). Guests are mostly from Metro Manila; families, barkadas (friend groups), couples and companies.
 You design targeted email offers for past guests. Each offer goes to one audience, with a personal single-use code. Staff will review, tweak or decline every suggestion before anything is sent.
 Rules:
 - Base every suggestion on the data given: segment sizes, spend, recency, months guests visit, occupancy gaps, the sales team's 2027 calendar and past campaign results (repeat what worked, avoid what was declined).
@@ -262,9 +377,12 @@ Rules:
 - Prefer filling low-occupancy months and weekdays. Overnight online booking currently runs to 2027-03-21 for Sunday–Thursday nights (Fri/Sat nights and Holy Week Mar 22–31 are closed online); dates from April 2027 are request-only. Keep overnight stay windows inside what can be booked unless the offer is clearly a request-based early bird.
 - Protect rate integrity: percent discounts normally 5–15% (max 20%), peso discounts modest, never discount peak dates (Holy Week, Christmas to New Year). For high-value (vip) guests prefer perks over discounts (e.g. a free massage, welcome drinks, late check-out, a free ATV ride, dessert platter, bonfire setup).
 - Offers apply to: casita rates ("rooms"), add-ons (overnight only), or the whole booking ("all"). booking_kinds: "overnight" and/or "day_trip".
+- How the resort talks about itself: "Exclusive resort in Batangas", "White sand beach 3 hours away from Manila", "Private villa resort", "Virgin white sand beach", "A drive away white sand beach". Never call it a "cove" (or "hidden gem", "paradise island"); it is a beach resort on the mainland.
+- Each email has photos. Choose "images": 1–3 photo keys from this list, the first is the big photo at the top, so it must show what the offer is about (an ATV offer → an ATV photo, a food perk → a food photo, corporate → the corporate photo; otherwise the beach or villas). Photo keys: ${Object.entries(PHOTOS).map(([k, p]) => `${k} (${p.alt})`).join("; ")}.
+- Choose "tagline": one of the soundbites above, shown above the photo.
 - Write warm, short, personal emails (2–3 short paragraphs, under 120 words), in natural English with an occasional light Filipino touch; no hype, no ALL CAPS, no false urgency, no invented facilities. Use {first_name} for the guest's first name. Don't repeat the code or the terms in the body: the email shows them below the message.
 Answer ONLY with a JSON array (no prose) of objects with exactly these keys:
-name, rationale (2–3 sentences with the numbers that justify it), audience (object using only: ${RULE_KEYS.join(", ")}; segments from family|friends|couple|solo|corporate; tiers from vip|repeat|one_time|upcoming; kinds from villa|daytrip; months are 1–12; dates YYYY-MM-DD), audience_label (plain words), offer ({kind: percent|fixed|perk, percent?, amount?, perk?, applies_to: rooms|add_ons|all, booking_kinds: [..], stay_from?, stay_to?, min_nights?, min_total?}), code_prefix (3–10 letters/digits), expires_on (YYYY-MM-DD), subject (under 60 characters), headline, body, cta_label, est_bookings (number), est_revenue (pesos).`;
+name, rationale (2–3 sentences with the numbers that justify it), audience (object using only: ${RULE_KEYS.join(", ")}; segments from family|friends|couple|solo|corporate; tiers from vip|repeat|one_time|upcoming; kinds from villa|daytrip; months are 1–12; dates YYYY-MM-DD), audience_label (plain words), offer ({kind: percent|fixed|perk, percent?, amount?, perk?, applies_to: rooms|add_ons|all, booking_kinds: [..], stay_from?, stay_to?, min_nights?, min_total?}), code_prefix (3–10 letters/digits), expires_on (YYYY-MM-DD), subject (under 60 characters), headline, body, cta_label, est_bookings (number), est_revenue (pesos), images (array of photo keys), tagline.`;
 
 function extractJson(text: string): Any {
   const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/);
@@ -299,7 +417,13 @@ function cleanSuggestion(s: Any, today: string) {
   const aud: Any = {};
   for (const k of RULE_KEYS) if (s.audience && s.audience[k] !== undefined && s.audience[k] !== null && s.audience[k] !== "") aud[k] = s.audience[k];
   const exp = /^\d{4}-\d{2}-\d{2}$/.test(String(s.expires_on || "")) && s.expires_on > today ? s.expires_on : ymd(new Date(Date.now() + 30 * 864e5));
-  return { ...s, offer, audience: aud, expires_on: exp };
+  const imgs = validPhotos(s.images ?? o.images);
+  offer.images = imgs.length ? imgs : pickPhotos({ ...s, offer });
+  if (s.tagline && !/cove/i.test(String(s.tagline))) offer.tagline = String(s.tagline).slice(0, 70);
+  const txt: Any = {};
+  for (const k of ["name", "rationale", "audience_label", "subject", "headline", "body", "cta_label"]) if (s[k] !== undefined) txt[k] = noCove(s[k]);
+  delete s.images; delete s.tagline;
+  return { ...s, ...txt, offer, audience: aud, expires_on: exp };
 }
 async function suggest(count: number, focus: string, by: string) {
   const ctx = await rpc("campaign_ai_context");
@@ -324,7 +448,7 @@ async function rewrite(c: Any, instruction: string) {
   const m = text.match(/\{[\s\S]*\}/);
   if (!m) throw new Error("The AI's answer couldn't be read; please try again.");
   const j = JSON.parse(m[0]);
-  return { subject: j.subject, headline: j.headline, body: j.body, cta_label: j.cta_label };
+  return { subject: noCove(j.subject), headline: noCove(j.headline), body: noCove(j.body), cta_label: noCove(j.cta_label) };
 }
 
 // ---------------------------------------------------------------- unsubscribe page
@@ -359,7 +483,7 @@ export async function handle(req: Request): Promise<Response> {
       case "import_guests": return json(await importGuests(Number(body.page) || 1));
       case "rebuild": return json(await rpc("campaign_rebuild_profiles"));
     }
-    if (isCron) return json({ error: "unknown action" }, 400);
+    if (isCron && body.action !== "send_test") return json({ error: "unknown action" }, 400);
     switch (body.action) {
       case "probe_guests": {
         const res = await guestPage(1);
@@ -372,12 +496,14 @@ export async function handle(req: Request): Promise<Response> {
       case "preview": {
         const c = body.campaign || {};
         const m = renderEmail(c, { name: body.name || "Maria Santos", code: (String(c.code_prefix || "VBR").toUpperCase().replace(/[^A-Z0-9]/g, "") || "VBR") + "-SAMPLE" });
-        return json({ subject: m.subject, html: m.html, offer_line: offerLine(c.offer || {}) });
+        return json({ subject: m.subject, html: m.html, offer_line: offerLine(c.offer || {}), images: m.images,
+          photos: body.catalog ? Object.entries(PHOTOS).map(([k, p]) => ({ key: k, topic: p.topic, alt: p.alt, caption: p.caption, url: PHOTO_BASE + k + ".jpg" })) : undefined });
       }
       case "send_test": {
         const c = body.campaign || {};
         const settings = await rpc("campaign_overview").then((o: Any) => o?.settings || {}).catch(() => ({}));
-        const to = String(body.to || settings.test_email || "").trim();
+        // internal calls may only send to the configured test address
+        const to = String((isCron ? "" : body.to) || settings.test_email || "").trim();
         if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(to)) return json({ error: "Enter an email address for the test" }, 400);
         const m = renderEmail(c, { name: body.name || "Maria Santos", code: (String(c.code_prefix || "VBR").toUpperCase().replace(/[^A-Z0-9]/g, "") || "VBR") + "-SAMPLE" });
         await sendMail(to, { ...m, subject: "[TEST] " + m.subject });
