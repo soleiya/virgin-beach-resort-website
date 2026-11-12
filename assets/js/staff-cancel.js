@@ -136,6 +136,40 @@
   });
   setTimeout(place, 500);
 
+  // ---------------------------------------------------------------- Cloudbeds view: the booking side panel
+  // Bookings open in #cbPanel there (staff-cloudbeds-pages.js), not in the
+  // booking windows — put the same button + automatic-cancellation line under
+  // the status row. The panel re-renders itself, so re-add it when it's gone.
+  css.textContent += ".scx-panel{display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center;margin:8px 0 2px}.scx-panel .scx-auto{margin-right:0;max-width:none;flex:1 1 200px}";
+  function placePanel() {
+    var p = $("cbPanel");
+    if (!p) return;
+    var codeEl = p.querySelector(".cbp-who .cb-dim"), row = p.querySelector(".cbp-statusrow");
+    var m = codeEl && codeEl.textContent.match(/\b(VBR-[A-Z0-9-]+)/i);
+    var box = p.querySelector(".scx-panel");
+    if (!m || !row) { if (box) box.remove(); return; }
+    var code = m[1].toUpperCase();
+    if (box && box.getAttribute("data-code") === code) return;
+    if (box) box.remove();
+    box = document.createElement("div");
+    box.className = "scx-panel";
+    box.setAttribute("data-code", code);
+    box.innerHTML = '<button type="button" class="btn-sm scx-btn">Cancel booking…</button><span class="scx-auto"></span>';
+    row.parentNode.insertBefore(box, row.nextSibling);
+    box.querySelector(".scx-btn").addEventListener("click", function () { openCode(code, null); });
+    var r = rowByCode(code);
+    if (r && ACTIVE.indexOf(String(r.status)) === -1) { box.hidden = true; return; }
+    loadAuto(code, box.querySelector(".scx-auto"), "scx-auto");
+  }
+  var panelTimer = null;
+  function watchPanel() {
+    var p = $("cbPanel");
+    if (!p) { setTimeout(watchPanel, 500); return; }
+    new MutationObserver(function () { clearTimeout(panelTimer); panelTimer = setTimeout(placePanel, 80); }).observe(p, { childList: true, subtree: true, characterData: true });
+    placePanel();
+  }
+  watchPanel();
+
   // ---------------------------------------------------------------- the dialog
   var cur = null; // { row, backdrop }
   function close() { back.classList.remove("open"); cur = null; }
@@ -146,8 +180,8 @@
     var f = function (s) { return s ? new Date(String(s).slice(0, 10) + "T00:00:00Z").toLocaleDateString("en-PH", { timeZone: "UTC", month: "short", day: "numeric", year: "numeric" }) : "—"; };
     return r.stay_type === "overnight" && r.check_out ? f(r.check_in) + " – " + f(r.check_out) : f(r.check_in);
   }
-  function openFor(backdropId) {
-    var code = codeIn(backdropId);
+  function openFor(backdropId) { openCode(codeIn(backdropId), backdropId); }
+  function openCode(code, backdropId) {
     if (!code) return;
     var known = rowByCode(code);
     (known && known.id ? Promise.resolve(known) : fetchRow(code)).then(function (r) {
@@ -210,9 +244,10 @@
     var btn = $("scxGo"); btn.disabled = true; btn.textContent = "Cancelling…"; $("scxErr").textContent = "";
     sb.rpc("staff_cancel_booking", { p_booking_id: r.id, p_reason: reason, p_message: email ? msg : null, p_email_guest: !!email, p_note: note || null }).then(function (res) {
       if (res.error) { btn.disabled = false; btn.textContent = "Cancel booking"; $("scxErr").textContent = res.error.message; return; }
-      var bd = $(cur.backdrop);
+      var bd = cur.backdrop ? $(cur.backdrop) : null;
       close();
       if (bd) bd.classList.remove("open");
+      if (!bd && window.VBRPanel && window.VBRPanel.close) window.VBRPanel.close();
       document.body.style.overflow = "";
       alert(r.order_code + " is cancelled." + (email ? " The guest is being emailed." : " The guest was not emailed.") +
         (res.data && res.data.cloudbeds ? " Cloudbeds is updated within a few minutes." : ""));
