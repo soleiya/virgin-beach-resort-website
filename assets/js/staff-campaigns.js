@@ -98,13 +98,15 @@
     ".cm-card{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:14px 16px;display:flex;flex-direction:column;gap:8px;min-width:0}" +
     ".cm-card h3{margin:0;font-family:var(--font-display);font-weight:600;font-size:1.08rem}.cm-card .cm-meta{display:flex;flex-wrap:wrap;gap:6px}" +
     ".cm-chip{display:inline-block;font-size:.72rem;font-weight:700;border-radius:999px;padding:3px 9px;background:var(--sand-deep);color:var(--ink-soft);white-space:nowrap}" +
+    ".cm-avail{margin:10px 0;padding:10px 12px;border-radius:10px;font-size:.84rem;line-height:1.45;background:var(--lagoon-tint);color:var(--lagoon-deep)}.cm-avail small{display:block;opacity:.8}" +
+    ".cm-avail.tight{background:#fbe8c2;color:#7f5200}.cm-avail.full{background:#f7dcd6;color:#8a2a1a}" +
     ".cm-pgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}.cm-pslot{display:flex;flex-direction:column;gap:6px;min-width:0}" +
     ".cm-pimg{aspect-ratio:3/2;border-radius:8px;overflow:hidden;background:var(--sand,#efe7da)}.cm-pimg img{width:100%;height:100%;object-fit:cover;display:block}" +
     ".cm-pslot select{width:100%;font:inherit;font-size:.8rem;padding:5px 6px;border:1px solid var(--line);border-radius:8px;background:#fff}.cm-pslot small{color:var(--ink-soft,#6b7774);font-size:.72rem}" +
     ".linkish{background:none;border:0;padding:0;color:var(--lagoon-deep,#0f6f68);text-decoration:underline;cursor:pointer;font:inherit}@media(max-width:560px){.cm-pgrid{grid-template-columns:1fr 1fr}}" +
     ".cm-chip.ai{background:#ece4f2;color:#6b4a85}.cm-chip.offer{background:var(--lagoon-tint);color:var(--lagoon-deep)}.cm-chip.st-sending{background:#f6e6cf;color:#94591c}.cm-chip.st-sent{background:#dff1e4;color:#1d6b37}" +
     ".cm-chip.st-declined,.cm-chip.st-cancelled{background:#eef1f4;color:#4a5563}.cm-chip.st-paused{background:#fbe8c2;color:#7f5200}.cm-chip.st-draft{background:#e6eefb;color:#2350a0}" +
-    ".cm-card .cm-why{font-size:.84rem;color:var(--ink-soft);line-height:1.45}.cm-card .cm-subj{font-size:.86rem}.cm-card .cm-subj b{font-weight:700}" +
+    ".cm-card .cm-why{white-space:pre-line;font-size:.84rem;color:var(--ink-soft);line-height:1.45}.cm-card .cm-subj{font-size:.86rem}.cm-card .cm-subj b{font-weight:700}" +
     ".cm-card .cm-acts{display:flex;flex-wrap:wrap;gap:6px;margin-top:auto;padding-top:4px}" +
     ".cm-empty{text-align:center;color:var(--ink-soft);padding:30px 10px;background:var(--surface);border:1px dashed var(--line);border-radius:14px}" +
     ".cm-twrap{overflow-x:auto;background:var(--surface);border:1px solid var(--line);border-radius:12px}" +
@@ -128,7 +130,7 @@
     ".cm-prev{position:sticky;top:12px}.cm-prevbox{background:#f4efe6;border-radius:12px;border:1px solid var(--line);max-height:72vh;overflow:auto}.cm-prevsubj{font-size:.86rem;margin:0 0 8px}" +
     ".cm-mfoot{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:flex-end;padding:12px 18px;background:var(--surface);border-top:1px solid var(--line);position:sticky;bottom:0}.cm-mfoot .cm-msg{margin-right:auto}" +
     ".btn-sm.danger{background:#fbe9e7;color:#9b2c2c;border:1px solid #f1c4bd}.btn-sm:disabled{opacity:.55;cursor:default}" +
-    ".cm-why-box{font-size:.84rem;background:#f5f0fa;border-radius:10px;padding:10px 12px;color:#4d3a5f;margin-bottom:12px}" +
+    ".cm-why-box{white-space:pre-line;font-size:.84rem;background:#f5f0fa;border-radius:10px;padding:10px 12px;color:#4d3a5f;margin-bottom:12px}" +
     "@media(max-width:1100px){.cm-tiles{grid-template-columns:repeat(3,1fr)!important}}@media(max-width:640px){.cm-tiles{grid-template-columns:1fr 1fr!important}.cm-cards{grid-template-columns:1fr}}";
   document.head.appendChild(css);
 
@@ -420,6 +422,7 @@
       '<div class="cm-f"><label for="eMinT">Minimum booking ₱</label><input id="eMinT" type="number" min="0" step="1000" value="' + esc(o.min_total || "") + '"></div>' +
       '<div class="cm-f"><label for="eExp">Book by (code expires)</label><input id="eExp" type="date" value="' + esc(ed.expires_on || "") + '"></div>' +
       '<div class="cm-f"><label for="ePrefix">Code starts with</label><input id="ePrefix" maxlength="12" value="' + esc(ed.code_prefix || "") + '" placeholder="e.g. SUMMER"></div></div>' +
+      '<div class="cm-avail" id="eAvail">Checking Cloudbeds availability…</div>' +
       '<p class="cm-note" style="margin:0">Each guest gets their own code (e.g. ' + esc((ed.code_prefix || "VBR").toUpperCase()) + '-7KQ2M): one booking, only with their email address. The website applies it automatically.</p></div>' +
       '<div class="cm-sec"><h4>The email</h4>' +
       '<div class="cm-f"><label for="eSubj">Subject</label><input id="eSubj" maxlength="120" value="' + esc(ed.subject || "") + '"></div>' +
@@ -440,7 +443,20 @@
       '<button type="button" class="btn-sm ghost" id="eTest">Send test</button>' +
       '<button type="button" class="btn-sm ghost" id="eSave">Save draft</button>' +
       '<button type="button" class="btn-sm primary" id="eLaunch">Approve &amp; send…</button></div>');
-    syncKind(); countAudience(); preview();
+    syncKind(); countAudience(); preview(); checkAvail();
+  }
+  // is there still room on the offer's dates? (Cloudbeds, live)
+  var availSeq = 0, availTimer = null;
+  function checkAvail() {
+    var c = collect(); if (!c || !$("eAvail")) return;
+    var seq = ++availSeq;
+    call("campaign_window_check", { p_offer: c.offer, p_expires: c.expires_on || null }).then(function (r) {
+      if (seq !== availSeq || !$("eAvail")) return;
+      ed.avail = r;
+      $("eAvail").className = "cm-avail " + (r.verdict || "");
+      $("eAvail").innerHTML = "<b>" + (r.verdict === "full" ? "No room on these dates. " : r.verdict === "tight" ? "Mostly full. " : "Room available. ") + "</b>" +
+        esc(r.note || "") + (c.offer.stay_from || c.offer.stay_to ? "" : " <small>(No stay dates set — checked " + esc(fmtDay(r.from)) + " to " + esc(fmtDay(r.to)) + ".)</small>");
+    }, function (e) { if ($("eAvail")) $("eAvail").textContent = "Couldn't check availability: " + e.message; });
   }
   function collect() {
     if (!ed) return null;
@@ -547,6 +563,7 @@
     if (e.target.name === "eKind") { syncKind(); preview(); }
     if (e.target.matches("input[type=checkbox],select") && e.target.closest(".cm-sec") && e.target.closest(".cm-sec").querySelector("#eAud")) { clearTimeout(audTimer); audTimer = setTimeout(countAudience, 200); }
     if (e.target.matches("input[data-k],#eOn,#eTag")) preview();
+    if (e.target.matches("input[data-k],#eFrom,#eTo,#eExp")) { clearTimeout(availTimer); availTimer = setTimeout(checkAvail, 300); }
     if (e.target.matches("select[data-photo]")) {
       var imgs = shownPhotos.slice(0, 3); imgs[Number(e.target.getAttribute("data-photo"))] = e.target.value;
       var seen = {}; ed.offer.images = imgs.filter(function (x) { if (!x || seen[x]) return false; seen[x] = 1; return true; });
@@ -585,6 +602,8 @@
       if (!c.subject || !c.body.replace(/Hi \{first_name\},?/, "").trim()) { edMsg("Write the subject and the message first.", true); return; }
       if (!c.expires_on || c.expires_on < todayStr()) { edMsg("Set a code expiry date in the future.", true); return; }
       if (!num(ed.count)) { edMsg("No guests match this audience.", true); return; }
+      if (ed.avail && ed.avail.verdict === "full") { edMsg("These dates are full in Cloudbeds — change the stay dates first.", true); return; }
+      if (ed.avail && ed.avail.verdict === "tight" && !confirm("Most of these dates are already full in Cloudbeds:\n" + ed.avail.note + "\n\nSend anyway?")) return;
       if (!confirm("Send “" + c.name + "” to " + plural(ed.count, "guest") + "?\n\nOffer: " + offerLine(c.offer) + "\nSubject: " + c.subject +
         "\n\nEach guest gets a personal code. Emails go out a few at a time (up to your daily limit); you can pause or cancel from the Campaigns tab.")) return;
       edMsg("Creating codes…");
