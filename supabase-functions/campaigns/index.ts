@@ -291,36 +291,42 @@ export function renderEmail(c: Any, r: { name?: string; code: string; unsub?: st
   const img = (k: string) => PHOTO_BASE + k + ".jpg";
   const [hero, ...more] = photos;
   const tag = soundbite(c);
-  const F = "font-family:Arial,Helvetica,sans-serif";
+  // the website's look: Fraunces headings, Manrope text, sand / lagoon colours
+  const SERIF = `font-family:Fraunces,'Iowan Old Style','Palatino Linotype',Georgia,serif`;
+  const SANS = `font-family:Manrope,-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif`;
+  const INK = "#23241f", SOFT = "#6b6559", LAGOON = "#1f7a72", DEEP = "#14524c", TINT = "#e4f1ee", LINE = "#ddd2ba", SAND = "#f6f1e6", SURF = "#fffdf8";
+  const eyebrow = `${SANS};font-size:11px;font-weight:700;letter-spacing:.18em;text-transform:uppercase;color:${DEEP}`;
   const tile = (k: string) => `<td class="tile" width="50%" valign="top" style="padding:0 6px">
-<a href="${esc(url)}" style="text-decoration:none"><img src="${img(k)}" width="264" alt="${esc(PHOTOS[k].alt)}" style="display:block;width:100%;max-width:264px;height:auto;border:0;border-radius:10px"></a>
-<div style="${F};font-size:13px;color:#4c5b58;padding:8px 2px 0">${esc(PHOTOS[k].caption)}</div></td>`;
+<a href="${esc(url)}" style="text-decoration:none"><img src="${img(k)}" width="264" alt="${esc(PHOTOS[k].alt)}" style="display:block;width:100%;max-width:264px;height:auto;border:0;border-radius:14px"></a>
+<div style="${SANS};font-size:11px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:${DEEP};padding:10px 2px 0">${esc(PHOTOS[k].caption)}</div></td>`;
   const html = `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<style>@media (max-width:520px){.pad{padding-left:18px!important;padding-right:18px!important}.tile{display:block!important;width:100%!important;padding:0 0 14px!important}.tile img{max-width:100%!important}h1{font-size:23px!important}}</style></head>
-<body style="margin:0;padding:0;background:#f4efe6">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400..600&family=Manrope:wght@400;600;700&display=swap" rel="stylesheet">
+<style>@media (max-width:520px){.pad{padding-left:20px!important;padding-right:20px!important}.tile{display:block!important;width:100%!important;padding:0 0 16px!important}.tile img{max-width:100%!important}.h1{font-size:26px!important}}</style></head>
+<body style="margin:0;padding:0;background:${SAND}">
 <div style="display:none;max-height:0;overflow:hidden">${esc(offerLine(o))} — your personal code ${esc(r.code)}</div>
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f4efe6"><tr><td align="center" style="padding:24px 10px">
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:600px;background:#fffdf8;border-radius:14px;overflow:hidden;${F};color:#24302e">
-<tr><td><a href="${SITE}/"><img src="${img("header-watercolor")}" width="600" alt="Virgin Beach Resort" style="display:block;width:100%;height:auto;border:0"></a></td></tr>
-<tr><td align="center" style="padding:2px 28px 16px;font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:#0f6f68">${esc(tag)} · Laiya, Batangas</td></tr>
-${hero ? `<tr><td><a href="${esc(url)}"><img src="${img(hero)}" width="600" alt="${esc(PHOTOS[hero].alt)}" style="display:block;width:100%;height:auto;border:0"></a></td></tr>` : ""}
-<tr><td class="pad" style="padding:28px 32px 8px"><h1 style="margin:0 0 16px;font-family:Georgia,'Times New Roman',serif;font-weight:normal;font-size:27px;line-height:1.25;color:#0f4f4a">${esc(headline)}</h1>
-${paras.map((p) => `<p style="margin:0 0 14px;font-size:15px;line-height:1.65">${esc(p).replace(/\n/g, "<br>")}</p>`).join("")}</td></tr>
-<tr><td class="pad" style="padding:6px 32px 4px"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border:2px dashed #0f6f68;border-radius:12px;background:#eef6f4">
-<tr><td align="center" style="padding:18px 16px"><div style="font-size:13px;color:#4c5b58;text-transform:uppercase;letter-spacing:.08em">Your offer</div>
-<div style="font-size:20px;font-weight:bold;color:#0f4f4a;margin:6px 0 10px">${esc(offerLine(o))}</div>
-<div style="font-size:12px;color:#4c5b58">Your personal code</div>
-<div style="font-family:'Courier New',monospace;font-size:26px;font-weight:bold;letter-spacing:.12em;color:#24302e;margin-top:4px">${esc(r.code)}</div></td></tr></table></td></tr>
-<tr><td align="center" style="padding:20px 28px 10px"><a href="${esc(url)}" style="display:inline-block;background:#e0763c;color:#fff;text-decoration:none;font-weight:bold;font-size:16px;padding:14px 30px;border-radius:999px">${esc(c.cta_label || "Book with my code")}</a>
-<div style="font-size:12px;color:#6b7774;margin-top:10px">The code is filled in for you — or enter it on the booking page.</div></td></tr>
-${more.length ? `<tr><td style="padding:18px 22px 6px"><table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>${more.map(tile).join("")}${more.length === 1 ? '<td class="tile" width="50%"></td>' : ""}</tr></table></td></tr>` : ""}
-<tr><td class="pad" style="padding:14px 32px 22px"><ul style="margin:0;padding-left:18px;font-size:12px;line-height:1.6;color:#6b7774">${terms.map((t) => `<li>${esc(t)}</li>`).join("")}</ul></td></tr>
-<tr><td align="center" style="padding:0 24px 18px;font-family:Georgia,'Times New Roman',serif;font-size:15px;line-height:1.6;color:#0f4f4a">Private villa resort · Virgin white sand beach<br>Just a drive away — about 3 hours from Manila</td></tr>
-<tr><td><img src="${img("footer-watercolor")}" width="600" alt="" style="display:block;width:100%;height:auto;border:0"></td></tr>
-<tr><td style="background:#f1ebe0;padding:18px 28px;font-size:12px;line-height:1.6;color:#6b7774">
-Questions? Reply to this email or call +63 917 792 0712 · <a href="${SITE}/" style="color:#0f6f68">virginbeachresort.com</a><br>
-You're getting this because you've been our guest. <a href="${esc(unsub)}" style="color:#6b7774">Unsubscribe from offers</a>.<br>
-Virgin Beach Resort, Laiya, San Juan, Batangas, Philippines</td></tr>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:${SAND}"><tr><td align="center" style="padding:24px 10px">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:600px;background:${SURF};border:1px solid ${LINE};border-radius:18px;overflow:hidden;${SANS};color:${INK}">
+<tr><td><a href="${SITE}/"><img src="${img("header-logo")}" width="600" alt="Virgin Beach Resort" style="display:block;width:100%;height:auto;border:0"></a></td></tr>
+<tr><td class="pad" style="padding:26px 36px 0"><div style="${eyebrow}">${esc(tag)}</div></td></tr>
+<tr><td class="pad" style="padding:12px 36px 22px"><h1 class="h1" style="margin:0;${SERIF};font-weight:460;font-size:31px;line-height:1.15;color:${INK}">${esc(headline)}</h1></td></tr>
+${hero ? `<tr><td style="padding:0 20px"><a href="${esc(url)}"><img src="${img(hero)}" width="560" alt="${esc(PHOTOS[hero].alt)}" style="display:block;width:100%;height:auto;border:0;border-radius:14px"></a></td></tr>` : ""}
+<tr><td class="pad" style="padding:26px 36px 6px">
+${paras.map((p) => `<p style="margin:0 0 15px;font-size:16px;line-height:1.65;color:${SOFT}">${esc(p).replace(/\n/g, "<br>")}</p>`).join("")}</td></tr>
+<tr><td class="pad" style="padding:6px 36px 4px"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:${TINT};border-radius:14px">
+<tr><td align="center" style="padding:22px 18px"><div style="${eyebrow}">Your offer</div>
+<div style="${SERIF};font-size:23px;font-weight:500;line-height:1.25;color:${INK};margin:8px 0 14px">${esc(offerLine(o))}</div>
+<div style="${SANS};font-size:12px;color:${SOFT}">Your personal code</div>
+<div style="font-family:'Courier New',monospace;font-size:24px;font-weight:bold;letter-spacing:.14em;color:${DEEP};margin-top:4px">${esc(r.code)}</div></td></tr></table></td></tr>
+<tr><td align="center" style="padding:24px 28px 8px"><a href="${esc(url)}" style="display:inline-block;background:${LAGOON};color:#ffffff;text-decoration:none;${SANS};font-weight:700;font-size:13px;letter-spacing:.08em;text-transform:uppercase;padding:16px 32px;border-radius:999px">${esc(c.cta_label || "Book with my code")}</a>
+<div style="font-size:12px;color:${SOFT};margin-top:12px">The code is filled in for you — or enter it on the booking page.</div></td></tr>
+${more.length ? `<tr><td style="padding:22px 24px 4px"><table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>${more.map(tile).join("")}${more.length === 1 ? '<td class="tile" width="50%"></td>' : ""}</tr></table></td></tr>` : ""}
+<tr><td class="pad" style="padding:18px 36px 24px"><ul style="margin:0;padding-left:18px;font-size:12px;line-height:1.65;color:${SOFT}">${terms.map((t) => `<li>${esc(t)}</li>`).join("")}</ul></td></tr>
+<tr><td align="center" style="padding:4px 28px 22px;${SERIF};font-style:italic;font-size:17px;line-height:1.5;color:${INK}">Private villa resort on a virgin white sand beach —<br>just a drive away, about 3 hours from Manila.</td></tr>
+<tr><td><img src="${img("footer-beach")}" width="600" alt="" style="display:block;width:100%;height:auto;border:0"></td></tr>
+<tr><td style="background:${SAND};padding:20px 32px;font-size:12px;line-height:1.7;color:${SOFT}">
+Questions? Reply to this email or call +63 917 792 0712 · <a href="${SITE}/" style="color:${LAGOON}">virginbeachresort.com</a><br>
+You're getting this because you've been our guest. <a href="${esc(unsub)}" style="color:${SOFT}">Unsubscribe from offers</a>.<br>
+Virgin Beach Resort · Laiya, San Juan, Batangas, Philippines</td></tr>
 </table></td></tr></table></body></html>`;
   const text = [headline, "", ...paras.flatMap((p) => [p, ""]), `Your offer: ${offerLine(o)}`, `Your personal code: ${r.code}`, `Book: ${url}`, "",
     ...terms.map((t) => "• " + t), "", "Virgin Beach Resort — private villa resort on a virgin white sand beach, about 3 hours from Manila.",
@@ -374,7 +380,8 @@ You design targeted email offers for past guests. Each offer goes to one audienc
 Rules:
 - Base every suggestion on the data given: segment sizes, spend, recency, months guests visit, occupancy gaps, the sales team's 2027 calendar and past campaign results (repeat what worked, avoid what was declined).
 - Audiences must be big enough to matter (normally 20+ guests) and must not overlap heavily between suggestions.
-- Prefer filling low-occupancy months and weekdays. Overnight online booking currently runs to 2027-03-21 for Sunday–Thursday nights (Fri/Sat nights and Holy Week Mar 22–31 are closed online); dates from April 2027 are request-only. Keep overnight stay windows inside what can be booked unless the offer is clearly a request-based early bird.
+- AVAILABILITY COMES FIRST. "availability" is live from Cloudbeds: by_month and free_casitas_per_night ("MM-DD:free casitas"; 0 or x = full or closed). Only offer dates that still have free casitas — never promote a night, weekend or holiday that is full (e.g. if Dec 24–Jan 3 shows 0, don't offer Christmas or New Year stays). Every overnight offer must set stay_from and stay_to around nights with room (ideally 3+ free casitas on most nights), and its message must not mention full dates. For day trips, avoid day_trip_full_days and day_trip_busy_days. Fill the months and Sunday–Thursday nights with the most free casitas.
+- Online booking limits are in "online_booking" (villa_nights_until, day_trips_until); later dates are by request only. Fri/Sat nights and Holy Week are closed online. Keep overnight windows inside what can be booked unless the offer is clearly a request-based early bird.
 - Protect rate integrity: percent discounts normally 5–15% (max 20%), peso discounts modest, never discount peak dates (Holy Week, Christmas to New Year). For high-value (vip) guests prefer perks over discounts (e.g. a free massage, welcome drinks, late check-out, a free ATV ride, dessert platter, bonfire setup).
 - Offers apply to: casita rates ("rooms"), add-ons (overnight only), or the whole booking ("all"). booking_kinds: "overnight" and/or "day_trip".
 - How the resort talks about itself: "Exclusive resort in Batangas", "White sand beach 3 hours away from Manila", "Private villa resort", "Virgin white sand beach", "A drive away white sand beach". Never call it a "cove" (or "hidden gem", "paradise island"); it is a beach resort on the mainland.
@@ -428,16 +435,31 @@ function cleanSuggestion(s: Any, today: string) {
 async function suggest(count: number, focus: string, by: string) {
   const ctx = await rpc("campaign_ai_context");
   const n = Math.min(Math.max(count || 4, 1), 8);
-  const user = `Today is ${ctx.today} (Manila). Propose ${n} campaign${n === 1 ? "" : "s"} for the next 2–3 months.` +
+  const ask = Math.min(n + 2, 10); // a couple spare: suggestions for full dates are dropped below
+  const user = `Today is ${ctx.today} (Manila). Propose ${ask} campaign${ask === 1 ? "" : "s"} for the next 2–3 months, each for dates that still have room.` +
     (focus ? `\nStaff asked to focus on: ${focus}` : "") +
     `\n\nResort data (JSON):\n${JSON.stringify(ctx)}`;
   const text = await claude(SYSTEM, user);
   let list: Any;
   try { list = extractJson(text); } catch { throw new Error("The AI's answer couldn't be read; please try again."); }
   if (!Array.isArray(list) || !list.length) throw new Error("The AI didn't return any suggestions; please try again.");
-  const clean = list.slice(0, n).map((s: Any) => cleanSuggestion(s, ctx.today));
-  const added = await rpc("campaign_add_suggestions", { p: clean, p_model: MODEL(), p_by: by });
-  return { added, model: MODEL() };
+  // check every suggestion's dates against Cloudbeds; drop the ones with no room
+  const keep: Any[] = [], dropped: string[] = [];
+  for (const raw of list) {
+    if (keep.length >= n) break;
+    const s = cleanSuggestion(raw, ctx.today);
+    const chk = await rpc("campaign_window_check", { p_offer: s.offer, p_expires: s.expires_on }).catch(() => null);
+    if (chk?.verdict === "full") { dropped.push(String(s.name || "?")); continue; }
+    if (chk) {
+      if (!s.offer.stay_from && chk.from) s.offer.stay_from = chk.from;
+      if (!s.offer.stay_to && chk.to) s.offer.stay_to = chk.to;
+      s.rationale = `${s.rationale || ""}\n\nAvailability check: ${chk.note}`.trim();
+    }
+    keep.push(s);
+  }
+  if (!keep.length) throw new Error("Every idea the AI had was for dates that are already full in Cloudbeds. Try again or give it a focus (e.g. February weekdays).");
+  const added = await rpc("campaign_add_suggestions", { p: keep, p_model: MODEL(), p_by: by });
+  return { added, dropped, model: MODEL() };
 }
 async function rewrite(c: Any, instruction: string) {
   const sys = SYSTEM.split("Answer ONLY")[0] +
