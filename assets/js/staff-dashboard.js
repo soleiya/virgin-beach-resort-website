@@ -1777,7 +1777,10 @@
     } else {
       if (b.regularAdults) L.push(billRow(b.regularAdults + " adult" + (b.regularAdults === 1 ? "" : "s") + " × " + peso(b.rate.adult), peso(b.regularAdults * b.rate.adult)));
       if (b.seniors) L.push(billRow(b.seniors + " senior/PWD × " + peso(b.seniorRate) + " <em>(20% off)</em>", peso(b.seniors * b.seniorRate)));
-      if (b.kids612) L.push(billRow(b.kids612 + " child" + (b.kids612 === 1 ? "" : "ren") + " (6–12) × " + peso(b.rate.child612), peso(b.kids612 * b.rate.child612)));
+      // PWD kids (6–12) get their own line at the 20%-off, VAT-exempt rate (the total already used it)
+      var regK612 = b.kids612 - (b.pwdKids || 0);
+      if (regK612 > 0) L.push(billRow(regK612 + " child" + (regK612 === 1 ? "" : "ren") + " (6–12) × " + peso(b.rate.child612), peso(regK612 * b.rate.child612)));
+      if (b.pwdKids) L.push(billRow(b.pwdKids + " PWD child" + (b.pwdKids === 1 ? "" : "ren") + " (6–12) × " + peso(b.pwdKidRate) + " <em>(VAT-exempt, 20% off)</em>", peso(b.pwdKids * b.pwdKidRate)));
       if (b.kids05) L.push(billRow(b.kids05 + " child" + (b.kids05 === 1 ? "" : "ren") + " (0–5)", "Free"));
       if (b.pets) L.push(billRow(b.pets + " pet" + (b.pets === 1 ? "" : "s") + " × " + peso(b.rate.pet), peso(b.petCost)));
       (b.cabanaLines || []).forEach(function (l) { L.push(billRow(l.qty + " × " + l.label + (l.qty === 1 ? "" : "s") + " × " + peso(l.rate), peso(l.amount))); });
