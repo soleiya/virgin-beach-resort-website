@@ -98,32 +98,8 @@
     if (document.querySelector(".modal-backdrop.open")) return;
     e.preventDefault(); input.focus(); input.select();
   });
-  // ---- Villas get the same Calendar / List switch as Day Trips ----------
-  var bar = document.getElementById("dtViewBar"), sw = document.getElementById("dtViewSwitch");
-  if (bar && sw) {
-    bar.removeAttribute("data-section");
-    var hint = bar.querySelector(".hint");
-    var HINT_D = hint ? hint.innerHTML : "";
-    var HINT_V = "Calendar: every casita, night by night (opens on top) &middot; List: search and filter every villa booking";
-    var villasNow = function () { return (D.section ? D.section() : "daytrip") === "villas"; };
-    var sync = function () {
-      bar.style.display = "";
-      if (!villasNow()) { if (hint) hint.innerHTML = HINT_D; return; }
-      if (hint) hint.innerHTML = HINT_V;
-      Array.prototype.forEach.call(sw.querySelectorAll("button"), function (b) { b.classList.toggle("active", b.getAttribute("data-view") === "list"); });
-    };
-    // capture phase: on Villas, "Calendar" opens the villa calendar and leaves the Day Trip view alone
-    sw.addEventListener("click", function (e) {
-      if (!villasNow()) return;
-      var b = e.target.closest("button[data-view]");
-      e.stopPropagation();
-      if (b && b.getAttribute("data-view") === "cal") { var vc = document.getElementById("villaCalBtn"); if (vc) vc.click(); }
-      sync();
-    }, true);
-    document.addEventListener("vbr:render", function () { setTimeout(sync, 0); });
-    document.getElementById("sectionTabs").addEventListener("click", function () { setTimeout(sync, 0); });
-    sync();
-  }
+  // v73: Villas have their own month Calendar / List switch (staff-villacal.js);
+  // the Day Trip switch stays with Day Trips.
 
   // bookings reloaded → forget cached search text
   document.addEventListener("vbr:render", function () { (D.rows() || []).forEach(function (r) { r._findHay = null; }); if (!box.hidden) render(); });
