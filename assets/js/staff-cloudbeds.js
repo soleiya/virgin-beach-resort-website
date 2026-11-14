@@ -56,7 +56,7 @@
   toggle.className = "view-toggle";
   toggle.setAttribute("role", "group");
   toggle.setAttribute("aria-label", "Dashboard view");
-  toggle.innerHTML = <button type="button" data-view="new">New version</button><button type="button" data-view="summary">Summary</button><button type="button" data-view="accounting">Accounting</button><button type="button" data-view="executive">Executive</button><button type="button" data-view="campaigns">Campaigns</button>';
+  toggle.innerHTML = '<button type="button" data-view="new">New version</button><button type="button" data-view="summary">Summary</button><button type="button" data-view="accounting">Accounting</button><button type="button" data-view="executive">Executive</button><button type="button" data-view="campaigns">Campaigns</button>';
   toggle.addEventListener("click", function (e) {
     var b = e.target.closest("button[data-view]");
     if (b) setView(b.getAttribute("data-view"));
