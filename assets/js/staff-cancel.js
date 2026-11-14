@@ -7,6 +7,9 @@
 // releases the casita / cabana, cancels it in Cloudbeds when it's there, and
 // send-booking-email sends the message. View-only accounts never see it.
 // The booking window is found from its title ("Edit Booking · VBR-…").
+// v72: "Payment deadline…" — staff choose how long an unpaid booking is held
+// (a date & time, the standard rule, or never cancel automatically), and the
+// default for website day trips (Booking window settings).
 // v71: "Send payment link…" next to it — the quotation with the Pay now button
 // again, to the email on the booking now (staff_resend_payment_link).
 // =============================================================================
@@ -41,6 +44,10 @@
     ".scx-btn{background:#fbe9e7;color:#9b2c2c;border:1px solid #f1c4bd;margin-right:8px}.scx-auto{margin-right:auto;font-size:.78rem;line-height:1.35;color:var(--ink-soft);max-width:440px;align-self:center}.scx-auto b{color:#9b2c2c}.scx-auto.none b{color:var(--ink)}.scx-btn:hover{background:#f6d9d3}" +
     "body.ro-staff .scx-btn,body.ro-staff .scx-auto,body.ro-staff .spl-btn{display:none!important}" +
     ".spl-btn{background:var(--lagoon-tint,#e4f2ef);color:var(--lagoon-deep,#0f6f68);border:1px solid #bfe0d9;margin-right:8px}.spl-btn:hover{filter:brightness(.97)}" +
+    ".sdl-btn{background:none;border:0;padding:0;color:var(--lagoon-deep,#0f6f68);text-decoration:underline;cursor:pointer;font:inherit;font-size:.78rem;margin-left:4px}body.ro-staff .sdl-btn{display:none!important}" +
+    ".sdl-opt{display:flex;gap:8px;align-items:flex-start;border:1px solid var(--line);border-radius:10px;padding:9px 11px;margin:0 0 8px;cursor:pointer;font-size:.88rem}.sdl-opt.on{border-color:var(--lagoon,#1f7a72);background:var(--lagoon-tint,#e4f2ef)}.sdl-opt input{margin-top:3px}.sdl-opt small{display:block;color:var(--ink-soft);font-size:.78rem;margin-top:2px}" +
+    ".sdl-row{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0 2px}.sdl-row input[type=datetime-local]{border:1px solid var(--line);border-radius:8px;padding:6px 8px;font:inherit;font-size:.86rem;background:var(--sand)}" +
+    ".sdl-chip{border:1px solid var(--line);background:var(--surface,#fff);border-radius:999px;padding:4px 10px;font:inherit;font-size:.76rem;font-weight:700;cursor:pointer}.sdl-chip:hover{border-color:var(--lagoon,#1f7a72)}" +
     ".spl-go{background:var(--lagoon,#1f7a72)!important;color:#fff!important;border:0}.spl-go:disabled{opacity:.6}" +
     "#vCxOpen{display:none!important}" + // v61's villa-only button: this one replaces it
     ".scx-back{position:fixed;inset:0;background:rgba(20,28,27,.5);z-index:2000;display:none;align-items:flex-start;justify-content:center;overflow:auto;padding:5vh 12px}" +
@@ -74,7 +81,7 @@
     return null;
   }
   function fetchRow(code) {
-    return sb.from("booking_requests").select("id,order_code,guest_name,guest_email,stay_type,stay_type_label,status,check_in,check_out,total_amount,amount_paid,cb_reservation_id,cb_owned,cb_info,booking_origin")
+    return sb.from("booking_requests").select("id,order_code,guest_name,guest_email,stay_type,stay_type_label,status,check_in,check_out,total_amount,amount_paid,cb_reservation_id,cb_owned,cb_info,booking_origin,source,hold_mode,hold_until,hold_note")
       .eq("order_code", code).limit(1).then(function (res) { return res.data && res.data[0] ? res.data[0] : null; });
   }
 
@@ -104,7 +111,8 @@
         if (seq !== autoSeq && cls === "scx-auto") return;
         if (res.error) { el.innerHTML = ""; return; }
         el.className = cls + (res.data && res.data.at ? "" : " none");
-        el.innerHTML = autoHtml(res.data);
+        el.innerHTML = autoHtml(res.data) + (ACTIVE.indexOf(String(r.status)) > -1 && r.cb_owned !== true && r.source !== "sheet_import" && !(res.data && res.data.source === "none")
+          ? ' <button type="button" class="sdl-btn" data-sdl="' + esc(r.order_code) + '">Change deadline…</button>' : "");
       });
     });
   }
@@ -200,7 +208,7 @@
     fetchRow(code).then(function (r) {
       if (!r) { alert("Couldn't find " + code + ". Reload the page and try again."); return; }
       payCur = { row: r, backdrop: backdropId };
-      cur = null;
+      cur = null; dlCur = null;
       var hasEmail = EMAIL_RE.test(String(r.guest_email || "").trim());
       $("scxTitle").textContent = "Send payment link — " + (r.order_code || "");
       $("scxSub").textContent = (r.guest_name || "Guest") + " · " + (r.stay_type === "overnight" ? "Villa stay" : (r.stay_type_label || "Day trip")) + " · " + dateText(r) + " · " + peso(r.total_amount);
@@ -236,9 +244,136 @@
     });
   });
 
+  // ---------------------------------------------------------------- v72: payment deadline per booking
+  var dlCur = null;
+  function manilaParts(d) {
+    var f = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Manila", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hour12: false }).formatToParts(d);
+    var o = {}; f.forEach(function (x) { o[x.type] = x.value; });
+    return o.year + "-" + o.month + "-" + o.day + "T" + (o.hour === "24" ? "00" : o.hour) + ":" + o.minute;
+  }
+  function fromManila(v) { return v ? new Date(v + ":00+08:00") : null; }
+  function addDaysStr(s, n) { var d = new Date(s + "T00:00:00Z"); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); }
+  function openDeadline(code) {
+    if (!code) return;
+    fetchRow(code).then(function (r) {
+      if (!r) { alert("Couldn't find " + code + "."); return; }
+      if (r.hold_mode === undefined) { alert("Payment deadlines need the database update booking-v72-payment-deadline-control.sql."); return; }
+      dlCur = { row: r }; cur = null; payCur = null;
+      var mode = r.hold_mode === "until" ? "until" : r.hold_mode === "off" ? "off" : "standard";
+      var now = new Date(), ci = r.check_in;
+      var preset = [];
+      var today = manilaParts(now).slice(0, 10);
+      preset.push(["Today 5:00 PM", today + "T17:00"]);
+      preset.push(["Tomorrow 12:00 PM", addDaysStr(today, 1) + "T12:00"]);
+      preset.push(["In 24 hours", manilaParts(new Date(now.getTime() + 864e5))]);
+      if (ci) preset.push([r.stay_type === "overnight" ? "2 days before arrival, 5:00 PM" : "Day before the trip, 5:00 PM", addDaysStr(ci, r.stay_type === "overnight" ? -2 : -1) + "T17:00"]);
+      preset = preset.filter(function (x) { var d = fromManila(x[1]); return d && d.getTime() > now.getTime() + 15 * 60e3 && (!ci || x[1].slice(0, 10) <= ci); });
+      var hasEmail = EMAIL_RE.test(String(r.guest_email || "").trim()) && ["pending", "pending_payment"].indexOf(String(r.status)) > -1;
+      var until = r.hold_until ? manilaParts(new Date(r.hold_until)) : (preset[0] ? preset[0][1] : "");
+      $("scxTitle").textContent = "Payment deadline — " + (r.order_code || "");
+      $("scxSub").textContent = (r.guest_name || "Guest") + " · " + (r.stay_type === "overnight" ? "Villa stay" : (r.stay_type_label || "Day trip")) + " · " + dateText(r) + " · " + peso(r.total_amount) + (Number(r.amount_paid) ? " (paid " + peso(r.amount_paid) + ")" : "");
+      $("scxBody").innerHTML =
+        '<p class="scx-info" id="sdlNow"></p>' +
+        '<span class="scx-lbl">How long to hold it while waiting for payment</span>' +
+        '<label class="sdl-opt" data-m="until"><input type="radio" name="sdlMode" value="until"' + (mode === "until" ? " checked" : "") + '><span><b>Cancel if unpaid by…</b><small>The booking is cancelled automatically at this time if nothing is paid, and the ' + (r.stay_type === "overnight" ? "casita is" : "cabana is") + ' released. Earlier or later than the usual rule.</small>' +
+          '<span class="sdl-row"><input type="datetime-local" id="sdlUntil" value="' + esc(until) + '"> <span class="scx-hint">Manila time</span></span>' +
+          '<span class="sdl-row">' + preset.map(function (x) { return '<button type="button" class="sdl-chip" data-v="' + esc(x[1]) + '">' + esc(x[0]) + "</button>"; }).join("") + "</span></span></label>" +
+        '<label class="sdl-opt" data-m="standard"><input type="radio" name="sdlMode" value="standard"' + (mode === "standard" ? " checked" : "") + '><span><b>Standard rule</b><small>' +
+          esc(r.stay_type === "overnight" ? "Villas: cancelled 24 hours after booking if unpaid (booked 15+ days ahead); never for bookings 14 days or less before arrival." :
+            "Website day trips: the default in Booking window settings (5:00 PM on the trip day unless changed). Staff-entered day trips: never.") + "</small></span></label>" +
+        '<label class="sdl-opt" data-m="off"><input type="radio" name="sdlMode" value="off"' + (mode === "off" ? " checked" : "") + '><span><b>Don\'t cancel automatically</b><small>The team follows up and cancels it by hand if needed.</small></span></label>' +
+        '<div class="scx-f"><label for="sdlNote">Note for the team</label><input id="sdlNote" maxlength="300" value="' + esc(r.hold_note || "") + '" placeholder="e.g. Guest asked for until Friday noon — paying via bank transfer"></div>' +
+        (hasEmail ? '<label class="scx-chk"><input type="checkbox" id="sdlEmail"' + (mode === "until" ? "" : "") + '><span><b>Email the guest the payment link with this deadline</b> at ' + esc(r.guest_email) + "</span></label>" +
+          '<div class="scx-f" id="sdlMsgWrap" hidden><label for="sdlMsg">Message to the guest</label><textarea id="sdlMsg">' + esc("Hi {first},\n\nThis is a reminder about your reservation {order} for {date}. To keep it, please complete your payment by the deadline below.") + "</textarea></div>" : "") +
+        '<p class="scx-err" id="sdlErr"></p>' +
+        '<div class="scx-acts"><button type="button" class="btn-sm ghost" data-x="close">Close</button><button type="button" class="btn-sm spl-go" id="sdlGo">Save deadline</button></div>';
+      back.classList.add("open");
+      syncDl();
+      loadAuto(r.order_code, $("sdlNow"), "scx-info");
+    });
+  }
+  function syncDl() {
+    var m = (back.querySelector('input[name=sdlMode]:checked') || {}).value;
+    Array.prototype.forEach.call(back.querySelectorAll(".sdl-opt"), function (o) { o.classList.toggle("on", o.getAttribute("data-m") === m); });
+    if ($("sdlEmail")) { $("sdlEmail").disabled = m === "off"; if (m === "off") $("sdlEmail").checked = false; $("sdlMsgWrap").hidden = !$("sdlEmail").checked; }
+  }
+  back.addEventListener("change", function (e) {
+    if (!dlCur) return;
+    if (e.target.name === "sdlMode" || e.target.id === "sdlEmail") syncDl();
+    if (e.target.id === "sdlUntil") { var u = back.querySelector('input[name=sdlMode][value=until]'); if (u) { u.checked = true; syncDl(); } }
+  });
+  back.addEventListener("click", function (e) {
+    if (!dlCur) return;
+    var chip = e.target.closest(".sdl-chip");
+    if (chip) { e.preventDefault(); $("sdlUntil").value = chip.getAttribute("data-v"); back.querySelector('input[name=sdlMode][value=until]').checked = true; syncDl(); return; }
+    if (!e.target.closest("#sdlGo")) return;
+    var r = dlCur.row, m = (back.querySelector('input[name=sdlMode]:checked') || {}).value;
+    var note = $("sdlNote").value.trim(), until = m === "until" ? fromManila($("sdlUntil").value) : null;
+    var email = $("sdlEmail") && $("sdlEmail").checked;
+    if (!m) { $("sdlErr").textContent = "Choose an option."; return; }
+    if (m === "until" && !until) { $("sdlErr").textContent = "Choose the date and time."; return; }
+    if (m === "off" && !note) { $("sdlErr").textContent = "Add a short note on why it shouldn't be cancelled automatically."; $("sdlNote").focus(); return; }
+    var btn = $("sdlGo"); btn.disabled = true; btn.textContent = "Saving…"; $("sdlErr").textContent = "";
+    sb.rpc("staff_set_payment_deadline", { p_booking_id: r.id, p_mode: m, p_until: until ? until.toISOString() : null, p_note: note || null,
+      p_email_guest: !!email, p_message: email && $("sdlMsg") ? ($("sdlMsg").value.trim() || null) : null }).then(function (res) {
+      if (res.error) { btn.disabled = false; btn.textContent = "Save deadline"; $("sdlErr").textContent = res.error.message; return; }
+      dlCur = null;
+      back.classList.remove("open");
+      var a = res.data || {};
+      alert(r.order_code + ": " + (a.at ? "cancels automatically " + fmtAt(a.at) + " if still unpaid." : (a.note || "saved.")) + (a.emailed ? "\nPayment link emailed to " + a.to + "." : ""));
+      document.querySelectorAll(".scx-auto[data-code]").forEach(function (x) { x.removeAttribute("data-code"); });
+      var pbox = document.querySelector(".scx-panel"); if (pbox) pbox.removeAttribute("data-code");
+      place(); placePanel();
+      if (D.reload) D.reload();
+    });
+  });
+  document.addEventListener("click", function (e) {
+    var b = e.target.closest("[data-sdl]");
+    if (!b || back.contains(b)) return;
+    e.preventDefault(); e.stopPropagation();
+    openDeadline(b.getAttribute("data-sdl"));
+  }, true);
+  back.addEventListener("click", function (e) {
+    var b = e.target.closest("[data-sdl]");
+    if (b) { e.preventDefault(); openDeadline(b.getAttribute("data-sdl")); }
+  });
+
+  // ---------------------------------------------------------------- v72: default for website day trips (Booking window settings)
+  var HOLD_RULES = [["trip_day_5pm", "5:00 PM on the trip day (standard)"], ["day_before_5pm", "5:00 PM the day before the trip"],
+    ["hours_6", "6 hours after booking"], ["hours_12", "12 hours after booking"], ["hours_24", "24 hours after booking"], ["hours_48", "48 hours after booking"]];
+  function placeHoldRule() {
+    var bal = $("bwDtBalance"), wb = $("windowModalBackdrop");
+    if (!bal || !wb || $("bwDtHold")) return;
+    var wrap = document.createElement("div");
+    wrap.className = "modal-field";
+    wrap.innerHTML = '<label for="bwDtHold">Day trips booked online by guests: cancel if still unpaid by</label><select id="bwDtHold">' +
+      HOLD_RULES.map(function (x) { return '<option value="' + x[0] + '">' + esc(x[1]) + "</option>"; }).join("") + "</select>" +
+      '<p class="field-hint" style="margin:4px 0 0">Earlier releases the cabana sooner so other guests can book it. Applies to bookings made after you change it (and never later than 5:00 PM on the trip day). Staff can set a different deadline on any booking with &ldquo;Change deadline&hellip;&rdquo;.</p>';
+    var lbl = bal.closest("label");
+    lbl.parentNode.insertBefore(wrap, lbl.nextSibling);
+    new MutationObserver(function () {
+      if (!wb.classList.contains("open")) return;
+      sb.from("booking_settings").select("daytrip_hold_rule").eq("id", 1).maybeSingle().then(function (res) {
+        if (res.error) { $("bwDtHold").disabled = true; return; }
+        $("bwDtHold").disabled = false;
+        $("bwDtHold").value = (res.data && res.data.daytrip_hold_rule) || "trip_day_5pm";
+        $("bwDtHold").setAttribute("data-was", $("bwDtHold").value);
+      });
+    }).observe(wb, { attributes: true, attributeFilter: ["class"] });
+    $("bwSave").addEventListener("click", function () {
+      var sel = $("bwDtHold");
+      if (!sel || sel.disabled || sel.value === sel.getAttribute("data-was")) return;
+      sb.from("booking_settings").update({ daytrip_hold_rule: sel.value }).eq("id", 1).then(function (res) {
+        if (res.error) { alert("Couldn't save the day-trip payment deadline: " + res.error.message); return; }
+        sel.setAttribute("data-was", sel.value);
+      });
+    });
+  }
+  setTimeout(placeHoldRule, 600);
+
   // ---------------------------------------------------------------- the dialog
   var cur = null; // { row, backdrop }
-  function close() { back.classList.remove("open"); cur = null; payCur = null; }
+  function close() { back.classList.remove("open"); cur = null; payCur = null; dlCur = null; }
   back.addEventListener("click", function (e) { if (e.target === back) close(); });
   document.addEventListener("keydown", function (e) { if (e.key === "Escape" && back.classList.contains("open")) { e.stopPropagation(); close(); } }, true);
 
@@ -258,7 +393,7 @@
   }
   function show(r, backdropId) {
     cur = { row: r, backdrop: backdropId };
-    payCur = null;
+    payCur = null; dlCur = null;
     msgTouched = false;
     var villa = r.stay_type === "overnight";
     var paid = Number(r.amount_paid) || 0;
