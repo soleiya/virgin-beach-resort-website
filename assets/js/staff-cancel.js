@@ -7,6 +7,8 @@
 // releases the casita / cabana, cancels it in Cloudbeds when it's there, and
 // send-booking-email sends the message. View-only accounts never see it.
 // The booking window is found from its title ("Edit Booking · VBR-…").
+// v71: "Send payment link…" next to it — the quotation with the Pay now button
+// again, to the email on the booking now (staff_resend_payment_link).
 // =============================================================================
 (function () {
   "use strict";
@@ -37,7 +39,9 @@
   var css = document.createElement("style");
   css.textContent =
     ".scx-btn{background:#fbe9e7;color:#9b2c2c;border:1px solid #f1c4bd;margin-right:8px}.scx-auto{margin-right:auto;font-size:.78rem;line-height:1.35;color:var(--ink-soft);max-width:440px;align-self:center}.scx-auto b{color:#9b2c2c}.scx-auto.none b{color:var(--ink)}.scx-btn:hover{background:#f6d9d3}" +
-    "body.ro-staff .scx-btn,body.ro-staff .scx-auto{display:none!important}" +
+    "body.ro-staff .scx-btn,body.ro-staff .scx-auto,body.ro-staff .spl-btn{display:none!important}" +
+    ".spl-btn{background:var(--lagoon-tint,#e4f2ef);color:var(--lagoon-deep,#0f6f68);border:1px solid #bfe0d9;margin-right:8px}.spl-btn:hover{filter:brightness(.97)}" +
+    ".spl-go{background:var(--lagoon,#1f7a72)!important;color:#fff!important;border:0}.spl-go:disabled{opacity:.6}" +
     "#vCxOpen{display:none!important}" + // v61's villa-only button: this one replaces it
     ".scx-back{position:fixed;inset:0;background:rgba(20,28,27,.5);z-index:2000;display:none;align-items:flex-start;justify-content:center;overflow:auto;padding:5vh 12px}" +
     ".scx-back.open{display:flex}.scx-box{background:var(--surface,#fffdf8);border-radius:14px;max-width:560px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,.25);padding:18px 20px}" +
@@ -122,6 +126,17 @@
       }
       var code = codeIn(w[0]), r = rowByCode(code);
       btn.hidden = !code || (r && ACTIVE.indexOf(String(r.status)) === -1);
+      // v71: send the payment link again (to the email on the booking now)
+      var pb = bd.querySelector(".spl-btn");
+      if (!pb) {
+        pb = document.createElement("button");
+        pb.type = "button";
+        pb.className = "btn-sm spl-btn";
+        pb.textContent = "Send payment link…";
+        pb.addEventListener("click", function () { openPay(codeIn(w[0]), w[0]); });
+        btn.parentElement.insertBefore(pb, btn);
+      }
+      pb.hidden = !code || !payable(r);
       // v68: when it would be cancelled automatically, right next to the button
       var info = bd.querySelector(".scx-auto");
       if (!info) { info = document.createElement("span"); info.className = "scx-auto"; btn.parentElement.insertBefore(info, btn.nextSibling); }
@@ -154,10 +169,12 @@
     box = document.createElement("div");
     box.className = "scx-panel";
     box.setAttribute("data-code", code);
-    box.innerHTML = '<button type="button" class="btn-sm scx-btn">Cancel booking…</button><span class="scx-auto"></span>';
+    box.innerHTML = '<button type="button" class="btn-sm spl-btn">Send payment link…</button><button type="button" class="btn-sm scx-btn">Cancel booking…</button><span class="scx-auto"></span>';
     row.parentNode.insertBefore(box, row.nextSibling);
     box.querySelector(".scx-btn").addEventListener("click", function () { openCode(code, null); });
+    box.querySelector(".spl-btn").addEventListener("click", function () { openPay(code, null); });
     var r = rowByCode(code);
+    box.querySelector(".spl-btn").hidden = !payable(r);
     if (r && ACTIVE.indexOf(String(r.status)) === -1) { box.hidden = true; return; }
     loadAuto(code, box.querySelector(".scx-auto"), "scx-auto");
   }
@@ -170,9 +187,58 @@
   }
   watchPanel();
 
+  // ---------------------------------------------------------------- v71: send the payment link again
+  // Waiting for payment, nothing paid, not made in Cloudbeds. Unknown row
+  // (not loaded in the lists) → show the button; the dialog checks the latest.
+  function payable(r) {
+    if (!r) return true;
+    return ["pending", "pending_payment"].indexOf(String(r.status)) > -1 && !(Number(r.amount_paid) >= 0.5) && r.cb_owned !== true;
+  }
+  var payCur = null;
+  function openPay(code, backdropId) {
+    if (!code) return;
+    fetchRow(code).then(function (r) {
+      if (!r) { alert("Couldn't find " + code + ". Reload the page and try again."); return; }
+      payCur = { row: r, backdrop: backdropId };
+      cur = null;
+      var hasEmail = EMAIL_RE.test(String(r.guest_email || "").trim());
+      $("scxTitle").textContent = "Send payment link — " + (r.order_code || "");
+      $("scxSub").textContent = (r.guest_name || "Guest") + " · " + (r.stay_type === "overnight" ? "Villa stay" : (r.stay_type_label || "Day trip")) + " · " + dateText(r) + " · " + peso(r.total_amount);
+      var problem = !payable(r) ? (Number(r.amount_paid) >= 0.5 ? "A payment is already recorded on this booking — the balance reminder handles the rest." :
+        r.cb_owned === true ? "This booking was made in Cloudbeds — send the payment request from Cloudbeds." :
+        "This booking is " + (D.statusLabel ? D.statusLabel(r) : r.status) + " — only bookings waiting for payment can get a payment link.") :
+        !hasEmail ? "There's no valid email on this booking. Correct it in the booking and save first." : "";
+      if (problem) {
+        $("scxBody").innerHTML = '<p class="scx-warn">' + esc(problem) + '</p><div class="scx-acts"><button type="button" class="btn-sm ghost" data-x="close">Close</button></div>';
+        back.classList.add("open");
+        return;
+      }
+      $("scxBody").innerHTML =
+        '<p class="scx-info">The guest gets the quotation again with the <b>Pay now</b> button, sent to <b>' + esc(r.guest_email) + '</b> — the email saved on the booking now. If you just corrected it, save the booking first.</p>' +
+        '<div class="scx-f"><label for="splMsg">Message to the guest</label><textarea id="splMsg">' + esc("Hi {first},\n\nAs requested, here is the payment link for your reservation {order} for {date}. Your booking details are below.") + '</textarea>' +
+        '<span class="scx-hint">Opens the email; the amount, the deadline and the Pay now button follow. {first} = first name, {order} = booking ID, {date} = date(s).</span></div>' +
+        '<p class="scx-info" id="splAuto"></p><p class="scx-err" id="splErr"></p>' +
+        '<div class="scx-acts"><button type="button" class="btn-sm ghost" data-x="close">Close</button><button type="button" class="btn-sm spl-go" id="splGo">Send payment link</button></div>';
+      back.classList.add("open");
+      loadAuto(r.order_code, $("splAuto"), "scx-info");
+    });
+  }
+  back.addEventListener("click", function (e) {
+    if (!e.target.closest("#splGo") || !payCur) return;
+    var r = payCur.row, btn = $("splGo");
+    btn.disabled = true; btn.textContent = "Sending…"; $("splErr").textContent = "";
+    sb.rpc("staff_resend_payment_link", { p_booking_id: r.id, p_message: ($("splMsg").value || "").trim() || null }).then(function (res) {
+      if (res.error) { btn.disabled = false; btn.textContent = "Send payment link"; $("splErr").textContent = res.error.message; return; }
+      payCur = null;
+      back.classList.remove("open");
+      alert("Payment link sent to " + ((res.data && res.data.to) || r.guest_email) + ". It's noted in the staff notes.");
+      if (D.reload) D.reload();
+    });
+  });
+
   // ---------------------------------------------------------------- the dialog
   var cur = null; // { row, backdrop }
-  function close() { back.classList.remove("open"); cur = null; }
+  function close() { back.classList.remove("open"); cur = null; payCur = null; }
   back.addEventListener("click", function (e) { if (e.target === back) close(); });
   document.addEventListener("keydown", function (e) { if (e.key === "Escape" && back.classList.contains("open")) { e.stopPropagation(); close(); } }, true);
 
@@ -192,6 +258,7 @@
   }
   function show(r, backdropId) {
     cur = { row: r, backdrop: backdropId };
+    payCur = null;
     msgTouched = false;
     var villa = r.stay_type === "overnight";
     var paid = Number(r.amount_paid) || 0;
