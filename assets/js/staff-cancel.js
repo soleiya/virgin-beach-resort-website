@@ -44,6 +44,7 @@
     ".scx-btn{background:#fbe9e7;color:#9b2c2c;border:1px solid #f1c4bd;margin-right:8px}.scx-auto{margin-right:auto;font-size:.78rem;line-height:1.35;color:var(--ink-soft);max-width:440px;align-self:center}.scx-auto b{color:#9b2c2c}.scx-auto.none b{color:var(--ink)}.scx-btn:hover{background:#f6d9d3}" +
     "body.ro-staff .scx-btn,body.ro-staff .scx-auto,body.ro-staff .spl-btn{display:none!important}" +
     ".spl-btn{background:var(--lagoon-tint,#e4f2ef);color:var(--lagoon-deep,#0f6f68);border:1px solid #bfe0d9;margin-right:8px}.spl-btn:hover{filter:brightness(.97)}" +
+    ".scx-f[hidden],.scx-back [hidden]{display:none!important}" +
     ".sdl-btn{background:none;border:0;padding:0;color:var(--lagoon-deep,#0f6f68);text-decoration:underline;cursor:pointer;font:inherit;font-size:.78rem;margin-left:4px}body.ro-staff .sdl-btn{display:none!important}" +
     ".sdl-opt{display:flex;gap:8px;align-items:flex-start;border:1px solid var(--line);border-radius:10px;padding:9px 11px;margin:0 0 8px;cursor:pointer;font-size:.88rem}.sdl-opt.on{border-color:var(--lagoon,#1f7a72);background:var(--lagoon-tint,#e4f2ef)}.sdl-opt input{margin-top:3px}.sdl-opt small{display:block;color:var(--ink-soft);font-size:.78rem;margin-top:2px}" +
     ".sdl-row{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0 2px}.sdl-row input[type=datetime-local]{border:1px solid var(--line);border-radius:8px;padding:6px 8px;font:inherit;font-size:.86rem;background:var(--sand)}" +
@@ -111,7 +112,7 @@
         if (seq !== autoSeq && cls === "scx-auto") return;
         if (res.error) { el.innerHTML = ""; return; }
         el.className = cls + (res.data && res.data.at ? "" : " none");
-        el.innerHTML = autoHtml(res.data) + (ACTIVE.indexOf(String(r.status)) > -1 && r.cb_owned !== true && r.source !== "sheet_import" && !(res.data && res.data.source === "none")
+        el.innerHTML = autoHtml(res.data) + (el.id !== "sdlNow" && ACTIVE.indexOf(String(r.status)) > -1 && r.cb_owned !== true && r.source !== "sheet_import" && !(res.data && res.data.source === "none")
           ? ' <button type="button" class="sdl-btn" data-sdl="' + esc(r.order_code) + '">Change deadline…</button>' : "");
       });
     });
