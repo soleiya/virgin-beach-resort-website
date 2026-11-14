@@ -338,6 +338,8 @@ function securePara(r: Any, total: number, dl: { label: string }, units: string)
 }
 // v47: day trips are kept until the trip day; villas are released after the hold
 function releaseLine(r: Any, units: string) {
+  // v72: a deadline set by staff, or the day-trip default rule
+  if (r?._release_at) return `If it's still unpaid by <strong>${esc(fmtDateTime(new Date(r._release_at)))}</strong>, it is cancelled automatically and the ${units} released.`;
   return isOvernight(r) ? `Unpaid bookings are automatically cancelled and the ${units} released.`
     : `If the booking is still unpaid on the day and you haven't arrived by 5:00 PM, it is cancelled and the ${units} released.`;
 }
@@ -1840,10 +1842,26 @@ async function waitForCloudbeds(r: Any): Promise<Any> {
   return r;
 }
 
+// v72: when the booking will really be cancelled if unpaid, when that's a
+// deadline set by staff or the day-trip default rule (booking_auto_cancel_info)
+async function withRelease(r: Any): Promise<Any> {
+  try {
+    const res = await db("rpc/booking_auto_cancel_info", { method: "POST", body: JSON.stringify({ p_booking_id: r.id }) });
+    if (!res.ok) return r;
+    const a = await res.json();
+    if (!a || !a.at || !["staff", "daytrip_rule"].includes(String(a.source))) return r;
+    const at = new Date(a.at);
+    if (isNaN(at.getTime()) || at.getTime() <= Date.now()) return r;
+    const std = paymentDeadline(r, deadlineHours());
+    const dl = a.source === "staff" || !std.date || at < std.date ? at : std.date;
+    return { ...r, _release_at: at.toISOString(), _deadline: dl.toISOString() };
+  } catch { return r; }
+}
+
 async function onInsert(r0: Any) {
   const c = cfg();
   if (!autoEmail(r0, c)) return await onInsertMonitor(r0, c);
-  const r = await waitForCloudbeds(r0);
+  const r = await withRelease(await waitForCloudbeds(r0));
   const cabanas = await loadUnits(r);
   const q = await quoteFor(r, cabanas);
   const mode = staffSentMode(r);
@@ -2206,7 +2224,7 @@ ${statusBox([
     [unpaid ? "To pay" : "Balance", `<strong>${esc(peso(owe))}</strong>`],
   ])}
 ${button(uploadUrl(r, c), "Pay now online")}
-${unpaid ? p(`<strong>Not able to make it?</strong> Please reply to let us know. If you don't arrive and the booking is still unpaid by <strong>5:00 PM today</strong>, it will be cancelled and your cabana(s) may be released to other guests.`, "margin-top:14px;") : p(`<strong>Not able to make it?</strong> Please reply to let us know.`, "margin-top:14px;")}
+${unpaid ? p(`<strong>Not able to make it?</strong> Please reply to let us know. If you don't arrive and the booking is still unpaid by <strong>${r._release_at ? esc(fmtDateTime(new Date(r._release_at))) : "5:00 PM today"}</strong>, it will be cancelled and your cabana(s) may be released to other guests.`, "margin-top:14px;") : p(`<strong>Not able to make it?</strong> Please reply to let us know.`, "margin-top:14px;")}
 ${signature(c)}`;
   return {
     subject: "Re: " + guestSubject(r, c),
@@ -2300,7 +2318,7 @@ async function onArrivalNotice(r: Any) {
   if (!((Number(r.total_amount) || 0) - (Number(r.amount_paid) || 0) > 0.5)) return { skipped: "paid" };
   const skip = deadlineGate(r, c, s.expiry_email_all);
   if (skip) return skip;
-  const g = guestArrivalNoticeEmail(r, c);
+  const g = guestArrivalNoticeEmail(await withRelease(r), c);
   return await send({ booking: r, kind: "arrival_notice", to: String(r.guest_email).trim(), cc: s.expiry_staff_alert ? MAILBOX : undefined, subject: g.subject, html: g.html, thread: "guest" });
 }
 
@@ -2376,7 +2394,8 @@ async function onResendQuote(r: Any, payload: Any) {
   }
   const msg = String(payload.message || "").trim() ||
     "Hi {first},\n\nAs requested, here is the payment link for your reservation {order} for {date}. Your booking details are below.";
-  const rr = { ...r, ...(deadline ? { _deadline: deadline } : {}), email_custom: { ...(r.email_custom || {}), quote: { message: msg.slice(0, 5000) } } };
+  const rel = await withRelease(r);
+  const rr = { ...rel, ...(deadline ? { _deadline: deadline } : {}), email_custom: { ...(r.email_custom || {}), quote: { message: msg.slice(0, 5000) } } };
   const g = guestQuoteEmail(rr, cabanas, q, c);
   return await send({
     booking: r, kind: `guest_quote_resend:${String(payload.resend_id || Date.now())}`, to: String(r.guest_email).trim(),
