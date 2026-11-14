@@ -58,6 +58,11 @@
 //   booking (type CHANGE, source "cloudbeds") — see booking-change-email.sql
 //     → GUEST:  "Changes to your reservation" — each changed detail shown as
 //               before → now, plus the full updated reservation  (kind: guest_changed:<id>)
+//               v71: still unpaid → also the amount, deadline and Pay now button
+//
+//   Staff click "Send payment link…" (type RESEND_QUOTE, booking-v71)
+//     → GUEST:  the quotation with the Pay now button again, to the email on
+//               the booking now  (kind: guest_quote_resend:<id>)
 //
 // Guest emails are sent only for auto-email sources (or email_guest = true),
 // never for bookings made in Cloudbeds (cb_owned — OTA guests), and only to a
@@ -276,6 +281,8 @@ function trip8(checkIn: string | null): Date | null {
   return checkIn ? new Date(checkIn + "T08:00:00+08:00") : null;
 }
 export function paymentDeadline(record: Any, hours = deadlineHours()): { date: Date | null; label: string } {
+  // v71: a re-sent payment link states when the booking really closes (booking_auto_cancel)
+  if (record?._deadline) { const d = new Date(record._deadline); if (!isNaN(d.getTime())) return { date: d, label: fmtDateTime(d) }; }
   const created = new Date(record.created_at || Date.now());
   const t8 = trip8(record.check_in);
   if (t8 && t8.getTime() <= created.getTime()) return { date: null, label: "upon arrival at the resort" };
@@ -327,7 +334,7 @@ function securePara(r: Any, total: number, dl: { label: string }, units: string)
   const how = paysOnline(r) ? " online with the <strong>Pay now</strong> button below" : ", and send us your proof of payment";
   return t.half
     ? `<strong>To secure your reservation, pay at least 50% (${esc(peso(t.deposit))}) &mdash; or the full ${esc(peso(t.total))} &mdash; by ${esc(dl.label)}</strong>${how}. The remaining balance is due by <strong>${esc(t.balanceDueLabel)}</strong> (${BALANCE_DAYS} days before arrival). ${releaseLine(r, units)}`
-    : `<strong>Full payment of ${esc(peso(t.total))} is required by ${esc(dl.label)}</strong> to secure the reservation, as ${isOvernight(r) ? "your stay" : "your visit"} is less than ${BALANCE_DAYS} days away. ${releaseLine(r, units)}`;
+    : `<strong>Full payment of ${esc(peso(t.total))} is required by ${esc(dl.label)}</strong> to secure the reservation. ${releaseLine(r, units)}`;
 }
 // v47: day trips are kept until the trip day; villas are released after the hold
 function releaseLine(r: Any, units: string) {
@@ -849,7 +856,7 @@ ${statusBox([
 ${h2("Your reservation")}${kv(reservationRows(r, cabanas))}${cabanaNote(cabanas, r)}
 ${h2("Quotation")}${quoteTable(q)}
 ${paysOnline(r) ? `${h2("How to pay")}
-${p(`<strong>Pay online</strong> &mdash; ${ONLINE_METHODS} &mdash; through our secure payment partner <strong>Xendit</strong>. Choose 50% or the full amount on the next page; your booking is confirmed as soon as the payment goes through.`)}
+${p(`<strong>Pay online</strong> &mdash; ${ONLINE_METHODS} &mdash; through our secure payment partner <strong>Xendit</strong>. Pay the full amount on the next page; your booking is confirmed as soon as the payment goes through.`)}
 ${button(payUrl, "Pay now")}
 ${h2("Next steps")}
 <ol style="margin:0 0 12px;padding-left:20px;font-size:14px;">
@@ -1161,7 +1168,21 @@ function changeBalanceNote(r: Any, ps: PaySummary | null, c: ReturnType<typeof c
   return p(`Thank you for your payment of <strong>${esc(peso(ps.paid))}</strong>. With these changes, the remaining balance is <strong>${esc(peso(ps.balance))}</strong>${due ? `, due ${ps.balance_due ? "by " : ""}<strong>${esc(due)}</strong>` : ""}.${paysOnline(r) ? " You can pay it online with the button below." : " When you've paid it, upload the proof using the same link:"}`, `background:${C.tint};border-radius:8px;padding:10px 14px;font-size:14px;margin-top:12px;`) +
     `<p style="margin:0 0 16px;">${button(uploadUrl(r, c), paysOnline(r) ? "Pay balance now" : "Upload balance payment")}</p>`;
 }
-export function guestChangedEmail(r: Any, cabanas: Any[], changes: Change[], c: ReturnType<typeof cfg>, threadRecord: Any, source = "", ps: PaySummary | null = null) {
+// v71: a change to a booking that's still unpaid (e.g. a corrected email
+// address) carries the payment link, so the guest can pay from this email.
+export function changeUnpaidNote(r: Any, ps: PaySummary | null, c: ReturnType<typeof cfg>, changes: Change[], deadline?: string | null) {
+  if (!["pending", "pending_payment"].includes(String(r.status))) return "";
+  if (ps && (ps.paid > 0 || ps.pending > 0)) return "";
+  const total = Number(r.total_amount) || 0;
+  if (!(total > 0)) return "";
+  let dl: { date: Date | null; label: string } = { date: null, label: "" };
+  if (deadline && Date.parse(deadline) > Date.now()) dl = paymentDeadline({ ...r, _deadline: deadline }, c.deadlineHours);
+  else { const d = paymentDeadline(r, c.deadlineHours); if (d.date && d.date.getTime() > Date.now()) dl = d; }
+  const emailFixed = changes.some((ch) => /e-?mail/i.test(ch.label));
+  return p(`${emailFixed ? "Here is your payment link at your updated email address. " : ""}<strong>Your booking isn't paid yet.</strong> Please pay <strong>${esc(peso(total))}</strong>${dl.date ? ` by <strong>${esc(dl.label)}</strong>` : ""} to secure it.${paysOnline(r) ? " You can pay online with the button below." : " When you've paid, upload the proof using the button below."}`, `background:${C.tint};border-radius:8px;padding:10px 14px;font-size:14px;margin-top:12px;`) +
+    `<p style="margin:0 0 16px;">${button(uploadUrl(r, c), paysOnline(r) ? "Pay now" : "Upload proof of payment")}</p>`;
+}
+export function guestChangedEmail(r: Any, cabanas: Any[], changes: Change[], c: ReturnType<typeof cfg>, threadRecord: Any, source = "", ps: PaySummary | null = null, deadline: string | null = null) {
   const first = esc(String(r.guest_name || "there").trim().split(/\s+/)[0]);
   const td = `padding:8px 8px;border-bottom:1px solid ${C.line};font-size:13.5px;vertical-align:top;`;
   const rows = changes.map((ch) =>
@@ -1181,7 +1202,7 @@ ${h2("Your updated reservation")}${kv([
     ...(r.total_amount !== null && r.total_amount !== undefined ? [["Total", `<strong>${esc(peso(Number(r.total_amount)))}</strong>`] as [string, string]] : []),
     ...changeBalanceRows(r, ps),
   ])}
-${changeBalanceNote(r, ps, c)}
+${changeBalanceNote(r, ps, c)}${changeUnpaidNote(r, ps, c, changes, deadline)}
 ${p("If anything here doesn't look right, or you didn't ask for this change, simply reply to this email and we'll sort it out.", "margin-top:16px;")}
 ${signature(c)}`;
   return {
@@ -1314,7 +1335,7 @@ ${h2("Your reservation")}${kv(overnightRows(r, villas))}${cabanaNote(villas)}
 ${h2("Guest list")}${rosterTable(r)}
 ${q ? h2("Quotation") + quoteTable(q) + p("The full-board meal package (lunch, dinner and breakfast) is mandatory for every guest and is charged per guest, per night. Children 0–5 eat free.", `font-size:12.5px;color:${C.soft};margin-top:8px;`) : ""}
 ${h2("How to pay")}
-${p(`<strong>Pay online</strong> &mdash; ${ONLINE_METHODS} &mdash; through our secure payment partner <strong>Xendit</strong>. Choose 50% or the full amount on the next page; your stay is confirmed as soon as the payment goes through.`)}
+${p(`<strong>Pay online</strong> &mdash; ${ONLINE_METHODS} &mdash; through our secure payment partner <strong>Xendit</strong>. Pay the full amount on the next page; your stay is confirmed as soon as the payment goes through.`)}
 ${button(payUrl, "Pay now")}
 ${h2("Next steps")}
 <ol style="margin:0 0 12px;padding-left:20px;font-size:14px;">
@@ -2329,9 +2350,38 @@ async function onChanged(r: Any, payload: Any) {
   const custom = payload.message ? { message: String(payload.message).slice(0, 5000) } : null;
   const rc = custom ? { ...r, email_custom: { ...(r.email_custom || {}), change: custom } } : r;
   const ps = await paySummary(r.id);
-  const g = guestChangedEmail(rc, cabanas, changes, c, threadRecord, String(payload.source || ""), ps);
+  const g = guestChangedEmail(rc, cabanas, changes, c, threadRecord, String(payload.source || ""), ps, payload.deadline ? String(payload.deadline) : null);
   const kind = `guest_changed:${String(payload.change_id || Date.now())}`;
   return await send({ booking: r, kind, to: String(r.guest_email).trim(), subject: g.subject, html: g.html, thread: "guest" });
+}
+
+// v71: staff "Send payment link" — the quotation with the Pay now button again,
+// to the email that's on the booking NOW (e.g. after a typo was corrected).
+// Only for bookings still waiting for payment with nothing paid. The deadline
+// shown is when the booking really closes (from booking_auto_cancel, sent by
+// staff_resend_payment_link); past it, the trip/arrival morning.
+async function onResendQuote(r: Any, payload: Any) {
+  const c = cfg();
+  if (!["pending", "pending_payment"].includes(String(r.status))) return { skipped: "booking is " + statusLabel(r) };
+  if (r.cb_owned === true) return { skipped: "made in Cloudbeds" };
+  if (!r.guest_email || !EMAIL_RE.test(String(r.guest_email).trim())) return { skipped: "no valid guest email" };
+  const ps = await paySummary(r.id);
+  if (ps && (ps.paid > 0 || ps.pending > 0)) return { skipped: "a payment is already recorded" };
+  const cabanas = await loadUnits(r);
+  const q = await quoteFor(r, cabanas);
+  let deadline: string | null = payload.deadline && Date.parse(String(payload.deadline)) > Date.now() ? String(payload.deadline) : null;
+  if (!deadline) {
+    const d = paymentDeadline(r, c.deadlineHours);
+    if (!(d.date && d.date.getTime() > Date.now())) { const t8 = trip8(r.check_in); if (t8 && t8.getTime() > Date.now()) deadline = t8.toISOString(); }
+  }
+  const msg = String(payload.message || "").trim() ||
+    "Hi {first},\n\nAs requested, here is the payment link for your reservation {order} for {date}. Your booking details are below.";
+  const rr = { ...r, ...(deadline ? { _deadline: deadline } : {}), email_custom: { ...(r.email_custom || {}), quote: { message: msg.slice(0, 5000) } } };
+  const g = guestQuoteEmail(rr, cabanas, q, c);
+  return await send({
+    booking: r, kind: `guest_quote_resend:${String(payload.resend_id || Date.now())}`, to: String(r.guest_email).trim(),
+    subject: g.subject, html: g.html, thread: "guest", attachments: q ? await agreementAttachment() : [],
+  });
 }
 
 // ---------- dashboard preview (signed-in staff only) ---------------------------
@@ -2456,6 +2506,7 @@ export async function handle(req: Request): Promise<Response> {
     if (payload.type === "INQUIRY_INSERT") out.inquiry = await onInquiry(r);
     if (payload.type === "INSERT") out.insert = await onInsert(r);
     if (payload.type === "CHANGE") out.changed = await onChanged(r, payload);
+    if (payload.type === "RESEND_QUOTE") out.resent = await onResendQuote(r, payload);
     if (payload.type === "DOCS") out.docs = await onDocs(r, payload);
     if (payload.type === "BALANCE_DUE") out.balance = await onBalance(r, false);
     if (payload.type === "BALANCE_OVERDUE") out.balance = await onBalance(r, true);
