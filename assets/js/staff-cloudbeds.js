@@ -1,5 +1,5 @@
 // =============================================================================
-// Staff dashboard: "Cloudbeds view" / "New version" interface switch.
+// Staff dashboard view styling and navigation.
 //
 // Purely an interface layer. Both views use the same data, the same forms and
 // the same buttons (this file only adds a Cloudbeds-style top bar, side menu,
@@ -56,7 +56,7 @@
   toggle.className = "view-toggle";
   toggle.setAttribute("role", "group");
   toggle.setAttribute("aria-label", "Dashboard view");
-  toggle.innerHTML = '<button type="button" data-view="cloudbeds">Cloudbeds view</button><button type="button" data-view="new">New version</button><button type="button" data-view="summary">Summary</button><button type="button" data-view="accounting">Accounting</button><button type="button" data-view="executive">Executive</button><button type="button" data-view="campaigns">Campaigns</button>';
+  toggle.innerHTML = '<button type="button" data-view="new">New version</button><button type="button" data-view="summary">Summary</button><button type="button" data-view="accounting">Accounting</button><button type="button" data-view="executive">Executive</button><button type="button" data-view="campaigns">Campaigns</button>';
   toggle.addEventListener("click", function (e) {
     var b = e.target.closest("button[data-view]");
     if (b) setView(b.getAttribute("data-view"));
@@ -576,8 +576,10 @@
   new MutationObserver(syncAuth).observe(dashScreen, { attributes: true, attributeFilter: ["style"] });
 
   function setView(v) {
+    // Retire saved Cloudbeds view preferences in existing browsers.
+    if (v === "cloudbeds") v = "new";
     store(KEY, v);
-    var cb = v === "cloudbeds";
+    var cb = false;
     if (window.VBRSummary) window.VBRSummary.show(v === "summary");
     if (window.VBRAccounting) window.VBRAccounting.show(v === "accounting");
     if (window.VBRExec) window.VBRExec.show(v === "executive");
@@ -603,7 +605,7 @@
   }
   var ready = false;
   var savedView = store(KEY);
-  setView(savedView === "cloudbeds" || savedView === "summary" || savedView === "accounting" || savedView === "executive" || savedView === "campaigns" ? savedView : "new");
+  setView(savedView === "summary" || savedView === "accounting" || savedView === "executive" || savedView === "campaigns" ? savedView : "new");
   ready = true;
   window.VBRView = { set: setView, go: goPage, page: function () { return page; }, current: function () { return store(KEY) || "new"; } };
 })();
