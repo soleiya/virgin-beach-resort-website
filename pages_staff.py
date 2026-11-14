@@ -1837,6 +1837,7 @@ html = """<!doctype html>
 <script src="../assets/js/staff-campaigns.js?v=__V_CMJS__"></script>
 <script src="../assets/js/staff-cancel.js?v=__V_CXJS__"></script>
 <script src="../assets/js/staff-find.js?v=__V_FINDJS__"></script>
+<script src="../assets/js/staff-villacal.js?v=__V_VCALJS__"></script>
 <script src="../assets/js/staff-alerts.js?v=__V_ALERTJS__"></script>
 <script src="../assets/js/staff-insights.js?v=__V_INSJS__"></script>
 <script src="../assets/js/staff-track.js?v=__V_TRKJS__"></script>
@@ -1857,6 +1858,7 @@ html = (html.replace("__V_CSS__", v("assets/css/style.css"))
             .replace("__V_WEB__", v("assets/js/staff-website.js"))
             .replace("__V_CODES__", v("assets/js/staff-codes.js"))
             .replace("__V_DCAL__", v("assets/js/staff-daycal.js"))
+            .replace("__V_VCALJS__", v("assets/js/staff-villacal.js"))
             .replace("__V_MAIL__", v("assets/js/staff-email.js"))
             .replace("__V_CBCSS__", v("assets/css/staff-cloudbeds.css"))
             .replace("__V_CBJS__", v("assets/js/staff-cloudbeds.js"))
