@@ -380,6 +380,7 @@ function cabanaKind(c: Any): "lounge" | "dining" {
   return String(c.cabana_type || "").startsWith("lounge") ? "lounge" : "dining";
 }
 function shortLabel(c: Any) {
+  if (c.section && String(c.section).length > 1 && c.number) return `${c.section} #${c.number}`; // v77: "Beach Bar #2"
   return c.section && c.number ? `Sec. ${c.section} #${c.number}` : String(c.label || "Cabana");
 }
 function cabanaName(kind: "lounge" | "dining", capacity?: number) {
@@ -391,11 +392,17 @@ function cabanaName(kind: "lounge" | "dining", capacity?: number) {
 export const isStaffMade = (r: Any) => String(r.source || "website") !== "website";
 
 // v29: day-trip cabanas are booked by count; staff assign numbers later.
+// v77: bbDining / bbLounge = how many of them are at the Beach Bar (staff only,
+// same price); dining / lounge stay the totals.
 export function cabanaCounts(r: Any, cabanas: Any[] = []) {
-  const assigned = (k: "dining" | "lounge") => cabanas.filter((c) => !c.unit_label && cabanaKind(c) === k).length;
+  const assigned = (k: "dining" | "lounge", bb?: boolean) =>
+    cabanas.filter((c) => !c.unit_label && cabanaKind(c) === k && (bb === undefined || !!c.staff_only === bb)).length;
+  const dining = Math.max(int(r.dining_cabanas), int(r.legacy_dining_cabanas), assigned("dining"));
+  const lounge = Math.max(int(r.lounge_cabanas), int(r.legacy_lounge_cabanas), assigned("lounge"));
   return {
-    dining: Math.max(int(r.dining_cabanas), int(r.legacy_dining_cabanas), assigned("dining")),
-    lounge: Math.max(int(r.lounge_cabanas), int(r.legacy_lounge_cabanas), assigned("lounge")),
+    dining, lounge,
+    bbDining: Math.min(dining, Math.max(int(r.bb_dining_cabanas), assigned("dining", true))),
+    bbLounge: Math.min(lounge, Math.max(int(r.bb_lounge_cabanas), assigned("lounge", true))),
   };
 }
 // v33: day-trip cabana numbers are for internal records; guests see them only
@@ -405,7 +412,12 @@ export const showCabanaNumbers = (r: Any, cabanas: Any[] = []) =>
 
 export function cabanaCountText(r: Any, cabanas: Any[] = []) {
   const n = cabanaCounts(r, cabanas);
-  return [n.dining ? plural(n.dining, "Dining Cabana") : "", n.lounge ? plural(n.lounge, "Lounge Cabana") : ""].filter(Boolean).join(", ");
+  return [
+    n.lounge - n.bbLounge ? plural(n.lounge - n.bbLounge, "Lounge Cabana") : "",
+    n.dining - n.bbDining ? plural(n.dining - n.bbDining, "Dining Cabana") : "",
+    n.bbLounge ? plural(n.bbLounge, "Beach Bar Lounge Cabana") : "",
+    n.bbDining ? plural(n.bbDining, "Beach Bar Dining Cabana") : "",
+  ].filter(Boolean).join(", ");
 }
 
 // What the guest still has to upload on /pay (Senior/PWD IDs, pet cards).
@@ -473,8 +485,14 @@ export function buildQuote(record: Any, cabanas: Any[]): Quote | null {
     for (const kind of ["dining", "lounge"] as const) {
       if (!n[kind]) continue;
       // Booked by count (v29) at the rate-sheet price; numbers come later.
-      const group = cabanas.filter((c) => cabanaKind(c) === kind);
-      add(`${cabanaName(kind, group[0]?.capacity)}${showCabanaNumbers(record, cabanas) && group.length ? " — " + group.map(shortLabel).join(", ") : ""}`, rate[kind], n[kind]);
+      // v77: Beach Bar cabanas (staff only) on their own line, same price.
+      const bbN = kind === "dining" ? n.bbDining : n.bbLounge;
+      for (const bb of [false, true]) {
+        const qty = bb ? bbN : n[kind] - bbN;
+        if (!qty) continue;
+        const group = cabanas.filter((c) => cabanaKind(c) === kind && !!c.staff_only === bb);
+        add(`${bb ? "Beach Bar " : ""}${cabanaName(kind, group[0]?.capacity)}${showCabanaNumbers(record, cabanas) && group.length ? " — " + group.map(shortLabel).join(", ") : ""}`, rate[kind], qty);
+      }
     }
     heading = type === "half_day"
       ? "HALF-DAY TRIP AREA — Inclusive of entrance fee and afternoon snacks"
@@ -734,7 +752,8 @@ export function staffSubject(r: Any, c: ReturnType<typeof cfg>) {
   } else {
     parts.push(SHORT_TYPES[r.stay_type] || r.stay_type_label || "Day trip");
     const n = cabanaCounts(r);
-    const cab = [n.dining ? `${n.dining} dining` : "", n.lounge ? `${n.lounge} lounge` : ""].filter(Boolean).join(" + ");
+    const cab = [n.lounge - n.bbLounge ? `${n.lounge - n.bbLounge} lounge` : "", n.dining - n.bbDining ? `${n.dining - n.bbDining} dining` : "",
+      n.bbLounge ? `${n.bbLounge} BB lounge` : "", n.bbDining ? `${n.bbDining} BB dining` : ""].filter(Boolean).join(" + ");
     if (cab) parts.push(cab);
   }
   const pax = paxOf(r);
@@ -1618,12 +1637,12 @@ async function loadBooking(id: string) {
 
 async function loadCabanas(r: Any): Promise<Any[]> {
   const res = await db(
-    `booking_cabanas?booking_id=eq.${encodeURIComponent(r.id)}&select=cabana_id,cabanas(label,cabana_type,price,capacity,section,number)`
+    `booking_cabanas?booking_id=eq.${encodeURIComponent(r.id)}&select=cabana_id,cabanas(label,cabana_type,price,capacity,section,number,staff_only)`
   );
   let list: Any[] = [];
   if (res.ok) list = (await res.json()).map((x: Any) => x.cabanas).filter(Boolean);
   if (!list.length && r.cabana_id) {
-    const one = await db(`cabanas?id=eq.${encodeURIComponent(r.cabana_id)}&select=label,cabana_type,price,capacity,section,number`);
+    const one = await db(`cabanas?id=eq.${encodeURIComponent(r.cabana_id)}&select=label,cabana_type,price,capacity,section,number,staff_only`);
     if (one.ok) list = await one.json();
   }
   return list.sort((a, b) => String(a.label).localeCompare(String(b.label), undefined, { numeric: true }));
@@ -2415,7 +2434,7 @@ const CORS = {
 const PREVIEW_FIELDS = ["source", "status", "stay_type", "stay_type_label", "guest_name", "guest_email", "guest_phone", "country",
   "check_in", "check_out", "adults", "children_6_12", "children_0_5", "senior_count", "pwd_kid_count", "pet_count", "companions", "primary_is_senior",
   "discount_type", "discount_value", "discount_amount", "discount_reason", "total_amount", "subtotal_people", "cabana_total",
-  "senior_discount", "notes", "add_ons", "online_discount", "booked_by", "email_custom", "dining_cabanas", "lounge_cabanas",
+  "senior_discount", "notes", "add_ons", "online_discount", "booked_by", "email_custom", "dining_cabanas", "lounge_cabanas", "bb_dining_cabanas", "bb_lounge_cabanas",
   "email_cabana_numbers"];
 
 async function staffUser(auth: string) {
@@ -2434,7 +2453,7 @@ async function unitsByIds(overnight: boolean, ids: string[]): Promise<Any[]> {
     const res = await db(`villas?id=in.${list}&select=unit_label,room_type,room_type_name,base_occupancy,max_extra,sort`);
     return res.ok ? (await res.json()).sort((a: Any, b: Any) => (a.sort || 0) - (b.sort || 0)) : [];
   }
-  const res = await db(`cabanas?id=in.${list}&select=label,cabana_type,price,capacity,section,number`);
+  const res = await db(`cabanas?id=in.${list}&select=label,cabana_type,price,capacity,section,number,staff_only`);
   return res.ok ? (await res.json()).sort((a: Any, b: Any) => String(a.label).localeCompare(String(b.label), undefined, { numeric: true })) : [];
 }
 
