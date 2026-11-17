@@ -175,23 +175,25 @@
 
     var last = new Date(Date.UTC(y, m, 0)).getUTCDate(), t = today();
     var stock = D.stock();
-    var days = [], mon = { bookings: 0, guests: 0, dining: 0, lounge: 0, total: 0, paid: 0, unpaid: 0, full: 0 };
+    var hasBb = (stock.bbDining || 0) + (stock.bbLounge || 0) > 0;
+    var days = [], mon = { bookings: 0, guests: 0, dining: 0, lounge: 0, bbDining: 0, bbLounge: 0, total: 0, paid: 0, unpaid: 0, full: 0 };
     for (var d = 1; d <= last; d++) {
       var ds = month + "-" + pad(d);
       var list = (byDay[ds] || []).slice().sort(function (a, b) {
         return (int(a.sheet_row) || 1e9) - (int(b.sheet_row) || 1e9) || String(a.created_at).localeCompare(String(b.created_at));
       });
       var active = list.filter(function (r) { return !D.releasesCabanas(r.status); });
-      var free = D.cabanasFreeOn(ds) || { dining: stock.dining, lounge: stock.lounge, stock: stock, blocked: { dining: 0, lounge: 0 } };
-      var sum = { adults: 0, kids: 0, k05: 0, sr: 0, pets: 0, dining: 0, lounge: 0, other: 0, total: 0, guests: 0 };
+      var free = D.cabanasFreeOn(ds) || { dining: stock.dining, lounge: stock.lounge, bbDining: stock.bbDining, bbLounge: stock.bbLounge, stock: stock,
+        blocked: { dining: 0, lounge: 0, bbDining: 0, bbLounge: 0 } };
+      var sum = { adults: 0, kids: 0, k05: 0, sr: 0, pets: 0, dining: 0, lounge: 0, bbDining: 0, bbLounge: 0, other: 0, total: 0, guests: 0 };
       active.forEach(function (r) {
         var n = D.countsOf(r), sr = int(r.senior_count);
         sum.adults += Math.max(int(r.adults) - sr, 0); sum.sr += sr; sum.kids += int(r.children_6_12); sum.k05 += int(r.children_0_5);
-        sum.pets += int(r.pet_count); sum.dining += n.dining; sum.lounge += n.lounge; sum.other += otherCharge(r); sum.total += int(r.total_amount);
+        sum.pets += int(r.pet_count); sum.dining += n.regDining; sum.lounge += n.regLounge; sum.bbDining += n.bbDining; sum.bbLounge += n.bbLounge; sum.other += otherCharge(r); sum.total += int(r.total_amount);
         sum.guests += guestsOf(r);
         if (r.status === "confirmed" || r.status === "completed") mon.paid += int(r.total_amount); else mon.unpaid++;
       });
-      mon.bookings += active.length; mon.guests += sum.guests; mon.dining += sum.dining; mon.lounge += sum.lounge; mon.total += sum.total;
+      mon.bookings += active.length; mon.guests += sum.guests; mon.dining += sum.dining; mon.lounge += sum.lounge; mon.bbDining += sum.bbDining; mon.bbLounge += sum.bbLounge; mon.total += sum.total;
       var excl = active.some(isExclusive);
       if (free.dining <= 0 && free.lounge <= 0) mon.full++;
       days.push({ ds: ds, list: list, active: active, free: free, sum: sum, excl: excl });
@@ -202,7 +204,9 @@
     $("dcalSum").innerHTML =
       '<div class="dcal-kpi"><span>' + esc(mName) + "</span><b>" + mon.bookings + "</b><small>bookings</small></div>" +
       '<div class="dcal-kpi"><span>Guests</span><b>' + mon.guests.toLocaleString() + "</b><small>excl. cancelled</small></div>" +
-      '<div class="dcal-kpi"><span>Cabanas sold</span><b>' + mon.dining + ' <i>D</i> · ' + mon.lounge + ' <i>L</i></b><small>of ' + stock.dining + " D / " + stock.lounge + " L a day</small></div>" +
+      '<div class="dcal-kpi"><span>Cabanas sold</span><b>' + mon.lounge + ' <i>L</i> · ' + mon.dining + ' <i>D</i>' +
+        (hasBb ? ' · ' + mon.bbLounge + ' <i>BB-L</i> · ' + mon.bbDining + ' <i>BB-D</i>' : "") + '</b><small>of ' + stock.lounge + " L / " + stock.dining + " D a day" +
+        (hasBb ? " + Beach Bar " + stock.bbLounge + " L / " + stock.bbDining + " D (staff only)" : "") + "</small></div>" +
       '<div class="dcal-kpi"><span>Paid</span><b>' + esc(peso(mon.paid)) + "</b><small>confirmed / completed</small></div>" +
       '<div class="dcal-kpi' + (mon.unpaid ? " warn" : "") + '"><span>Not yet paid</span><b>' + mon.unpaid + "</b><small>pending bookings</small></div>" +
       '<div class="dcal-kpi"><span>Sold-out days</span><b>' + mon.full + "</b><small>no cabanas left</small></div>";
@@ -213,13 +217,16 @@
     for (var b = 0; b < first; b++) g.push('<div class="dcal-cell blank"></div>');
     days.forEach(function (x) {
       var dl = level(x.free.dining, x.free.stock.dining), ll = level(x.free.lounge, x.free.stock.lounge);
+      var bbl = level(x.free.bbLounge, x.free.stock.bbLounge), bbd = level(x.free.bbDining, x.free.stock.bbDining);
       var hit = st.q && x.list.some(matches);
       var dow = utc(x.ds).getUTCDay();
       g.push('<button type="button" class="dcal-cell' + (x.ds < t ? " past" : "") + (x.ds === t ? " today" : "") + (x.excl ? " excl" : "") +
         (dow === 0 || dow === 6 ? " wkend" : "") + (hit ? " hit" : "") + (st.q && !hit ? " dim" : "") + '" data-date="' + x.ds + '" title="' +
-        esc(dayName(x.ds) + " — " + x.free.dining + " dining and " + x.free.lounge + " lounge cabanas left · " + x.active.length + " bookings, " + x.sum.guests + " guests") + '">' +
+        esc(dayName(x.ds) + " — cabanas left: " + x.free.lounge + " lounge, " + x.free.dining + " dining" +
+          (hasBb ? ", Beach Bar " + x.free.bbLounge + " lounge, " + x.free.bbDining + " dining" : "") + " · " + x.active.length + " bookings, " + x.sum.guests + " guests") + '">' +
         '<span class="dn">' + int(x.ds.slice(8)) + (x.excl ? "<em>Exclusive</em>" : x.active.length ? "<span>" + x.sum.guests + " pax</span>" : "") + "</span>" +
-        '<span class="av"><b class="' + dl + '">D ' + Math.max(x.free.dining, 0) + '</b><b class="' + ll + '">L ' + Math.max(x.free.lounge, 0) + "</b></span>" +
+        '<span class="av"><b class="' + ll + '">L ' + Math.max(x.free.lounge, 0) + '</b><b class="' + dl + '">D ' + Math.max(x.free.dining, 0) + "</b>" +
+          (hasBb ? '<b class="bb ' + bbl + '">BB-L ' + Math.max(x.free.bbLounge, 0) + '</b><b class="bb ' + bbd + '">BB-D ' + Math.max(x.free.bbDining, 0) + "</b>" : "") + "</span>" +
         (x.active.length ? '<span class="bk">' + x.active.length + " booking" + (x.active.length === 1 ? "" : "s") + "</span>" : "") +
         "</button>");
     });
@@ -238,23 +245,25 @@
           (left <= 0 ? (left < 0 ? "over by " + -left : "FULL") : left + " left") + "</b> / " + stock + "</span>";
       };
       html.push('<tr class="dcal-day' + (x.ds === t ? " is-today" : "") + (x.excl ? " is-excl" : "") + (h.dow === 0 || h.dow === 6 ? " is-wkend" : "") +
-        '" data-date="' + x.ds + '"><td colspan="15"><div class="dcal-dayhead">' +
+        '" data-date="' + x.ds + '"><td colspan="17"><div class="dcal-dayhead">' +
         '<span class="dcal-date"><b>' + h.day + "</b> " + esc(h.mon) + " <span>" + esc(h.wd) + "</span></span>" +
         (x.excl ? '<span class="pill-av excl">Exclusive booking</span>' : "") +
-        pill("Dining", f.dining, f.stock.dining, f.blocked.dining) + pill("Lounge", f.lounge, f.stock.lounge, f.blocked.lounge) +
+        pill("Lounge", f.lounge, f.stock.lounge, f.blocked.lounge) + pill("Dining", f.dining, f.stock.dining, f.blocked.dining) +
+        (hasBb ? pill("Beach Bar Lounge", f.bbLounge, f.stock.bbLounge, f.blocked.bbLounge) + pill("Beach Bar Dining", f.bbDining, f.stock.bbDining, f.blocked.bbDining) : "") +
         '<span class="dcal-cap">' + x.active.length + " booking" + (x.active.length === 1 ? "" : "s") + " · <b>" + x.sum.guests + "</b> guests</span>" +
         '<button type="button" class="btn-sm ghost dcal-add" data-date="' + x.ds + '">+ Add</button></div></td></tr>');
       shown.forEach(function (r) { html.push(rowHtml(r)); shownRows++; });
       if (addDate === x.ds) html.push(addRowHtml(x));
-      else if (!shown.length) html.push('<tr class="dcal-empty"><td colspan="15">No bookings — <button type="button" class="linklike dcal-add" data-date="' + x.ds + '">add one</button></td></tr>');
+      else if (!shown.length) html.push('<tr class="dcal-empty"><td colspan="17">No bookings — <button type="button" class="linklike dcal-add" data-date="' + x.ds + '">add one</button></td></tr>');
       if (x.active.length > 1 || (x.active.length && showOff && x.list.length > x.active.length)) {
         var s = x.sum;
         html.push('<tr class="dcal-tot"><td></td><td>TOTAL</td><td class="num">' + s.adults + '</td><td class="num">' + s.kids + '</td><td class="num">' + s.k05 +
-          '</td><td class="num">' + s.sr + '</td><td class="num">' + s.pets + '</td><td class="num">' + s.dining + '</td><td class="num">' + s.lounge +
+          '</td><td class="num">' + s.sr + '</td><td class="num">' + s.pets + '</td><td class="num cab-first">' + s.lounge + '</td><td class="num">' + s.dining +
+          '</td><td class="num cab-bb">' + (s.bbLounge || "") + '</td><td class="num cab-bb">' + (s.bbDining || "") +
           '</td><td></td><td class="num">' + (s.other ? esc(peso(s.other)) : "") + '</td><td class="num">' + esc(peso(s.total)) + '</td><td colspan="3">' + s.guests + " guests</td></tr>");
       }
     });
-    $("dcalBody").innerHTML = html.join("") || '<tr class="dcal-empty"><td colspan="15">' +
+    $("dcalBody").innerHTML = html.join("") || '<tr class="dcal-empty"><td colspan="17">' +
       (st.q ? "No match for “" + esc(st.q) + "” in " + esc(mName) + (Object.keys(hits).length ? " — the highlighted month tabs have matches." : " this year.")
         : "No day trips this month" + (showEmpty ? "" : " (tick “Empty days” to see every day)") + ".") + "</td></tr>";
     if (addDate) { var nf = $("dnName"); if (nf && document.activeElement !== nf && !addFocused) { nf.focus(); addFocused = true; } }
@@ -278,8 +287,10 @@
       '<td class="num">' + (int(r.children_0_5) || "") + "</td>" +
       '<td class="num">' + (sr || "") + "</td>" +
       '<td class="num">' + (int(r.pet_count) || "") + "</td>" +
-      '<td class="num cab-d">' + (n.dining || "") + "</td>" +
-      '<td class="num cab-l">' + (n.lounge || "") + "</td>" +
+      '<td class="num cab-first cab-l">' + (n.regLounge || "") + "</td>" +
+      '<td class="num cab-d">' + (n.regDining || "") + "</td>" +
+      '<td class="num cab-bb">' + (n.bbLounge || "") + "</td>" +
+      '<td class="num cab-bb">' + (n.bbDining || "") + "</td>" +
       "<td>" + esc(PKG[r.stay_type] || r.stay_type_label || r.stay_type || "") + "</td>" +
       '<td class="num">' + (otherCharge(r) ? esc(peso(otherCharge(r))) : "") + "</td>" +
       '<td class="num">' + (r.total_amount == null ? "—" : esc(peso(r.total_amount))) + "</td>" +
@@ -302,7 +313,8 @@
       '<option value="walk_in">Walk-in</option><option value="other">Other</option></select></td>' +
       num("dnAdults", "Adults (not counting PWD / Seniors)") + '<td class="num"><input class="n" type="number" min="0" step="1" inputmode="numeric" id="dnKids" title="Kids 6–12" placeholder="0">' +
         '<input class="n" type="number" min="0" step="1" inputmode="numeric" id="dnPwdK" title="PWD kids 6–12 — counted in Kids 6–12 (20% off, VAT-exempt; ID needed)" placeholder="PWD"></td>' + num("dnK05", "Kids 0–5") + num("dnSr", "PWD / Seniors") + num("dnPets", "Pets") +
-      num("dnDining", "Dining cabanas") + num("dnLounge", "Lounge cabanas") +
+      num("dnLounge", "Lounge cabanas") + num("dnDining", "Dining cabanas") +
+      num("dnBbLounge", "Beach Bar lounge cabanas (staff only, same price)") + num("dnBbDining", "Beach Bar dining cabanas (staff only, same price)") +
       '<td><select id="dnType">' + ["day_trip", "half_day", "flash_sale", "all_inclusive_family", "all_inclusive_barkada", "corporate", "other"].map(function (k) {
         return '<option value="' + k + '">' + esc(PKG[k]) + "</option>";
       }).join("") + "</select></td>" +
@@ -321,7 +333,7 @@
     if (!P) return null;
     var type = $("dnType").value, sr = dnVal("dnSr");
     return P.compute({ type: type, adults: dnVal("dnAdults") + sr, seniors: sr, kids612: dnVal("dnKids"), kids05: dnVal("dnK05"), pwdKids: Math.min(dnVal("dnPwdK"), dnVal("dnKids")),
-      pets: dnVal("dnPets"), dining: dnVal("dnDining"), lounge: dnVal("dnLounge") });
+      pets: dnVal("dnPets"), dining: dnVal("dnDining") + dnVal("dnBbDining"), lounge: dnVal("dnLounge") + dnVal("dnBbLounge") });
   }
   function dnReprice() {
     var b = dnBill(), tot = $("dnTotal");
@@ -335,7 +347,7 @@
   $("dcalBody").addEventListener("input", function (e) {
     if (!e.target.closest(".dcal-new")) return;
     if (e.target.id === "dnTotal") { addTotalTouched = e.target.value !== ""; return; }
-    if (/^dn(Adults|Kids|PwdK|K05|Sr|Pets|Dining|Lounge)$/.test(e.target.id)) dnReprice();
+    if (/^dn(Adults|Kids|PwdK|K05|Sr|Pets|Dining|Lounge|BbDining|BbLounge)$/.test(e.target.id)) dnReprice();
   });
   $("dcalBody").addEventListener("change", function (e) { if (e.target.id === "dnType") dnReprice(); });
   $("dcalBody").addEventListener("keydown", function (e) {
@@ -347,13 +359,15 @@
     var err = $("dnErr"), btn = $("dnSave");
     var name = $("dnName").value.trim(), ds = addDate;
     var sr = dnVal("dnSr"), adults = dnVal("dnAdults") + sr, kids = dnVal("dnKids"), k05 = dnVal("dnK05");
-    var dining = dnVal("dnDining"), lounge = dnVal("dnLounge"), type = $("dnType").value;
+    var dining = dnVal("dnDining"), lounge = dnVal("dnLounge"), bbD = dnVal("dnBbDining"), bbL = dnVal("dnBbLounge"), type = $("dnType").value;
     if (!name) { err.textContent = "Type the guest's name."; $("dnName").focus(); return; }
     if (!adults && !kids && !k05 && type.indexOf("all_inclusive") !== 0 && type !== "other") { err.textContent = "Add at least one guest — or pick Package “Other” for charges like sunscreen (no guests)."; return; }
     if (type === "other" && !adults && !kids && !k05 && !(Number($("dnTotal").value) > 0)) { err.textContent = "Type the amount of the other charge in Total."; $("dnTotal").focus(); return; }
     var free = D.cabanasFreeOn(ds);
-    if (free && (dining > free.dining || lounge > free.lounge) && !addOverOk) {
-      err.textContent = "Only " + Math.max(free.dining, 0) + " dining and " + Math.max(free.lounge, 0) + " lounge cabanas are left that day. Click “Save anyway” to overbook.";
+    if (free && (dining > free.dining || lounge > free.lounge || bbD > free.bbDining || bbL > free.bbLounge) && !addOverOk) {
+      err.textContent = "Only " + Math.max(free.lounge, 0) + " lounge and " + Math.max(free.dining, 0) + " dining cabanas are left that day" +
+        (free.stock.bbDining + free.stock.bbLounge ? " (Beach Bar: " + Math.max(free.bbLounge, 0) + " lounge, " + Math.max(free.bbDining, 0) + " dining)" : "") +
+        ". Click “Save anyway” to overbook.";
       addOverOk = true; btn.textContent = "Save anyway";
       return;
     }
@@ -364,7 +378,7 @@
       source: $("dnVia").value, stay_type: type, stay_type_label: TYPE_LABELS[type] || PKG[type], status: "pending",
       guest_name: name, guest_phone: $("dnPhone").value.trim() || null, booked_by: (D.staffName && D.staffName()) || null,
       check_in: ds, adults: adults, senior_count: sr, children_6_12: kids, children_0_5: k05, pwd_kid_count: Math.min(dnVal("dnPwdK"), kids), pet_count: dnVal("dnPets"),
-      dining_cabanas: dining, lounge_cabanas: lounge, total_amount: total,
+      dining_cabanas: dining + bbD, lounge_cabanas: lounge + bbL, bb_dining_cabanas: bbD, bb_lounge_cabanas: bbL, total_amount: total,
       staff_notes: $("dnRemarks").value.trim() || null, email_guest: false, discount_amount: 0,
     };
     if (priced) {

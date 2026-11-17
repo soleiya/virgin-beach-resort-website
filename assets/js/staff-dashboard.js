@@ -217,7 +217,7 @@
   // v74: staff-only cabanas (e.g. the Beach Bar lounge cabana) — on top of the
   // website's daily stock; only staff can book them
   var staffExtra = { dining: 0, lounge: 0 };
-  function fullStock() { return { dining: cabanaStock.dining + staffExtra.dining, lounge: cabanaStock.lounge + staffExtra.lounge }; }
+  function fullStock() { return { dining: cabanaStock.dining, lounge: cabanaStock.lounge, bbDining: staffExtra.dining, bbLounge: staffExtra.lounge }; }
   function loadCabanaOptions() {
     sb.from("booking_settings").select("dining_cabanas_per_day, lounge_cabanas_per_day").eq("id", 1).maybeSingle().then(function (res) {
       if (!res.error && res.data) cabanaStock = { dining: res.data.dining_cabanas_per_day, lounge: res.data.lounge_cabanas_per_day };
@@ -236,27 +236,42 @@
   function cabKind(c) { return String((c && c.cabana_type) || "").indexOf("lounge") === 0 ? "lounge" : "dining"; }
   // v75: Beach Bar cabanas read "BB-L1" (lounge) / "BB-D2" (dining)
   function cabShort(c) { return c ? (String(c.section).length > 1 ? "BB-" + (cabKind(c) === "lounge" ? "L" : "D") + c.number : c.section + "-" + c.number) : "?"; }
-  // how many dining / lounge cabanas a day trip has
+  // how many dining / lounge cabanas a day trip has. dining / lounge are the
+  // totals (what's priced); v77: bbDining / bbLounge are how many of them are
+  // at the Beach Bar (staff only), regDining / regLounge the regular ones.
   function countsOf(r) {
-    var a = { dining: 0, lounge: 0 };
-    (r.booking_cabanas || []).forEach(function (bc) { var c = cabanasById[bc.cabana_id]; if (c) a[cabKind(c)]++; });
-    return {
-      dining: Math.max(Number(r.dining_cabanas) || 0, Number(r.legacy_dining_cabanas) || 0, a.dining),
-      lounge: Math.max(Number(r.lounge_cabanas) || 0, Number(r.legacy_lounge_cabanas) || 0, a.lounge),
-    };
+    var a = { dining: 0, lounge: 0 }, bb = { dining: 0, lounge: 0 };
+    (r.booking_cabanas || []).forEach(function (bc) { var c = cabanasById[bc.cabana_id]; if (c) { a[cabKind(c)]++; if (c.staff_only) bb[cabKind(c)]++; } });
+    var dining = Math.max(Number(r.dining_cabanas) || 0, Number(r.legacy_dining_cabanas) || 0, a.dining);
+    var lounge = Math.max(Number(r.lounge_cabanas) || 0, Number(r.legacy_lounge_cabanas) || 0, a.lounge);
+    var bbD = Math.min(dining, Math.max(Number(r.bb_dining_cabanas) || 0, bb.dining));
+    var bbL = Math.min(lounge, Math.max(Number(r.bb_lounge_cabanas) || 0, bb.lounge));
+    return { dining: dining, lounge: lounge, bbDining: bbD, bbLounge: bbL, regDining: dining - bbD, regLounge: lounge - bbL };
   }
-  // cabanas still free on a day: stock − blocked − booked (counts)
+  // "1 lounge · 2 dining · 1 Beach Bar lounge" — the 4 day-trip categories
+  var CAB_CATS = [["regLounge", "lounge", "Lounge"], ["regDining", "dining", "Dining"], ["bbLounge", "Beach Bar lounge", "Beach Bar Lounge"], ["bbDining", "Beach Bar dining", "Beach Bar Dining"]];
+  function cabText(n, sep) {
+    return CAB_CATS.filter(function (k) { return n[k[0]]; }).map(function (k) { return n[k[0]] + " " + k[1]; }).join(sep || " · ");
+  }
+  // cabanas still free on a day: stock − blocked − booked (counts). dining /
+  // lounge = the regular cabanas (the website's stock), bbDining / bbLounge =
+  // the Beach Bar (staff only).
   function cabanasFreeOn(dateStr, excludeId) {
-    var used = { dining: 0, lounge: 0 }, blocked = { dining: 0, lounge: 0 };
+    var used = { dining: 0, lounge: 0, bbDining: 0, bbLounge: 0 }, blocked = { dining: 0, lounge: 0, bbDining: 0, bbLounge: 0 };
     if (!dateStr) return null;
     allRows.forEach(function (r) {
       if (r.check_in !== dateStr || isVillaRow(r) || releasesCabanas(r.status) || (excludeId && r.id === excludeId)) return;
-      var n = countsOf(r); used.dining += n.dining; used.lounge += n.lounge;
+      var n = countsOf(r);
+      used.dining += n.regDining; used.lounge += n.regLounge; used.bbDining += n.bbDining; used.bbLounge += n.bbLounge;
     });
-    blocksForDate(dateStr).set.forEach(function (id) { var c = cabanasById[id]; if (c) blocked[cabKind(c)]++; });
-    var stock = fullStock();
+    blocksForDate(dateStr).set.forEach(function (id) {
+      var c = cabanasById[id]; if (!c) return;
+      var k = cabKind(c); blocked[c.staff_only ? (k === "lounge" ? "bbLounge" : "bbDining") : k]++;
+    });
+    var stock = { dining: cabanaStock.dining, lounge: cabanaStock.lounge, bbDining: staffExtra.dining, bbLounge: staffExtra.lounge };
     return {
       dining: stock.dining - blocked.dining - used.dining, lounge: stock.lounge - blocked.lounge - used.lounge,
+      bbDining: stock.bbDining - blocked.bbDining - used.bbDining, bbLounge: stock.bbLounge - blocked.bbLounge - used.bbLounge,
       used: used, blocked: blocked, stock: stock,
     };
   }
@@ -734,7 +749,7 @@
     var countLine = document.createElement("div");
     countLine.style.fontSize = "0.82rem";
     countLine.style.fontWeight = "600";
-    countLine.textContent = [n.dining ? n.dining + " dining" : "", n.lounge ? n.lounge + " lounge" : ""].filter(Boolean).join(" · ");
+    countLine.textContent = cabText(n);
     td.appendChild(countLine);
     if (!assignedIds.length) {
       var na = document.createElement("div");
@@ -1301,6 +1316,8 @@
     ["pet_count", "Pets", String],
     ["dining_cabanas", "Dining cabanas", String],
     ["lounge_cabanas", "Lounge cabanas", String],
+    ["bb_lounge_cabanas", "Beach Bar lounge cabanas", String],
+    ["bb_dining_cabanas", "Beach Bar dining cabanas", String],
     ["discount_amount", "Discount", function (v) { return Number(v) > 0 ? peso(v) : "None"; }],
     ["total_amount", "Total", function (v) { return v === null || v === undefined || v === "" ? "" : peso(v); }],
     ["guest_name", "Name", String],
@@ -1637,9 +1654,17 @@
 
   // v29: cabana numbers are picked from a list (no map); the counts above
   // are what's booked and priced.
-  function assignedCount(kind) {
-    return modalCabanaIds.filter(function (id) { return cabanasById[id] && cabKind(cabanasById[id]) === kind; }).length;
+  // staffOnly: true = Beach Bar only, false = regular only, undefined = all
+  function assignedCount(kind, staffOnly) {
+    return modalCabanaIds.filter(function (id) {
+      var c = cabanasById[id];
+      return c && cabKind(c) === kind && (staffOnly === undefined || !!c.staff_only === staffOnly);
+    }).length;
   }
+  // v77: 4 day-trip categories — lounge, dining, Beach Bar lounge, Beach Bar dining
+  // (the Beach Bar ones are staff only, same price). Totals are what's priced.
+  function cabTot(kind) { return kind === "lounge" ? intVal("addLounge") + intVal("addBbLounge") : intVal("addDining") + intVal("addBbDining"); }
+  function cabField(c) { var l = cabKind(c) === "lounge"; return c.staff_only ? (l ? "addBbLounge" : "addBbDining") : (l ? "addLounge" : "addDining"); }
   function renderModalMap() {
     var dateStr = addDateEl.value;
     var h = holdsForDate(dateStr);
@@ -1653,10 +1678,14 @@
     var free = cabanasFreeOn(dateStr, editingRow && editingRow.id);
     var leftEl = $("addCabanaLeft");
     if (leftEl) {
+      var hasBb = staffExtra.dining + staffExtra.lounge > 0;
+      document.querySelectorAll("#addCabanaCounts .bb-only").forEach(function (el) { el.style.display = hasBb ? "" : "none"; });
       leftEl.textContent = free
-        ? "Dining " + Math.max(free.dining, 0) + " of " + free.stock.dining + " · Lounge " + Math.max(free.lounge, 0) + " of " + free.stock.lounge
-        : "Pick a date";
-      var over = free && (intVal("addDining") > free.dining || intVal("addLounge") > free.lounge);
+        ? "Free that day — Lounge " + Math.max(free.lounge, 0) + " of " + free.stock.lounge + " · Dining " + Math.max(free.dining, 0) + " of " + free.stock.dining +
+          (hasBb ? " · Beach Bar Lounge " + Math.max(free.bbLounge, 0) + " of " + free.stock.bbLounge + " · Beach Bar Dining " + Math.max(free.bbDining, 0) + " of " + free.stock.bbDining : "")
+        : "Free that day — pick a date";
+      var over = free && (intVal("addDining") > free.dining || intVal("addLounge") > free.lounge ||
+        intVal("addBbDining") > free.bbDining || intVal("addBbLounge") > free.bbLounge);
       leftEl.style.color = over ? "#9b2c2c" : "";
       if (over) leftEl.textContent += " — over capacity";
     }
@@ -1680,8 +1709,8 @@
         if (i >= 0) modalCabanaIds.splice(i, 1);
         else {
           modalCabanaIds.push(c.id);
-          var k = cabKind(c), field = k === "lounge" ? "addLounge" : "addDining";
-          if (assignedCount(k) > intVal(field)) $(field).value = assignedCount(k); // more assigned than booked: count up
+          var k = cabKind(c), field = cabField(c), got = assignedCount(k, !!c.staff_only);
+          if (got > intVal(field)) $(field).value = got; // more assigned than booked: count up
         }
         renderModalMap();
       },
@@ -1711,8 +1740,8 @@
         if (i >= 0) modalCabanaIds.splice(i, 1);
         else {
           modalCabanaIds.push(c.id);
-          var k = cabKind(c), field = k === "lounge" ? "addLounge" : "addDining";
-          if (assignedCount(k) > intVal(field)) $(field).value = assignedCount(k);
+          var k = cabKind(c), field = cabField(c), got = assignedCount(k, !!c.staff_only);
+          if (got > intVal(field)) $(field).value = got;
         }
         renderModalMap();
       });
@@ -1730,7 +1759,7 @@
 
   function priceSig() {
     return [$("addType").value, intVal("addAdults"), intVal("addKids"), intVal("addKids05"), intVal("addSeniors"), intVal("addPwdKids"), intVal("addPets"),
-      intVal("addDining"), intVal("addLounge"), discTypeEl.value, discValueEl.value, $("addTotal").value].join("|");
+      intVal("addDining"), intVal("addLounge"), intVal("addBbDining"), intVal("addBbLounge"), discTypeEl.value, discValueEl.value, $("addTotal").value].join("|");
   }
 
   // Everything the booking will be saved with: the rate-sheet bill, the
@@ -1767,7 +1796,7 @@
     var bill = P.compute({
       type: type, adults: intVal("addAdults"), kids612: intVal("addKids"), kids05: intVal("addKids05"),
       seniors: intVal("addSeniors"), pwdKids: intVal("addPwdKids"), pets: intVal("addPets"),
-      dining: intVal("addDining"), lounge: intVal("addLounge"),
+      dining: cabTot("dining"), lounge: cabTot("lounge"),
     });
     var out = { bill: bill, rated: bill.rated, discountType: null, discountValue: null, discount: 0, total: null, kept: false, error: null };
     if (bill.rated) {
@@ -1936,7 +1965,7 @@
   ["addAdults", "addKids", "addKids05", "addSeniors", "addPwdKids", "addPets", "addTotal", "addDiscountValue", "addDiscountReason"].forEach(function (id) {
     $(id).addEventListener("input", renderModalBill);
   });
-  ["addDining", "addLounge"].forEach(function (id) { $(id).addEventListener("input", renderModalMap); });
+  ["addDining", "addLounge", "addBbDining", "addBbLounge"].forEach(function (id) { $(id).addEventListener("input", renderModalMap); });
   ["addType", "addDiscountType"].forEach(function (id) { $(id).addEventListener("change", renderModalBill); });
   // Package "Other" = other charges (sunscreen, items, fees): a new one starts with no guests,
   // so it isn't counted as an extra adult on the Day Trip calendar.
@@ -2061,8 +2090,10 @@
       if ($("addEmailCabNo")) $("addEmailCabNo").checked = !!r.email_cabana_numbers;
       modalCabanaIds = (r.booking_cabanas || []).map(function (bc) { return bc.cabana_id; });
       var n0 = countsOf(r);
-      $("addDining").value = n0.dining;
-      $("addLounge").value = n0.lounge;
+      $("addDining").value = n0.regDining;
+      $("addLounge").value = n0.regLounge;
+      $("addBbDining").value = n0.bbDining;
+      $("addBbLounge").value = n0.bbLounge;
       openPriceSig = priceSig();
     } else {
       openPriceSig = null;
@@ -2128,8 +2159,10 @@
       pwd_kid_count: intVal("addPwdKids"),
       pet_count: intVal("addPets"),
       children_0_5: intVal("addKids05"),
-      dining_cabanas: intVal("addDining"),
-      lounge_cabanas: intVal("addLounge"),
+      dining_cabanas: cabTot("dining"),
+      lounge_cabanas: cabTot("lounge"),
+      bb_dining_cabanas: intVal("addBbDining"),
+      bb_lounge_cabanas: intVal("addBbLounge"),
       total_amount: pr.total,
       subtotal_people: b.rated && !pr.kept ? P.r2(b.subtotalPeople) : undefined,
       cabana_total: b.rated && !pr.kept ? P.r2(b.isPackage ? b.extraCabanaCost : b.cabanaTotal) : undefined,
@@ -2251,8 +2284,9 @@
       }
     }
     if ((vals.pwd_kid_count || 0) > (vals.children_6_12 || 0)) return showFormError("PWD kids are counted within Kids 6–12 — PWD kids can't be more than Kids 6–12.");
-    if (assignedCount("dining") > vals.dining_cabanas || assignedCount("lounge") > vals.lounge_cabanas) {
-      return showFormError("More cabana numbers are assigned than the booking has — untick some numbers or raise the Dining / Lounge count.");
+    if (assignedCount("dining", false) > intVal("addDining") || assignedCount("lounge", false) > intVal("addLounge") ||
+        assignedCount("dining", true) > intVal("addBbDining") || assignedCount("lounge", true) > intVal("addBbLounge")) {
+      return showFormError("More cabana numbers are assigned than the booking has — untick some numbers or raise the Lounge / Dining / Beach Bar count.");
     }
     saveBookingBtn.disabled = true;
     if (notifyEl.checked && !notifyEl.disabled) saveBookingBtn.textContent = editingRow ? "Saving & emailing…" : "Saving & sending…";
@@ -2480,7 +2514,7 @@
       if (plannerSource && plannerSource.row.id === r.id) tr.className = "is-source";
       var cabs = (r.booking_cabanas || []).map(function (bc) { return cabLabel(bc.cabana_id); }).join(", ");
       var nc = countsOf(r);
-      if (!cabs && (nc.dining || nc.lounge)) cabs = nc.dining + " dining, " + nc.lounge + " lounge (no numbers yet)";
+      if (!cabs && (nc.dining || nc.lounge)) cabs = cabText(nc, ", ") + " (no numbers yet)";
       [r.guest_name || "—", r.order_code || "—", partySize(r) + " pax", cabs || "— not assigned", STATUS_LABELS[r.status] || r.status].forEach(function (t) {
         var td = document.createElement("td"); td.textContent = t; tr.appendChild(td);
       });
@@ -2678,7 +2712,7 @@
         .join("; ");
       var ncsv = countsOf(r);
       if (ncsv.dining || ncsv.lounge) {
-        cabanaLabels = [ncsv.dining ? ncsv.dining + " dining" : "", ncsv.lounge ? ncsv.lounge + " lounge" : ""].filter(Boolean).join(", ") +
+        cabanaLabels = cabText(ncsv, ", ") +
           (cabanaLabels ? " — " + cabanaLabels : "");
       }
       if (r.stay_type === "overnight" && window.VBRVillas) cabanaLabels = window.VBRVillas.labelsFor(r).join("; ");
@@ -2987,7 +3021,7 @@
     openBreakdown: openBreakdown, payMethodName: payMethodName, listRows: function () { return renderQueue; },
     section: function () { return activeSection; }, sort: function () { return { field: sortField, dir: sortDir }; }, cabanaLabel: function (id) { return cabanasById[id] ? cabanasById[id].label : ""; },
     cabanas: function () { return cabanasList; }, cabanaById: function (id) { return cabanasById[id]; },
-    cabKind: cabKind, cabShort: cabShort, countsOf: countsOf, cabanasFreeOn: cabanasFreeOn, blocksForDate: blocksForDate,
+    cabKind: cabKind, cabShort: cabShort, countsOf: countsOf, cabText: cabText, CAB_CATS: CAB_CATS, cabanasFreeOn: cabanasFreeOn, blocksForDate: blocksForDate,
     cabanaListText: cabanaListText, releasesCabanas: releasesCabanas, isVillaRow: isVillaRow,
     stock: function () { return fullStock(); }, staffExtra: function () { return staffExtra; }, setStock: function (s) { cabanaStock = s; },
   };
