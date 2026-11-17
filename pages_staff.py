@@ -172,7 +172,11 @@ html = """<!doctype html>
   .dcal-table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
   .dcal-table th { position: sticky; top: 0; z-index: 3; background: var(--sand-deep); text-align: left; padding: 7px 8px; font-size: 0.68rem; letter-spacing: .05em; text-transform: uppercase; white-space: nowrap; border-bottom: 1px solid var(--line); }
   .dcal-table th.num { text-align: right; }
-  .dcal-table th.cab-d, .dcal-table td.cab-d { box-shadow: inset 2px 0 0 var(--line); }
+  .dcal-table th.cab-first, .dcal-table td.cab-first { box-shadow: inset 2px 0 0 var(--line); }
+  .dcal-table th.cab-bb, .dcal-table td.cab-bb { background: rgba(176, 132, 64, .07); }
+  .dcal-table th.cab-bb { background: var(--sand-deep); }
+  .dcal-cell .av b.bb { font-weight: 700; opacity: .9; }
+  @media (max-width: 560px) { #addCabanaCounts.modal-row.four { grid-template-columns: 1fr 1fr; } }
   .dcal-table td { padding: 6px 8px; border-top: 1px solid var(--line); vertical-align: top; }
   .dcal-table .num { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
   .dcal-day td { background: var(--dc-day); border-top: 2px solid var(--ink-soft); padding: 6px 8px; position: sticky; top: 30px; z-index: 2; }
@@ -947,13 +951,13 @@ html = """<!doctype html>
       <div class="dcal-kpis" id="dcalSum"></div>
       <div class="dcal-grid-wrap">
         <div class="dcal-grid" id="dcalGrid"></div>
-        <div class="dcal-legend"><span><b>D</b> Dining &middot; <b>L</b> Lounge cabanas still free that day:</span><span><i class="ok"></i>plenty</span><span><i class="low"></i>few left (&le; 25%)</span><span><i class="full"></i>full</span><span><i class="ex"></i>exclusive booking</span><span>Click a day to jump to it.</span></div>
+        <div class="dcal-legend"><span><b>L</b> Lounge &middot; <b>D</b> Dining &middot; <b>BB-L</b> / <b>BB-D</b> Beach Bar lounge / dining (staff only) cabanas still free that day:</span><span><i class="ok"></i>plenty</span><span><i class="low"></i>few left (&le; 25%)</span><span><i class="full"></i>full</span><span><i class="ex"></i>exclusive booking</span><span>Click a day to jump to it.</span></div>
       </div>
       <div class="dcal-scroll">
         <table class="dcal-table">
           <thead><tr>
             <th>Booker</th><th>Guest</th><th class="num">Adult</th><th class="num">Kids</th><th class="num">0&ndash;5</th><th class="num">PWD | Sr</th><th class="num">Pet</th>
-            <th class="num cab-d">Dining</th><th class="num">Lounge</th><th>Package</th><th class="num" title="Other charges (sunscreen, items, fees) — Package “Other” with no guests; not counted as guests">Other ₱</th><th class="num">Total</th><th>Status</th><th>Remarks</th><th title="Internal use only">Cabana no. <span style="font-weight:400;text-transform:none;letter-spacing:0;">(internal)</span></th>
+            <th class="num cab-first">Lounge</th><th class="num">Dining</th><th class="num cab-bb" title="Beach Bar lounge cabanas — staff only, same price">BB Lounge</th><th class="num cab-bb" title="Beach Bar dining cabanas — staff only, same price">BB Dining</th><th>Package</th><th class="num" title="Other charges (sunscreen, items, fees) — Package “Other” with no guests; not counted as guests">Other ₱</th><th class="num">Total</th><th>Status</th><th>Remarks</th><th title="Internal use only">Cabana no. <span style="font-weight:400;text-transform:none;letter-spacing:0;">(internal)</span></th>
           </tr></thead>
           <tbody id="dcalBody"></tbody>
         </table>
@@ -1169,20 +1173,25 @@ html = """<!doctype html>
         </div>
         <p class="party-line" id="addPartyLine"></p>
       </div>
-      <div class="modal-row three" id="addCabanaCounts">
-        <div class="modal-field" style="margin-bottom:0;">
-          <label for="addDining">Dining cabanas</label>
-          <input id="addDining" type="number" min="0" max="60" value="0">
-        </div>
+      <div class="modal-row four" id="addCabanaCounts">
         <div class="modal-field" style="margin-bottom:0;">
           <label for="addLounge">Lounge cabanas</label>
           <input id="addLounge" type="number" min="0" max="20" value="0">
         </div>
         <div class="modal-field" style="margin-bottom:0;">
-          <label>Free that day</label>
-          <p class="modal-hint" id="addCabanaLeft" style="margin-top:8px;">Pick a date</p>
+          <label for="addDining">Dining cabanas</label>
+          <input id="addDining" type="number" min="0" max="60" value="0">
+        </div>
+        <div class="modal-field bb-only" style="margin-bottom:0;">
+          <label for="addBbLounge" title="Staff only · same price as a lounge cabana">Beach Bar Lounge</label>
+          <input id="addBbLounge" type="number" min="0" max="10" value="0">
+        </div>
+        <div class="modal-field bb-only" style="margin-bottom:0;">
+          <label for="addBbDining" title="Staff only · same price as a dining cabana">Beach Bar Dining</label>
+          <input id="addBbDining" type="number" min="0" max="10" value="0">
         </div>
       </div>
+      <p class="modal-hint" id="addCabanaLeft" style="margin:6px 0 10px;">Pick a date</p>
       <div id="addNoCabanaWrap" style="margin:-4px 0 10px;">
         <label class="modal-check"><input type="checkbox" id="addNoCabana"> Entrance only &mdash; no cabana</label>
         <div class="nocab-why" id="addNoCabanaWhy" hidden>
