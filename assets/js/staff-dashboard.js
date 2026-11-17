@@ -234,7 +234,8 @@
     }, function () { return []; });
   }
   function cabKind(c) { return String((c && c.cabana_type) || "").indexOf("lounge") === 0 ? "lounge" : "dining"; }
-  function cabShort(c) { return c ? (String(c.section).length > 1 ? c.section : c.section + "-" + c.number) : "?"; }
+  // v75: Beach Bar cabanas read "BB-L1" (lounge) / "BB-D2" (dining)
+  function cabShort(c) { return c ? (String(c.section).length > 1 ? "BB-" + (cabKind(c) === "lounge" ? "L" : "D") + c.number : c.section + "-" + c.number) : "?"; }
   // how many dining / lounge cabanas a day trip has
   function countsOf(r) {
     var a = { dining: 0, lounge: 0 };
