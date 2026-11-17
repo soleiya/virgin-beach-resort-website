@@ -249,6 +249,10 @@ html = """<!doctype html>
   .cab-chip.is-on { background: var(--lagoon, #1f7a72); color: #fff; border-color: transparent; }
   .cab-chip.is-taken { opacity: .38; cursor: not-allowed; text-decoration: line-through; }
   .cab-chip.is-blocked { background: repeating-linear-gradient(45deg, #eee, #eee 4px, #ddd 4px, #ddd 8px); color: #777; cursor: not-allowed; }
+  .offmap-cabs { display: flex; flex-direction: column; gap: 6px; margin: 8px 0 2px; padding: 8px 10px; border: 1px dashed var(--line); border-radius: 10px; background: var(--surface); }
+  .offmap-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+  .offmap-lbl { font-size: .78rem; font-weight: 700; color: var(--ink-soft); min-width: 150px; } .offmap-lbl i { font-weight: 400; }
+  .dcal-toassign { cursor: pointer; text-decoration: underline dotted; }
   .cd-h { font-size: 0.72rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-soft); margin: 6px 0 10px; font-weight: 700; }
   .cd-hint { font-size: 0.74rem; }
   .cd-types { display: flex; flex-wrap: wrap; gap: 4px 16px; }
