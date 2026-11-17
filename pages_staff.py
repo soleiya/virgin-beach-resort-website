@@ -1643,7 +1643,7 @@ html = """<!doctype html>
   <div class="dcal-pop-head"><strong id="dcalPopTitle"></strong><span class="muted" id="dcalPopSub"></span></div>
   <div class="cab-assign" id="dcalPopList"></div>
   <p class="modal-hint" id="dcalPopNote"></p>
-  <div class="dcal-pop-actions"><button type="button" class="btn-sm ghost" id="dcalPopCancel">Cancel</button> <button type="button" class="btn-sm primary" id="dcalPopSave">Save &amp; email guest</button></div>
+  <div class="dcal-pop-actions"><button type="button" class="btn-sm ghost" id="dcalPopCancel">Cancel</button> <button type="button" class="btn-sm primary" id="dcalPopSave">Save</button></div>
 </div>
 
 <div class="modal-backdrop" id="windowModalBackdrop">
