@@ -214,6 +214,10 @@
   // v29: day-trip cabanas are booked by count (dining / lounge); the numbers
   // (booking_cabanas) are assigned by staff whenever they're ready.
   var cabanaStock = { dining: 43, lounge: 6 };
+  // v74: staff-only cabanas (e.g. the Beach Bar lounge cabana) — on top of the
+  // website's daily stock; only staff can book them
+  var staffExtra = { dining: 0, lounge: 0 };
+  function fullStock() { return { dining: cabanaStock.dining + staffExtra.dining, lounge: cabanaStock.lounge + staffExtra.lounge }; }
   function loadCabanaOptions() {
     sb.from("booking_settings").select("dining_cabanas_per_day, lounge_cabanas_per_day").eq("id", 1).maybeSingle().then(function (res) {
       if (!res.error && res.data) cabanaStock = { dining: res.data.dining_cabanas_per_day, lounge: res.data.lounge_cabanas_per_day };
@@ -224,11 +228,13 @@
       cabanasById = {};
       cabanasList = cabanas;
       cabanas.forEach(function (c) { cabanasById[c.id] = c; });
+      staffExtra = { dining: 0, lounge: 0 };
+      cabanas.forEach(function (c) { if (c.staff_only) staffExtra[cabKind(c)]++; });
       return cabanas;
     }, function () { return []; });
   }
   function cabKind(c) { return String((c && c.cabana_type) || "").indexOf("lounge") === 0 ? "lounge" : "dining"; }
-  function cabShort(c) { return c ? c.section + "-" + c.number : "?"; }
+  function cabShort(c) { return c ? (String(c.section).length > 1 ? c.section : c.section + "-" + c.number) : "?"; }
   // how many dining / lounge cabanas a day trip has
   function countsOf(r) {
     var a = { dining: 0, lounge: 0 };
@@ -247,9 +253,10 @@
       var n = countsOf(r); used.dining += n.dining; used.lounge += n.lounge;
     });
     blocksForDate(dateStr).set.forEach(function (id) { var c = cabanasById[id]; if (c) blocked[cabKind(c)]++; });
+    var stock = fullStock();
     return {
-      dining: cabanaStock.dining - blocked.dining - used.dining, lounge: cabanaStock.lounge - blocked.lounge - used.lounge,
-      used: used, blocked: blocked, stock: cabanaStock,
+      dining: stock.dining - blocked.dining - used.dining, lounge: stock.lounge - blocked.lounge - used.lounge,
+      used: used, blocked: blocked, stock: stock,
     };
   }
 
@@ -2949,6 +2956,6 @@
     cabanas: function () { return cabanasList; }, cabanaById: function (id) { return cabanasById[id]; },
     cabKind: cabKind, cabShort: cabShort, countsOf: countsOf, cabanasFreeOn: cabanasFreeOn, blocksForDate: blocksForDate,
     cabanaListText: cabanaListText, releasesCabanas: releasesCabanas, isVillaRow: isVillaRow,
-    stock: function () { return cabanaStock; }, setStock: function (s) { cabanaStock = s; },
+    stock: function () { return fullStock(); }, staffExtra: function () { return staffExtra; }, setStock: function (s) { cabanaStock = s; },
   };
 })();

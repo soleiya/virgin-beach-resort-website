@@ -455,7 +455,8 @@
       if (!n[kind] && !pickedOf(kind)) return; // only the types this group booked
       var box = document.createElement("div");
       box.className = "cab-assign-group";
-      box.innerHTML = "<h4>Section " + esc(key.split("|")[0]) + " · " + (kind === "lounge" ? "Lounge" : "Dining") + "</h4>";
+      var sec = key.split("|")[0];
+      box.innerHTML = "<h4>" + (sec.length > 1 ? esc(sec) + " (staff only)" : "Section " + esc(sec)) + " · " + (kind === "lounge" ? "Lounge" : "Dining") + "</h4>";
       var wrap = document.createElement("div");
       wrap.className = "cab-assign-chips";
       groups[key].slice().sort(function (a, b) { return a.number - b.number; }).forEach(function (c) {
