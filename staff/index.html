@@ -227,6 +227,10 @@
   .cab-chip.is-on { background: var(--lagoon, #1f7a72); color: #fff; border-color: transparent; }
   .cab-chip.is-taken { opacity: .38; cursor: not-allowed; text-decoration: line-through; }
   .cab-chip.is-blocked { background: repeating-linear-gradient(45deg, #eee, #eee 4px, #ddd 4px, #ddd 8px); color: #777; cursor: not-allowed; }
+  .offmap-cabs { display: flex; flex-direction: column; gap: 6px; margin: 8px 0 2px; padding: 8px 10px; border: 1px dashed var(--line); border-radius: 10px; background: var(--surface); }
+  .offmap-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+  .offmap-lbl { font-size: .78rem; font-weight: 700; color: var(--ink-soft); min-width: 150px; } .offmap-lbl i { font-weight: 400; }
+  .dcal-toassign { cursor: pointer; text-decoration: underline dotted; }
   .cd-h { font-size: 0.72rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-soft); margin: 6px 0 10px; font-weight: 700; }
   .cd-hint { font-size: 0.74rem; }
   .cd-types { display: flex; flex-wrap: wrap; gap: 4px 16px; }
@@ -1799,16 +1803,16 @@
 
 <script src="../assets/js/vendor/supabase-js-2.117.3.js"></script>
 <script src="../assets/js/booking-config.js?v=c116a3a0ae"></script>
-<script src="../assets/js/cabana-map.js?v=3741396eca"></script>
+<script src="../assets/js/cabana-map.js?v=2b008d5e7b"></script>
 <script src="../assets/js/pricing.js?v=43cc9875e9"></script>
-<script src="../assets/js/staff-dashboard.js?v=f0048347a6"></script>
+<script src="../assets/js/staff-dashboard.js?v=87ef20f867"></script>
 <script src="../assets/js/staff-email.js?v=ac542441c2"></script>
 <script src="../assets/js/staff-villas.js?v=1e683324d7"></script>
 <script src="../assets/js/staff-payments.js?v=d563661be7"></script>
 <script src="../assets/js/staff-activity.js?v=2d41dd54bc"></script>
 <script src="../assets/js/staff-website.js?v=24ff44d3e2"></script>
 <script src="../assets/js/staff-codes.js?v=67a9e57cdc"></script>
-<script src="../assets/js/staff-daycal.js?v=df6469d796"></script>
+<script src="../assets/js/staff-daycal.js?v=46ed065c42"></script>
 <script src="../assets/js/staff-summary.js?v=9596d523a5"></script>
 <script src="../assets/js/staff-accounting.js?v=7a2f80d1b0"></script>
 <script src="../assets/js/staff-exec.js?v=720e9a00ac"></script>
