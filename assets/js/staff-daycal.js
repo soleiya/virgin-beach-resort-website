@@ -479,10 +479,13 @@
     });
     var dPick = pickedOf("dining"), lPick = pickedOf("lounge");
     var over = dPick > n.dining || lPick > n.lounge;
+    var willEmail = !!r.email_cabana_numbers && EMAIL_RE.test(String(r.guest_email || "").trim());
     $("dcalPopSave").disabled = over;
     $("dcalPopNote").textContent = "Assigned " + dPick + " of " + n.dining + " dining" + (n.lounge || lPick ? ", " + lPick + " of " + n.lounge + " lounge" : "") +
       (over ? " — more than this booking has. Untick some, or raise its Dining / Lounge count with ✎ Edit first." : "") +
-      (EMAIL_RE.test(String(r.guest_email || "").trim()) ? " The guest is emailed the numbers." : " No guest email on this booking — nobody is emailed.");
+      (willEmail ? " The guest is emailed the new cabana numbers." : " For the team only — the guest isn't emailed.");
+    // v76: "Save" unless the guest really gets an email (valid email AND "email cabana numbers" ticked on the booking)
+    $("dcalPopSave").textContent = willEmail ? "Save & email guest" : "Save";
   }
   if (pop) $("dcalPopSave").addEventListener("click", function () {
     var r = popRow;
