@@ -173,6 +173,7 @@
   global.VBRCabanaMap = {
     TYPE_LABELS: TYPE_LABELS,
     loadCabanas: loadCabanas,
+    layoutFor: layoutFor,
     loadHolds: loadHolds,
     render: render,
   };

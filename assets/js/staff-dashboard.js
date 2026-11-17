@@ -1686,6 +1686,38 @@
         renderModalMap();
       },
     });
+    // v76: cabanas that aren't on the map artwork (staff-only Beach Bar) — picked here, same rules
+    var offMap = cabanasList.filter(function (c) { return !window.VBRCabanaMap.layoutFor || !window.VBRCabanaMap.layoutFor(c); });
+    if (offMap.length) {
+      var box = document.createElement("div");
+      box.className = "offmap-cabs";
+      var groups = {};
+      offMap.forEach(function (c) { var k = c.section + "|" + cabKind(c); (groups[k] = groups[k] || []).push(c); });
+      box.innerHTML = Object.keys(groups).sort(function (a, b) { return a.split("|")[1] < b.split("|")[1] ? 1 : -1; }).map(function (k) {
+        var sec = k.split("|")[0], kind = k.split("|")[1];
+        return '<div class="offmap-row"><span class="offmap-lbl">' + esc(sec) + " · " + (kind === "lounge" ? "Lounge" : "Dining") + ' <i>(staff only)</i></span>' +
+          groups[k].sort(function (a, b) { return a.number - b.number; }).map(function (c) {
+            var on = modalCabanaIds.indexOf(c.id) >= 0, taken = !on && h.held.has(c.id), blk = h.blocked && h.blocked.has(c.id);
+            return '<button type="button" class="cab-chip' + (kind === "lounge" ? " lounge" : "") + (on ? " is-on" : "") + (taken ? (blk ? " is-blocked" : " is-taken") : "") +
+              '" data-offmap="' + esc(c.id) + '"' + (taken ? " disabled" : "") + ' title="' + esc(c.label + (h.info[c.id] ? " — " + h.info[c.id] : "")) + '">' + esc(cabShort(c)) + "</button>";
+          }).join("") + "</div>";
+      }).join("");
+      box.addEventListener("click", function (e) {
+        var b = e.target.closest("[data-offmap]");
+        if (!b || b.disabled) return;
+        var c = cabanasById[b.getAttribute("data-offmap")];
+        if (!c) return;
+        var i = modalCabanaIds.indexOf(c.id);
+        if (i >= 0) modalCabanaIds.splice(i, 1);
+        else {
+          modalCabanaIds.push(c.id);
+          var k = cabKind(c), field = k === "lounge" ? "addLounge" : "addDining";
+          if (assignedCount(k) > intVal(field)) $(field).value = assignedCount(k);
+        }
+        renderModalMap();
+      });
+      addMapEl.appendChild(box);
+    }
     renderModalSelected();
   }
 

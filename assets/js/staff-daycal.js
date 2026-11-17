@@ -285,9 +285,9 @@
       '<td class="num">' + (r.total_amount == null ? "—" : esc(peso(r.total_amount))) + "</td>" +
       '<td><span class="status-badge readonly status-' + esc(r.status) + '">' + esc(D.statusLabel(r)) + "</span></td>" +
       '<td class="dcal-remarks">' + esc(remarks(r)) + "</td>" +
-      '<td class="dcal-cabno">' + tags + (off || !needs || (past && !ids.length) ? "" :
-        ' <button type="button" class="btn-sm ghost dcal-assign" data-id="' + esc(r.id) + '">' + (ids.length ? "Change" : "Assign") + "</button>") +
-      (!off && !past && needs && ids.length < needs ? '<span class="muted">' + (needs - ids.length) + " to assign</span>" : "") + "</td></tr>";
+      // v76: cabana numbers are assigned in the booking window (with the emails and activity log) — click the row
+      '<td class="dcal-cabno">' + tags +
+      (!off && !past && needs && ids.length < needs ? '<span class="muted dcal-toassign" title="Open the booking to assign">' + (needs - ids.length) + " to assign</span>" : "") + "</td></tr>";
   }
 
   // ------------------------------------------------------------- quick add (a new row on the day)
@@ -407,7 +407,13 @@
     var as = e.target.closest(".dcal-assign");
     if (as) { e.stopPropagation(); openPop(rowById(as.getAttribute("data-id")), as); return; }
     var tr = e.target.closest(".dcal-row");
-    if (tr) { var r = rowById(tr.getAttribute("data-id")); if (r) D.openModal(r); }
+    if (tr) {
+      var r = rowById(tr.getAttribute("data-id"));
+      if (!r) return;
+      D.openModal(r);
+      // clicked the Cabana no. cell: go straight to the cabana picker
+      if (e.target.closest(".dcal-cabno")) setTimeout(function () { var m = $("addCabanaMap"); if (m) m.scrollIntoView({ block: "center", behavior: "smooth" }); }, 250);
+    }
   });
 
   // ------------------------------------------------------------- assign popover
