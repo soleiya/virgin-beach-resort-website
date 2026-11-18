@@ -1314,6 +1314,7 @@
     ["children_6_12", "Kids (6–12)", String],
     ["children_0_5", "Kids (0–5)", String],
     ["pet_count", "Pets", String],
+    ["driver_count", "Drivers", String],
     ["dining_cabanas", "Dining cabanas", String],
     ["lounge_cabanas", "Lounge cabanas", String],
     ["bb_lounge_cabanas", "Beach Bar lounge cabanas", String],
@@ -1758,7 +1759,7 @@
   var openPriceSig = null; // pricing inputs when an existing booking was opened
 
   function priceSig() {
-    return [$("addType").value, intVal("addAdults"), intVal("addKids"), intVal("addKids05"), intVal("addSeniors"), intVal("addPwdKids"), intVal("addPets"),
+    return [$("addType").value, intVal("addAdults"), intVal("addKids"), intVal("addKids05"), intVal("addSeniors"), intVal("addPwdKids"), intVal("addPets"), intVal("addDrivers"),
       intVal("addDining"), intVal("addLounge"), intVal("addBbDining"), intVal("addBbLounge"), discTypeEl.value, discValueEl.value, $("addTotal").value].join("|");
   }
 
@@ -1795,7 +1796,7 @@
     var type = $("addType").value;
     var bill = P.compute({
       type: type, adults: intVal("addAdults"), kids612: intVal("addKids"), kids05: intVal("addKids05"),
-      seniors: intVal("addSeniors"), pwdKids: intVal("addPwdKids"), pets: intVal("addPets"),
+      seniors: intVal("addSeniors"), pwdKids: intVal("addPwdKids"), pets: intVal("addPets"), drivers: intVal("addDrivers"),
       dining: cabTot("dining"), lounge: cabTot("lounge"),
     });
     var out = { bill: bill, rated: bill.rated, discountType: null, discountValue: null, discount: 0, total: null, kept: false, error: null };
@@ -1843,6 +1844,7 @@
       if (b.extraPax) L.push(billRow(b.extraPax + " extra guest" + (b.extraPax === 1 ? "" : "s"), peso(b.extraPaxCost)));
       if (b.pets) L.push(billRow(b.pets + " pet" + (b.pets === 1 ? "" : "s"), peso(b.extraPetCost)));
       if (b.extraCabanas) L.push(billRow(b.extraCabanas + " extra cabana" + (b.extraCabanas === 1 ? "" : "s"), peso(b.extraCabanaCost)));
+      if (b.drivers) L.push(billRow(b.drivers + " driver" + (b.drivers === 1 ? "" : "s") + " × " + peso(b.driverRate), peso(b.driverCost)));
     } else {
       if (b.regularAdults) L.push(billRow(b.regularAdults + " adult" + (b.regularAdults === 1 ? "" : "s") + " × " + peso(b.rate.adult), peso(b.regularAdults * b.rate.adult)));
       if (b.seniors) L.push(billRow(b.seniors + " senior/PWD × " + peso(b.seniorRate) + " <em>(20% off)</em>", peso(b.seniors * b.seniorRate)));
@@ -1853,6 +1855,7 @@
       if (b.kids05) L.push(billRow(b.kids05 + " child" + (b.kids05 === 1 ? "" : "ren") + " (0–5)", "Free"));
       if (b.pets) L.push(billRow(b.pets + " pet" + (b.pets === 1 ? "" : "s") + " × " + peso(b.rate.pet), peso(b.petCost)));
       (b.cabanaLines || []).forEach(function (l) { L.push(billRow(l.qty + " × " + l.label + (l.qty === 1 ? "" : "s") + " × " + peso(l.rate), peso(l.amount))); });
+      if (b.drivers) L.push(billRow(b.drivers + " driver" + (b.drivers === 1 ? "" : "s") + " × " + peso(b.driverRate), peso(b.driverCost)));
     }
     return L;
   }
@@ -1920,6 +1923,8 @@
     if (a) bits.push(plural(a, "adult", "adults") + (sr ? sr === a ? (a === 1 ? " — Senior/PWD" : " — all Senior/PWD") : " (" + sr + " Senior/PWD, " + (a - sr) + " regular)" : ""));
     if (k) bits.push(plural(k, "kid 6–12", "kids 6–12") + (pk ? " (" + pk + " PWD)" : ""));
     if (b) bits.push(plural(b, "kid 0–5", "kids 0–5") + " (free)");
+    var dr = intVal("addDrivers");
+    if (dr) bits.push("+ " + plural(dr, "driver", "drivers") + " (not counted as guests)");
     var ids = sr + pk;
     el.innerHTML = total ? "<b>" + plural(total, "guest", "guests") + "</b> · " + esc(bits.join(" · ")) +
       (ids ? ' <span class="sr-tag">' + plural(ids, "Senior/PWD ID", "Senior/PWD IDs") + " needed · discount on their meals</span>" : "")
@@ -1962,7 +1967,7 @@
     });
   });
 
-  ["addAdults", "addKids", "addKids05", "addSeniors", "addPwdKids", "addPets", "addTotal", "addDiscountValue", "addDiscountReason"].forEach(function (id) {
+  ["addAdults", "addKids", "addKids05", "addSeniors", "addPwdKids", "addPets", "addDrivers", "addTotal", "addDiscountValue", "addDiscountReason"].forEach(function (id) {
     $(id).addEventListener("input", renderModalBill);
   });
   ["addDining", "addLounge", "addBbDining", "addBbLounge"].forEach(function (id) { $(id).addEventListener("input", renderModalMap); });
@@ -2084,6 +2089,7 @@
       $("addSeniors").value = r.senior_count || 0;
       if ($("addPwdKids")) $("addPwdKids").value = r.pwd_kid_count || 0;
       $("addPets").value = r.pet_count || 0;
+      $("addDrivers").value = r.driver_count || 0;
       $("addTotal").value = r.total_amount != null ? r.total_amount : "";
       $("addNotes").value = r.notes || "";
       $("addStaffNotes").value = r.staff_notes || "";
@@ -2158,6 +2164,7 @@
       senior_count: intVal("addSeniors"),
       pwd_kid_count: intVal("addPwdKids"),
       pet_count: intVal("addPets"),
+      driver_count: intVal("addDrivers"),
       children_0_5: intVal("addKids05"),
       dining_cabanas: cabTot("dining"),
       lounge_cabanas: cabTot("lounge"),
@@ -2949,7 +2956,7 @@
       });
     } else {
       var nb = countsOf(r);
-      var b = P.compute({ type: r.stay_type, adults: r.adults, kids612: r.children_6_12, kids05: r.children_0_5, seniors: r.senior_count, pwdKids: r.pwd_kid_count, pets: r.pet_count, dining: nb.dining, lounge: nb.lounge });
+      var b = P.compute({ type: r.stay_type, adults: r.adults, kids612: r.children_6_12, kids05: r.children_0_5, seniors: r.senior_count, pwdKids: r.pwd_kid_count, pets: r.pet_count, drivers: r.driver_count, dining: nb.dining, lounge: nb.lounge });
       if (!b.rated) {
         bdBody.innerHTML = '<div class="bill-lines">' + billRow(esc(FULL_TYPE_NAMES[r.stay_type] || r.stay_type || "Booking"), "Quoted by hand") + "</div>" + foot(null);
       } else {

@@ -21,6 +21,9 @@
     day_trip: { adult: 1250, child612: 825, child05: 0, pet: 750, dining: 1500, lounge: 2000 },
     half_day: { adult: 800, child612: 550, child05: 0, pet: 375, dining: 750, lounge: 1000 },
   };
+  // v78: drivers of the guests (staff bookings) — ₱250 each, on every rate
+  // sheet. Not counted as guests or toward cabana seats.
+  var DRIVER_RATE = 250;
   var PACKAGE_PRICING = {
     all_inclusive_family: { base: 5000, includedPax: 4, includedCabanas: 1, addlAdult: 1250, addlChild: 825, addlPet: 750, addlCabana: 1000 },
     all_inclusive_barkada: { base: 10000, includedPax: 10, includedCabanas: 1, addlAdult: 1250, addlChild: 825, addlPet: 750, addlCabana: 1000 },
@@ -51,6 +54,7 @@
     var seniors = Math.min(int(p.seniors), adults);
     var pwdKids = Math.min(int(p.pwdKids), kids612); // PWD children 6–12
     var pets = int(p.pets);
+    var drivers = int(p.drivers), driverCost = drivers * DRIVER_RATE;
     var cabanas = p.cabanas || [];
     var dining = p.dining != null || p.lounge != null ? int(p.dining) : cabanas.filter(function (c) { return !isLounge(c); }).length;
     var lounge = p.dining != null || p.lounge != null ? int(p.lounge) : cabanas.filter(isLounge).length;
@@ -64,7 +68,7 @@
     if (dining) cabanaLines.push({ kind: "dining", label: "Dining Cabana", qty: dining, rate: r0.dining, amount: dining * r0.dining });
     if (lounge) cabanaLines.push({ kind: "lounge", label: "Lounge Cabana", qty: lounge, rate: r0.lounge, amount: lounge * r0.lounge });
     var base = { type: type, adults: adults, kids612: kids612, kids05: kids05, seniors: seniors, pwdKids: pwdKids, pets: pets,
-      regularAdults: regularAdults, totalGuests: totalGuests, cabanaTotal: cabanaTotal, totalCapacity: totalCapacity,
+      regularAdults: regularAdults, totalGuests: totalGuests, drivers: drivers, driverRate: DRIVER_RATE, driverCost: driverCost, cabanaTotal: cabanaTotal, totalCapacity: totalCapacity,
       dining: dining, lounge: lounge, cabanaCount: dining + lounge, cabanaLines: cabanaLines,
       cabanaPrice: cp, cabanas: cabanas, rated: hasRateSheet(type) };
 
@@ -78,7 +82,7 @@
         extraPax: extraPax, extraPaxCost: extraPaxCost, extraPetCost: extraPetCost,
         extraCabanas: extraCabanas, extraCabanaCost: extraCabanaCost,
         subtotalPeople: pkg.base + extraPaxCost, seniorDiscount: 0,
-        total: pkg.base + extraPaxCost + extraPetCost + extraCabanaCost,
+        total: pkg.base + extraPaxCost + extraPetCost + extraCabanaCost + driverCost,
       });
     }
     var rate = PRICING[type] || PRICING.day_trip;
@@ -88,7 +92,7 @@
     return Object.assign(base, {
       isPackage: false, rate: rate, seniorRate: seniorRate, pwdKidRate: pwdKidRate, subtotalPeople: subtotalPeople, petCost: petCost,
       seniorDiscount: r2(seniors * (rate.adult - seniorRate) + pwdKids * (rate.child612 - pwdKidRate)),
-      total: r2(subtotalPeople + petCost + cabanaTotal),
+      total: r2(subtotalPeople + petCost + cabanaTotal + driverCost),
     });
   }
 
@@ -103,7 +107,7 @@
   }
 
   window.VBRPricing = {
-    PRICING: PRICING, PACKAGE_PRICING: PACKAGE_PRICING, CAPACITY: CAPACITY, SENIOR_DISCOUNT_RATE: SENIOR_DISCOUNT_RATE, seniorPrice: seniorPrice,
+    PRICING: PRICING, PACKAGE_PRICING: PACKAGE_PRICING, DRIVER_RATE: DRIVER_RATE, CAPACITY: CAPACITY, SENIOR_DISCOUNT_RATE: SENIOR_DISCOUNT_RATE, seniorPrice: seniorPrice,
     hasRateSheet: hasRateSheet, cabanaPrice: cabanaPrice, compute: compute, discountAmount: discountAmount, r2: r2,
   };
 })();

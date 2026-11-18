@@ -185,11 +185,11 @@
       var active = list.filter(function (r) { return !D.releasesCabanas(r.status); });
       var free = D.cabanasFreeOn(ds) || { dining: stock.dining, lounge: stock.lounge, bbDining: stock.bbDining, bbLounge: stock.bbLounge, stock: stock,
         blocked: { dining: 0, lounge: 0, bbDining: 0, bbLounge: 0 } };
-      var sum = { adults: 0, kids: 0, k05: 0, sr: 0, pets: 0, dining: 0, lounge: 0, bbDining: 0, bbLounge: 0, other: 0, total: 0, guests: 0 };
+      var sum = { adults: 0, kids: 0, k05: 0, sr: 0, pets: 0, drivers: 0, dining: 0, lounge: 0, bbDining: 0, bbLounge: 0, other: 0, total: 0, guests: 0 };
       active.forEach(function (r) {
         var n = D.countsOf(r), sr = int(r.senior_count);
         sum.adults += Math.max(int(r.adults) - sr, 0); sum.sr += sr; sum.kids += int(r.children_6_12); sum.k05 += int(r.children_0_5);
-        sum.pets += int(r.pet_count); sum.dining += n.regDining; sum.lounge += n.regLounge; sum.bbDining += n.bbDining; sum.bbLounge += n.bbLounge; sum.other += otherCharge(r); sum.total += int(r.total_amount);
+        sum.pets += int(r.pet_count); sum.drivers += int(r.driver_count); sum.dining += n.regDining; sum.lounge += n.regLounge; sum.bbDining += n.bbDining; sum.bbLounge += n.bbLounge; sum.other += otherCharge(r); sum.total += int(r.total_amount);
         sum.guests += guestsOf(r);
         if (r.status === "confirmed" || r.status === "completed") mon.paid += int(r.total_amount); else mon.unpaid++;
       });
@@ -245,25 +245,25 @@
           (left <= 0 ? (left < 0 ? "over by " + -left : "FULL") : left + " left") + "</b> / " + stock + "</span>";
       };
       html.push('<tr class="dcal-day' + (x.ds === t ? " is-today" : "") + (x.excl ? " is-excl" : "") + (h.dow === 0 || h.dow === 6 ? " is-wkend" : "") +
-        '" data-date="' + x.ds + '"><td colspan="17"><div class="dcal-dayhead">' +
+        '" data-date="' + x.ds + '"><td colspan="18"><div class="dcal-dayhead">' +
         '<span class="dcal-date"><b>' + h.day + "</b> " + esc(h.mon) + " <span>" + esc(h.wd) + "</span></span>" +
         (x.excl ? '<span class="pill-av excl">Exclusive booking</span>' : "") +
         pill("Lounge", f.lounge, f.stock.lounge, f.blocked.lounge) + pill("Dining", f.dining, f.stock.dining, f.blocked.dining) +
         (hasBb ? pill("Beach Bar Lounge", f.bbLounge, f.stock.bbLounge, f.blocked.bbLounge) + pill("Beach Bar Dining", f.bbDining, f.stock.bbDining, f.blocked.bbDining) : "") +
-        '<span class="dcal-cap">' + x.active.length + " booking" + (x.active.length === 1 ? "" : "s") + " · <b>" + x.sum.guests + "</b> guests</span>" +
+        '<span class="dcal-cap">' + x.active.length + " booking" + (x.active.length === 1 ? "" : "s") + " · <b>" + x.sum.guests + "</b> guests" + (x.sum.drivers ? " + " + x.sum.drivers + " driver" + (x.sum.drivers === 1 ? "" : "s") : "") + "</span>" +
         '<button type="button" class="btn-sm ghost dcal-add" data-date="' + x.ds + '">+ Add</button></div></td></tr>');
       shown.forEach(function (r) { html.push(rowHtml(r)); shownRows++; });
       if (addDate === x.ds) html.push(addRowHtml(x));
-      else if (!shown.length) html.push('<tr class="dcal-empty"><td colspan="17">No bookings — <button type="button" class="linklike dcal-add" data-date="' + x.ds + '">add one</button></td></tr>');
+      else if (!shown.length) html.push('<tr class="dcal-empty"><td colspan="18">No bookings — <button type="button" class="linklike dcal-add" data-date="' + x.ds + '">add one</button></td></tr>');
       if (x.active.length > 1 || (x.active.length && showOff && x.list.length > x.active.length)) {
         var s = x.sum;
         html.push('<tr class="dcal-tot"><td></td><td>TOTAL</td><td class="num">' + s.adults + '</td><td class="num">' + s.kids + '</td><td class="num">' + s.k05 +
-          '</td><td class="num">' + s.sr + '</td><td class="num">' + s.pets + '</td><td class="num cab-first">' + s.lounge + '</td><td class="num">' + s.dining +
+          '</td><td class="num">' + s.sr + '</td><td class="num">' + s.pets + '</td><td class="num">' + (s.drivers || "") + '</td><td class="num cab-first">' + s.lounge + '</td><td class="num">' + s.dining +
           '</td><td class="num cab-bb">' + (s.bbLounge || "") + '</td><td class="num cab-bb">' + (s.bbDining || "") +
           '</td><td></td><td class="num">' + (s.other ? esc(peso(s.other)) : "") + '</td><td class="num">' + esc(peso(s.total)) + '</td><td colspan="3">' + s.guests + " guests</td></tr>");
       }
     });
-    $("dcalBody").innerHTML = html.join("") || '<tr class="dcal-empty"><td colspan="17">' +
+    $("dcalBody").innerHTML = html.join("") || '<tr class="dcal-empty"><td colspan="18">' +
       (st.q ? "No match for “" + esc(st.q) + "” in " + esc(mName) + (Object.keys(hits).length ? " — the highlighted month tabs have matches." : " this year.")
         : "No day trips this month" + (showEmpty ? "" : " (tick “Empty days” to see every day)") + ".") + "</td></tr>";
     if (addDate) { var nf = $("dnName"); if (nf && document.activeElement !== nf && !addFocused) { nf.focus(); addFocused = true; } }
@@ -287,6 +287,7 @@
       '<td class="num">' + (int(r.children_0_5) || "") + "</td>" +
       '<td class="num">' + (sr || "") + "</td>" +
       '<td class="num">' + (int(r.pet_count) || "") + "</td>" +
+      '<td class="num">' + (int(r.driver_count) || "") + "</td>" +
       '<td class="num cab-first cab-l">' + (n.regLounge || "") + "</td>" +
       '<td class="num cab-d">' + (n.regDining || "") + "</td>" +
       '<td class="num cab-bb">' + (n.bbLounge || "") + "</td>" +
@@ -312,7 +313,7 @@
       '<select id="dnVia" title="Came in via"><option value="messenger">via Messenger</option><option value="phone">via Phone</option><option value="email">via Email</option>' +
       '<option value="walk_in">Walk-in</option><option value="other">Other</option></select></td>' +
       num("dnAdults", "Adults (not counting PWD / Seniors)") + '<td class="num"><input class="n" type="number" min="0" step="1" inputmode="numeric" id="dnKids" title="Kids 6–12" placeholder="0">' +
-        '<input class="n" type="number" min="0" step="1" inputmode="numeric" id="dnPwdK" title="PWD kids 6–12 — counted in Kids 6–12 (20% off, VAT-exempt; ID needed)" placeholder="PWD"></td>' + num("dnK05", "Kids 0–5") + num("dnSr", "PWD / Seniors") + num("dnPets", "Pets") +
+        '<input class="n" type="number" min="0" step="1" inputmode="numeric" id="dnPwdK" title="PWD kids 6–12 — counted in Kids 6–12 (20% off, VAT-exempt; ID needed)" placeholder="PWD"></td>' + num("dnK05", "Kids 0–5") + num("dnSr", "PWD / Seniors") + num("dnPets", "Pets") + num("dnDrivers", "Drivers — ₱250 each, not counted as guests") +
       num("dnLounge", "Lounge cabanas") + num("dnDining", "Dining cabanas") +
       num("dnBbLounge", "Beach Bar lounge cabanas (staff only, same price)") + num("dnBbDining", "Beach Bar dining cabanas (staff only, same price)") +
       '<td><select id="dnType">' + ["day_trip", "half_day", "flash_sale", "all_inclusive_family", "all_inclusive_barkada", "corporate", "other"].map(function (k) {
@@ -333,7 +334,7 @@
     if (!P) return null;
     var type = $("dnType").value, sr = dnVal("dnSr");
     return P.compute({ type: type, adults: dnVal("dnAdults") + sr, seniors: sr, kids612: dnVal("dnKids"), kids05: dnVal("dnK05"), pwdKids: Math.min(dnVal("dnPwdK"), dnVal("dnKids")),
-      pets: dnVal("dnPets"), dining: dnVal("dnDining") + dnVal("dnBbDining"), lounge: dnVal("dnLounge") + dnVal("dnBbLounge") });
+      pets: dnVal("dnPets"), drivers: dnVal("dnDrivers"), dining: dnVal("dnDining") + dnVal("dnBbDining"), lounge: dnVal("dnLounge") + dnVal("dnBbLounge") });
   }
   function dnReprice() {
     var b = dnBill(), tot = $("dnTotal");
@@ -347,7 +348,7 @@
   $("dcalBody").addEventListener("input", function (e) {
     if (!e.target.closest(".dcal-new")) return;
     if (e.target.id === "dnTotal") { addTotalTouched = e.target.value !== ""; return; }
-    if (/^dn(Adults|Kids|PwdK|K05|Sr|Pets|Dining|Lounge|BbDining|BbLounge)$/.test(e.target.id)) dnReprice();
+    if (/^dn(Adults|Kids|PwdK|K05|Sr|Pets|Drivers|Dining|Lounge|BbDining|BbLounge)$/.test(e.target.id)) dnReprice();
   });
   $("dcalBody").addEventListener("change", function (e) { if (e.target.id === "dnType") dnReprice(); });
   $("dcalBody").addEventListener("keydown", function (e) {
@@ -377,7 +378,7 @@
     var payload = {
       source: $("dnVia").value, stay_type: type, stay_type_label: TYPE_LABELS[type] || PKG[type], status: "pending",
       guest_name: name, guest_phone: $("dnPhone").value.trim() || null, booked_by: (D.staffName && D.staffName()) || null,
-      check_in: ds, adults: adults, senior_count: sr, children_6_12: kids, children_0_5: k05, pwd_kid_count: Math.min(dnVal("dnPwdK"), kids), pet_count: dnVal("dnPets"),
+      check_in: ds, adults: adults, senior_count: sr, children_6_12: kids, children_0_5: k05, pwd_kid_count: Math.min(dnVal("dnPwdK"), kids), pet_count: dnVal("dnPets"), driver_count: dnVal("dnDrivers"),
       dining_cabanas: dining + bbD, lounge_cabanas: lounge + bbL, bb_dining_cabanas: bbD, bb_lounge_cabanas: bbL, total_amount: total,
       staff_notes: $("dnRemarks").value.trim() || null, email_guest: false, discount_amount: 0,
     };
