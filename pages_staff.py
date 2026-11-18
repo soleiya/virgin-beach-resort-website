@@ -695,7 +695,7 @@ html = """<!doctype html>
   .sp-file input { max-width: 210px; } .sp-file.has { border-style: solid; border-color: #2f7d6d; }
   .party-box { border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; margin: 14px 0 4px; background: var(--surface); }
   .party-head { font-size: .78rem; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--ink-soft); margin-bottom: 8px; }
-  .party-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+  .party-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; }
   .party-cell > label, .party-sub > label { display: block; font-size: .85rem; font-weight: 600; margin-bottom: 4px; }
   .party-sub { margin-top: 8px; padding: 8px; border-radius: 10px; background: #fbf4e4; border: 1px dashed #d9b86c; }
   .party-sub > label { font-size: .78rem; color: #7a5a17; }
@@ -956,7 +956,7 @@ html = """<!doctype html>
       <div class="dcal-scroll">
         <table class="dcal-table">
           <thead><tr>
-            <th>Booker</th><th>Guest</th><th class="num">Adult</th><th class="num">Kids</th><th class="num">0&ndash;5</th><th class="num">PWD | Sr</th><th class="num">Pet</th>
+            <th>Booker</th><th>Guest</th><th class="num">Adult</th><th class="num">Kids</th><th class="num">0&ndash;5</th><th class="num">PWD | Sr</th><th class="num">Pet</th><th class="num" title="The guests' driver(s) — ₱250 each, not counted as guests">Driver</th>
             <th class="num cab-first">Lounge</th><th class="num">Dining</th><th class="num cab-bb" title="Beach Bar lounge cabanas — staff only, same price">BB Lounge</th><th class="num cab-bb" title="Beach Bar dining cabanas — staff only, same price">BB Dining</th><th>Package</th><th class="num" title="Other charges (sunscreen, items, fees) — Package “Other” with no guests; not counted as guests">Other ₱</th><th class="num">Total</th><th>Status</th><th>Remarks</th><th title="Internal use only">Cabana no. <span style="font-weight:400;text-transform:none;letter-spacing:0;">(internal)</span></th>
           </tr></thead>
           <tbody id="dcalBody"></tbody>
@@ -1169,6 +1169,10 @@ html = """<!doctype html>
           <div class="party-cell">
             <label for="addPets">Pets</label>
             <input id="addPets" type="number" min="0" max="2" value="0" data-stepper>
+          </div>
+          <div class="party-cell" id="addDriversCell">
+            <label for="addDrivers" title="The guests' driver(s) — ₱250 each; not counted as guests or for cabana seats">Driver <span class="muted">&#8369;250</span></label>
+            <input id="addDrivers" type="number" min="0" max="20" value="0" data-stepper>
           </div>
         </div>
         <p class="party-line" id="addPartyLine"></p>
