@@ -389,6 +389,9 @@ function cabanaName(kind: "lounge" | "dining", capacity?: number) {
     : `Dining Cabana (capacity of ${capacity || 10})`;
 }
 
+// v78: the guests' driver(s) on staff bookings — ₱250 each (assets/js/pricing.js DRIVER_RATE)
+const DRIVER_RATE = 250;
+
 export const isStaffMade = (r: Any) => String(r.source || "website") !== "website";
 
 // v29: day-trip cabanas are booked by count; staff assign numbers later.
@@ -472,6 +475,7 @@ export function buildQuote(record: Any, cabanas: Any[]): Quote | null {
     add("Additional guest", pkg.addlAdult, extraPax);
     add("Pet fee", pkg.addlPet, pets);
     add("Additional cabana", pkg.addlCabana, extraCab);
+    add("Driver", DRIVER_RATE, int(record.driver_count));
     heading = heading + " — Inclusive of entrance fee and lunch";
   } else {
     const rate = PRICING[type] || PRICING.day_trip;
@@ -494,6 +498,7 @@ export function buildQuote(record: Any, cabanas: Any[]): Quote | null {
         add(`${bb ? "Beach Bar " : ""}${cabanaName(kind, group[0]?.capacity)}${showCabanaNumbers(record, cabanas) && group.length ? " — " + group.map(shortLabel).join(", ") : ""}`, rate[kind], qty);
       }
     }
+    add("Driver", DRIVER_RATE, int(record.driver_count));
     heading = type === "half_day"
       ? "HALF-DAY TRIP AREA — Inclusive of entrance fee and afternoon snacks"
       : "DAY TRIP AREA — Inclusive of entrance fee and lunch";
@@ -2434,7 +2439,7 @@ const CORS = {
 const PREVIEW_FIELDS = ["source", "status", "stay_type", "stay_type_label", "guest_name", "guest_email", "guest_phone", "country",
   "check_in", "check_out", "adults", "children_6_12", "children_0_5", "senior_count", "pwd_kid_count", "pet_count", "companions", "primary_is_senior",
   "discount_type", "discount_value", "discount_amount", "discount_reason", "total_amount", "subtotal_people", "cabana_total",
-  "senior_discount", "notes", "add_ons", "online_discount", "booked_by", "email_custom", "dining_cabanas", "lounge_cabanas", "bb_dining_cabanas", "bb_lounge_cabanas",
+  "senior_discount", "notes", "add_ons", "online_discount", "booked_by", "email_custom", "dining_cabanas", "lounge_cabanas", "driver_count", "bb_dining_cabanas", "bb_lounge_cabanas",
   "email_cabana_numbers"];
 
 async function staffUser(auth: string) {
