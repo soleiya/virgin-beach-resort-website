@@ -1860,6 +1860,7 @@ html = """<!doctype html>
 <script src="../assets/js/staff-track.js?v=__V_TRKJS__"></script>
 <script src="../assets/js/staff-cloudbeds.js?v=__V_CBJS__"></script>
 <script src="../assets/js/staff-cloudbeds-pages.js?v=__V_CBPAGES__"></script>
+<script src="../assets/js/staff-assistant.js?v=__V_ASKJS__"></script>
 </body>
 </html>
 """
@@ -1888,7 +1889,8 @@ html = (html.replace("__V_CSS__", v("assets/css/style.css"))
             .replace("__V_ALERTJS__", v("assets/js/staff-alerts.js"))
             .replace("__V_INSJS__", v("assets/js/staff-insights.js"))
             .replace("__V_TRKJS__", v("assets/js/staff-track.js"))
-            .replace("__V_CBPAGES__", v("assets/js/staff-cloudbeds-pages.js")))
+            .replace("__V_CBPAGES__", v("assets/js/staff-cloudbeds-pages.js"))
+            .replace("__V_ASKJS__", v("assets/js/staff-assistant.js")))
 
 os.makedirs(os.path.join(ROOT, "staff"), exist_ok=True)
 with open(os.path.join(ROOT, "staff", "index.html"), "w", encoding="utf-8") as f:
