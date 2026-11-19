@@ -7,6 +7,143 @@ FINE_PRINT_A = """
 </div>
 """
 
+# ---------------------------------------------------------------- Cabana gallery (Day Trip)
+# Full-size photos in assets/images/daytrip/, grid thumbnails in daytrip/thumbs/.
+DAYTRIP_GALLERY = [
+    ("dining", "Dining Cabanas", "Open thatched pavilions with a long bamboo table and benches &mdash; lunch is served right here.", [
+        ("dining-04", "Rows of thatched dining cabanas under the trees along the beach"),
+        ("dining-02", "Inside a dining cabana: bamboo table under the thatched roof, sea beyond"),
+        ("dining-06", "Two dining cabanas framing the path to the beach"),
+        ("dining-05", "Looking out from a dining cabana down the row of pavilions"),
+        ("dining-03", "Dining cabana roof and bamboo table with loungers on the shore"),
+        ("dining-01", "A dining cabana by the water, seen through the trees"),
+    ]),
+    ("lounge", "Lounge Cabanas", "Curtained cabanas with a cushioned daybed &mdash; shade, privacy and a sea view for up to 4.", [
+        ("lounge-02", "Lounge cabana daybed with white pillows inside drawn curtains"),
+        ("lounge-12", "White lounge cabana on the sand facing the blue sea"),
+        ("lounge-07", "Inside a lounge cabana with tan curtains, cushioned daybed and chairs"),
+        ("lounge-05", "Lounge cabana with curtains tied back, daybed and chairs"),
+        ("lounge-13", "Row of lounge cabanas with chairs along the beach"),
+        ("lounge-21", "Lounge cabana on the beach at sunset"),
+        ("lounge-03", "Lounge cabana interior with daybed mats, chairs and side table"),
+        ("lounge-22", "Lounge cabana by the water under a clear sky"),
+        ("lounge-11", "Lounge cabana lit up at dusk"),
+        ("lounge-06", "Lounge cabana with curtains open and chairs on the sand"),
+        ("lounge-10", "Daybed inside a lounge cabana looking out to sea"),
+        ("lounge-01", "Lounge cabana with tan curtains and bamboo daybed"),
+        ("lounge-04", "Row of tan-curtained cabanas beneath the trees"),
+        ("lounge-15", "Cushioned daybed inside a lounge cabana with tan curtains"),
+        ("lounge-09", "Lounge cabana among beach greenery with the sea behind"),
+        ("lounge-19", "Lounge cabana on the shore seen from a neighbouring pavilion"),
+        ("lounge-20", "Lounge cabana tucked among trees by the sea"),
+        ("lounge-25", "Close view of a curtained lounge cabana on the sand"),
+        ("lounge-14", "Lounge cabana framed by palms and trees"),
+        ("lounge-16", "Lounge cabana with table and chairs, dining pavilions behind"),
+        ("lounge-17", "Daybed mats inside a curtained lounge cabana"),
+        ("lounge-08", "Row of lounge cabanas with white chairs"),
+        ("lounge-26", "Path past a line of lounge cabanas"),
+        ("lounge-23", "Tan-curtained cabanas under large shade trees"),
+        ("lounge-27", "View of the sea through the tan curtains of a lounge cabana"),
+        ("lounge-24", "Lounge cabana by the sea, seen through branches"),
+    ]),
+    ("beach", "The Beach", "White sand, clear water and loungers just steps from every cabana.", [
+        ("beach-03", "Thatched umbrellas and loungers on the white sand beach"),
+        ("beach-04", "Couple walking toward the clear blue water"),
+        ("beach-02", "Beach umbrellas and loungers under big white clouds"),
+        ("beach-05", "Sun loungers in front of the lounge cabanas"),
+        ("beach-01", "Aerial view of the cabanas along the shoreline"),
+    ]),
+]
+
+DAYTRIP_GALLERY_CSS = """
+<style>
+.cg-tabs{display:flex;flex-wrap:wrap;gap:8px;margin:8px 0 18px;}
+.cg-tabs button{appearance:none;border:1px solid var(--line);background:var(--surface);color:var(--ink);font:600 .92rem var(--font-body);padding:10px 18px;border-radius:999px;cursor:pointer;display:inline-flex;align-items:center;gap:8px;transition:background .2s,color .2s,border-color .2s;}
+.cg-tabs button:hover{border-color:var(--lagoon);}
+.cg-tabs button[aria-selected="true"]{background:var(--lagoon-deep);border-color:var(--lagoon-deep);color:#fff;}
+.cg-tabs .cg-n{font-size:.75rem;font-weight:700;padding:2px 8px;border-radius:999px;background:var(--sand-deep);color:var(--ink-soft);}
+.cg-tabs button[aria-selected="true"] .cg-n{background:rgba(255,255,255,.18);color:#fff;}
+.cg-blurb{margin:0 0 16px;}
+.cg-mosaic{display:grid;grid-template-columns:repeat(4,1fr);grid-auto-rows:clamp(130px,15vw,200px);grid-auto-flow:dense;gap:10px;}
+.cg-tile{display:block;overflow:hidden;border-radius:12px;background:var(--sand-deep);cursor:zoom-in;}
+.cg-tile img{width:100%;height:100%;object-fit:cover;display:block;transition:transform .6s ease;}
+.cg-tile:hover img,.cg-tile:focus-visible img{transform:scale(1.05);}
+.cg-tile.is-big{grid-column:span 2;grid-row:span 2;}
+.cg-tile.is-wide{grid-column:span 2;}
+.cg-mosaic.is-collapsed .cg-tile:nth-child(n+9){display:none;}
+.cg-more{display:block;margin:18px auto 0;}
+.cg-jump{display:inline-block;margin-top:10px;font-weight:600;font-size:.9rem;color:var(--lagoon-deep);}
+@media (max-width:720px){.cg-mosaic{grid-template-columns:repeat(2,1fr);grid-auto-rows:34vw;gap:8px;}.cg-tabs button{padding:9px 14px;font-size:.86rem;}}
+</style>
+"""
+
+DAYTRIP_GALLERY_JS = """
+<script>
+(function(){
+  var root=document.getElementById('cabanaGallery'); if(!root) return;
+  var tabs=[].slice.call(root.querySelectorAll('[role=tab]'));
+  function select(t,focus){
+    tabs.forEach(function(b){var on=b===t;b.setAttribute('aria-selected',on?'true':'false');b.tabIndex=on?0:-1;document.getElementById(b.getAttribute('aria-controls')).hidden=!on;});
+    if(focus)t.focus();
+  }
+  tabs.forEach(function(t,i){
+    t.addEventListener('click',function(){select(t);});
+    t.addEventListener('keydown',function(e){var d=e.key==='ArrowRight'?1:e.key==='ArrowLeft'?-1:0;if(d){e.preventDefault();select(tabs[(i+d+tabs.length)%tabs.length],true);}});
+  });
+  root.querySelectorAll('[data-more]').forEach(function(b){b.addEventListener('click',function(){b.previousElementSibling.classList.remove('is-collapsed');b.remove();});});
+  document.querySelectorAll('[data-gallery-tab]').forEach(function(a){a.addEventListener('click',function(){var t=document.getElementById('cg-tab-'+a.getAttribute('data-gallery-tab'));if(t)select(t);});});
+})();
+</script>
+"""
+
+
+def _mosaic_shapes(n):
+    """Tile shapes that fill a 4-column (and 2-column) grid with no gaps:
+    blocks of 8 = big, 4 small, wide, 2 small (3 rows); the last partial block
+    is padded by widening its trailing tiles."""
+    shapes = []
+    full, r = divmod(n, 8)
+    for _ in range(full):
+        shapes += ["big", "", "", "", "", "wide", "", ""]
+    if r:
+        tail = (["big"] if r >= 3 else []) + [""] * (r - (1 if r >= 3 else 0))
+        cells = lambda t: sum(4 if x == "big" else 2 if x == "wide" else 1 for x in t)
+        i = len(tail) - 1
+        while cells(tail) % 4 and i >= 0:
+            if tail[i] == "":
+                tail[i] = "wide"
+            i -= 1
+        shapes += tail
+    return shapes
+
+
+def daytrip_gallery_html():
+    tabs, panels = [], []
+    for i, (key, label, blurb, photos) in enumerate(DAYTRIP_GALLERY):
+        on = i == 0
+        tabs.append(
+            '<button type="button" role="tab" id="cg-tab-%s" aria-controls="cg-panel-%s" aria-selected="%s"%s>%s <span class="cg-n">%d</span></button>'
+            % (key, key, "true" if on else "false", "" if on else ' tabindex="-1"', label, len(photos)))
+        shapes = _mosaic_shapes(len(photos))
+        items = "".join(
+            '<a class="cg-tile%s" href="../assets/images/daytrip/%s.jpg"><img src="../assets/images/daytrip/thumbs/%s.jpg" alt="%s" loading="lazy" decoding="async"></a>'
+            % ((" is-" + sh) if sh else "", f, f, alt) for (f, alt), sh in zip(photos, shapes))
+        collapsed = len(photos) > 8
+        more = ('<button type="button" class="btn btn-ghost cg-more" data-more>Show all %d photos</button>' % len(photos)) if collapsed else ""
+        panels.append(
+            '<div class="cg-panel" role="tabpanel" id="cg-panel-%s" aria-labelledby="cg-tab-%s"%s>\n'
+            '      <p class="prose cg-blurb">%s</p>\n'
+            '      <div class="cg-mosaic%s" data-lightbox>%s</div>\n'
+            '      %s\n    </div>'
+            % (key, key, "" if on else " hidden", blurb, " is-collapsed" if collapsed else "", items, more))
+    return (
+        '\n<section id="cabanaGallery" class="cabana-gallery">\n  <div class="wrap">\n'
+        '    <div class="two-col-head"><div><span class="eyebrow">Gallery</span><h2>See the cabanas</h2></div>\n'
+        '      <p class="prose" style="max-width:44ch;">Tap any photo to view it full screen, then swipe or use the arrows to browse.</p></div>\n'
+        '    <div class="cg-tabs" role="tablist" aria-label="Cabana photos">' + "".join(tabs) + '</div>\n    '
+        + "\n    ".join(panels) + '\n  </div>\n</section>\n' + DAYTRIP_GALLERY_CSS + DAYTRIP_GALLERY_JS)
+
+
 # ---------------------------------------------------------------- Day Trip
 
 day_body = """
@@ -130,7 +267,7 @@ day_body = """
           <img src="../assets/images/dining-cabana-thatch-exterior.jpg" alt="Dining Cabana, exterior view of the thatched pavilion on the sand">
           <button type="button" class="card-media-toggle" data-label-primary="View exterior" data-label-alt="View interior">View exterior</button>
         </div>
-        <div class="card-body"><span class="meta">10 Persons</span><h3>Dining Cabana</h3><div class="price"><b>&#8369;1,500</b></div></div>
+        <div class="card-body"><span class="meta">10 Persons</span><h3>Dining Cabana</h3><div class="price"><b>&#8369;1,500</b></div><a class="cg-jump" href="#cabanaGallery" data-gallery-tab="dining">See all dining photos &rarr;</a></div>
       </div>
       <div class="card">
         <div class="card-media has-alt">
@@ -138,13 +275,13 @@ day_body = """
           <img src="../assets/images/lounge-cabana-canopy-exterior.jpg" alt="Lounge Cabana, exterior view of the curtained cabana on the sand">
           <button type="button" class="card-media-toggle" data-label-primary="View exterior" data-label-alt="View interior">View exterior</button>
         </div>
-        <div class="card-body"><span class="meta">4 Persons</span><h3>Lounge Cabana</h3><div class="price"><b>&#8369;2,000</b></div></div>
+        <div class="card-body"><span class="meta">4 Persons</span><h3>Lounge Cabana</h3><div class="price"><b>&#8369;2,000</b></div><a class="cg-jump" href="#cabanaGallery" data-gallery-tab="lounge">See all lounge photos &rarr;</a></div>
       </div>
     </div>
     {fine_print_1}
   </div>
 </section>
-
+{cabana_gallery}
 <section class="band-tint center">
   <div class="wrap" style="max-width:560px; margin:0 auto;">
     <span class="eyebrow">Already booked?</span>
@@ -155,7 +292,7 @@ day_body = """
 </section>
 {booking_scripts_html}
 <script src="../assets/js/day-quick.js?v={dq_v}"></script>
-""".format(fine_print_1=FINE_PRINT_A, dq_v=asset_v("assets/js/day-quick.js"), booking_form=booking_form_section("day_trip"), booking_scripts_html=booking_scripts())
+""".format(fine_print_1=FINE_PRINT_A, cabana_gallery=daytrip_gallery_html(), dq_v=asset_v("assets/js/day-quick.js"), booking_form=booking_form_section("day_trip"), booking_scripts_html=booking_scripts())
 
 page("day-packages/index.html", "Day Trip", "Day Trip packages at Virgin Beach Resort — dining and lounge cabanas, with instant online booking.", day_body, cta_label="Book a Day Trip", cta_href="#planYourTrip")
 
