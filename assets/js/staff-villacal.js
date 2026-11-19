@@ -20,6 +20,11 @@
    unit-by-unit "Villa Calendar" grid (still under the toolbar button).
    Uses the Day Trip calendar's styles (.dcal-*). Needs staff-dashboard.js and
    staff-villas.js loaded first.
+
+   v81 revenue monitor: every night shows the most the casitas could earn
+   (every casita sold at its room rate + full-board meals at base occupancy)
+   and how much confirmed stays are earning of it, with the blocked share
+   shown as lost. Figures from villa_revenue_days() (booking-v81).
    ========================================================================== */
 (function () {
   "use strict";
@@ -53,6 +58,13 @@
     "#dashScreen.v-cal .table-scroll,#dashScreen.v-cal #cbList{display:none!important}" +
     ".vcal-dep{font-size:.78rem;color:var(--ink-soft);padding:4px 10px 8px!important}.vcal-dep b{color:var(--ink)}" +
     ".vcal-units .cab-tag{margin:0 3px 3px 0}.dcal-cell .av b.blk{background:#eef1f4;color:#4a5563}" +
+    ".vcal-rev{display:flex;flex-direction:column;gap:2px;margin-top:auto}.vcal-rev .rv{font-size:.66rem;color:var(--ink-soft);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}" +
+    ".vcal-rev .rv b{color:var(--ink);font-weight:800}.vbar{display:flex;height:5px;border-radius:3px;overflow:hidden;background:#e8e1d0}" +
+    ".vbar i{display:block;height:100%}.vbar .a{background:#1f7a72}.vbar .l{background:#9a9384}" +
+    ".pill-rev{font-size:.78rem;padding:3px 9px;border-radius:999px;background:var(--lagoon-tint,#e4f1ee);color:var(--ink);white-space:nowrap}.pill-rev b{font-weight:800}" +
+    "#vcalRev{grid-template-columns:repeat(4,minmax(0,1fr));margin-top:0}#vcalRev .dcal-kpi .vbar{margin-top:4px}" +
+    "@media(max-width:700px){#vcalRev{grid-template-columns:repeat(2,minmax(0,1fr))}}" +
+    "@media(prefers-color-scheme:dark){.vbar{background:#3a3626}}:root[data-theme=dark] .vbar{background:#3a3626}" +
     "@media print{#vViewBar{display:none!important}}";
   document.head.appendChild(css);
 
@@ -80,8 +92,10 @@
     '<button type="button" class="btn-sm ghost" id="vcalPrint">Print</button>' +
     '<button type="button" class="btn-sm ghost" id="vcalUnits" title="Every casita, night by night">Unit view</button></div></div>' +
     '<div class="dcal-kpis" id="vcalSum"></div>' +
+    '<div class="dcal-kpis" id="vcalRev"></div>' +
     '<div class="dcal-grid-wrap"><div class="dcal-grid" id="vcalGrid"></div>' +
     '<div class="dcal-legend"><span><b>C</b> casitas still free that night:</span><span><i class="ok"></i>plenty</span><span><i class="low"></i>few left (&le; 25%)</span><span><i class="full"></i>full</span>' +
+    '<span><i style="background:#1f7a72"></i>revenue achieved (confirmed)</span><span><i style="background:#9a9384"></i>blocked (lost)</span>' +
     '<span>Click a day to jump to it. Arrivals are listed under each day.</span></div></div>' +
     '<div class="dcal-scroll"><table class="dcal-table"><thead><tr>' +
     '<th>Booker</th><th>Guest</th><th class="num">Adult</th><th class="num">Kids</th><th class="num">0&ndash;5</th><th class="num">PWD | Sr</th><th class="num">Pet</th>' +
@@ -95,6 +109,7 @@
   if (saved && /^\d{4}-\d{2}$/.test(saved)) { st.year = +saved.slice(0, 4); st.month = +saved.slice(5, 7); }
   function monthKey() { return st.year + "-" + pad(st.month); }
   var holds = { key: null, list: [], loading: false };
+  var rev = { key: null, days: {}, loading: false, year: null, yearKey: null };
 
   // ------------------------------------------------------------- view switch
   function applyView() {
@@ -119,7 +134,7 @@
     applyView();
   });
   var pending = null;
-  function soon() { if (pending) return; pending = setTimeout(function () { pending = null; holds.key = null; applyView(); }, 0); }
+  function soon() { if (pending) return; pending = setTimeout(function () { pending = null; holds.key = null; rev.key = null; rev.yearKey = null; applyView(); }, 0); }
   document.addEventListener("vbr:render", soon);
   document.addEventListener("vbr:list", soon);
 
@@ -165,12 +180,54 @@
     if (r.discount_code) bits.push("Code " + r.discount_code);
     return bits.filter(Boolean).join(" · ");
   }
+  function kPeso(n) {
+    n = Math.round(+n || 0);
+    var a = Math.abs(n);
+    return "₱" + (a >= 1e6 ? (n / 1e6).toFixed(a >= 1e7 ? 1 : 2).replace(/\.?0+$/, "") + "M" : a >= 1e3 ? Math.round(n / 1e3) + "k" : n);
+  }
+  function pct(a, b) { return b > 0 ? Math.round(a / b * 100) : 0; }
+  function vbar(a, l, max) {
+    if (!(max > 0)) return "";
+    var pa = Math.min(100, a / max * 100), pl = Math.min(100 - pa, l / max * 100);
+    return '<span class="vbar"><i class="a" style="width:' + pa.toFixed(1) + '%"></i><i class="l" style="width:' + pl.toFixed(1) + '%"></i></span>';
+  }
+  function revTip(r) {
+    return "Max " + peso(r.max_total) + " · achieved " + peso(r.achieved) + " (" + pct(r.achieved, r.max_total) + "%)" +
+      (+r.lost_blocked ? " · blocked " + peso(r.lost_blocked) + " (" + r.blocked + " casita" + (r.blocked === 1 ? "" : "s") + ")" : "") +
+      (+r.pending ? " · pending " + peso(r.pending) + " not counted" : "") +
+      " · still open " + peso(Math.max(0, r.max_total - r.achieved - r.lost_blocked));
+  }
+
   function level(left, stock) { return left <= 0 ? "full" : left <= Math.max(1, Math.floor(stock * 0.25)) ? "low" : "ok"; }
   function rowById(id) { return D.rows().filter(function (r) { return r.id === id; })[0]; }
 
   // casita holds (bookings + blocks) for the month, one query per month
+  // v81: the month's revenue per night, and the rest of the year from today
+  function loadRevenue(month, first, next) {
+    if (rev.key === month || rev.loading === month) return;
+    rev.loading = month;
+    var t = today(), yEnd = (+t.slice(0, 4) + 1) + "-01-01", yKey = t;
+    var calls = [sb.rpc("villa_revenue_days", { p_from: first, p_to: next })];
+    if (rev.yearKey !== yKey) calls.push(sb.rpc("villa_revenue_days", { p_from: t, p_to: yEnd }));
+    Promise.all(calls).then(function (res) {
+      rev.loading = false;
+      rev.key = month;
+      rev.err = res[0].error ? res[0].error.message : null;
+      rev.days = {};
+      (res[0].data || []).forEach(function (d) { rev.days[d.night] = d; });
+      if (res[1]) {
+        rev.yearKey = yKey;
+        rev.year = res[1].error ? null : (res[1].data || []).reduce(function (a, d) {
+          a.max += +d.max_total; a.ach += +d.achieved; a.lost += +d.lost_blocked; a.pen += +d.pending; return a;
+        }, { max: 0, ach: 0, lost: 0, pen: 0, to: yEnd });
+      }
+      draw();
+    });
+  }
+
   function load() {
     var month = monthKey(), first = month + "-01", next = addDays(addDays(first, 31).slice(0, 7) + "-01", 0);
+    loadRevenue(month, first, next);
     if (holds.key === month) { draw(); return; }
     if (holds.loading === month) return;
     holds.loading = month;
@@ -252,6 +309,24 @@
       '<div class="dcal-kpi' + (mon.unpaid ? " warn" : "") + '"><span>Not yet paid</span><b>' + mon.unpaid + "</b><small>confirmation pending</small></div>" +
       '<div class="dcal-kpi"><span>Sold-out nights</span><b>' + (ready ? mon.full : "…") + "</b><small>no casitas left</small></div>";
 
+    // v81: the month's revenue against its maximum, and the rest of the year
+    var rReady = rev.key === month, mr = { max: 0, ach: 0, lost: 0, pen: 0 };
+    if (rReady) Object.keys(rev.days).forEach(function (k) {
+      var d = rev.days[k]; mr.max += +d.max_total; mr.ach += +d.achieved; mr.lost += +d.lost_blocked; mr.pen += +d.pending;
+    });
+    var yr = rev.year;
+    $("vcalRev").innerHTML = rev.err ? '<div class="dcal-kpi"><span>Revenue</span><b>—</b><small>' + esc(rev.err) + "</small></div>" :
+      '<div class="dcal-kpi" title="Every casita sold every night at its room rate, plus full-board meals at base occupancy"><span>' + esc(mName) + " max revenue</span><b>" +
+        (rReady ? esc(kPeso(mr.max)) : "…") + "</b><small>all casitas, rooms + meals</small></div>" +
+      '<div class="dcal-kpi" title="' + (rReady ? esc(peso(mr.ach) + " of " + peso(mr.max) + (mr.pen ? " · " + peso(mr.pen) + " more pending, not counted" : "")) : "") + '"><span>Achieved (confirmed)</span><b>' +
+        (rReady ? esc(kPeso(mr.ach)) + " <i>" + pct(mr.ach, mr.max) + "%</i>" : "…") + "</b>" + (rReady ? vbar(mr.ach, mr.lost, mr.max) : "") +
+        "<small>" + (rReady && mr.pen ? esc(kPeso(mr.pen)) + " pending not counted" : "of the month's max") + "</small></div>" +
+      '<div class="dcal-kpi"><span>Lost to blocks</span><b>' + (rReady ? esc(kPeso(mr.lost)) + " <i>" + pct(mr.lost, mr.max) + "%</i>" : "…") +
+        "</b><small>blocked / held casitas</small></div>" +
+      '<div class="dcal-kpi" title="' + (yr ? esc("From today to " + yr.to + ": " + peso(yr.ach) + " of " + peso(yr.max) + " · blocked " + peso(yr.lost) + " · still open " + peso(Math.max(0, yr.max - yr.ach - yr.lost))) : "") +
+        '"><span>Rest of ' + esc(today().slice(0, 4)) + "</span><b>" + (yr ? esc(kPeso(yr.ach)) + " <i>of " + esc(kPeso(yr.max)) + " · " + pct(yr.ach, yr.max) + "%</i>" : "…") + "</b>" +
+        (yr ? vbar(yr.ach, yr.lost, yr.max) : "") + "<small>" + (yr ? esc(kPeso(Math.max(0, yr.max - yr.ach - yr.lost))) + " still open to sell" : "today to Dec 31") + "</small></div>";
+
     // availability grid
     var first = utc(month + "-01").getUTCDay();
     var g = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map(function (w) { return '<div class="wd">' + w + "</div>"; });
@@ -264,7 +339,10 @@
           " · " + x.active.length + " arriving, " + x.inHouse.length + " stays in-house (" + x.guestsIn + " guests)") + '">' +
         '<span class="dn">' + int(x.ds.slice(8)) + (x.inHouse.length ? "<span>" + x.guestsIn + " pax</span>" : "") + "</span>" +
         '<span class="av">' + (ready ? '<b class="' + lv + '">C ' + Math.max(x.free, 0) + "</b>" : "<b>…</b>") + "</span>" +
-        (x.active.length ? '<span class="bk">' + x.active.length + " arriving</span>" : "") + "</button>");
+        (x.active.length ? '<span class="bk">' + x.active.length + " arriving</span>" : "") +
+        (rev.days[x.ds] ? '<span class="vcal-rev" title="' + esc(revTip(rev.days[x.ds])) + '"><span class="rv"><b>' + esc(kPeso(rev.days[x.ds].achieved)) + "</b> / " +
+          esc(kPeso(rev.days[x.ds].max_total)) + " · " + pct(rev.days[x.ds].achieved, rev.days[x.ds].max_total) + "%</span>" +
+          vbar(+rev.days[x.ds].achieved, +rev.days[x.ds].lost_blocked, +rev.days[x.ds].max_total) + "</span>" : "") + "</button>");
     });
     $("vcalGrid").innerHTML = g.join("");
 
@@ -279,6 +357,9 @@
         '<span class="dcal-date"><b>' + h.day + "</b> " + esc(h.mon) + " <span>" + esc(h.wd) + "</span></span>" +
         (ready ? '<span class="pill-av ' + lv + '" title="' + stock + " casitas" + (x.blocked ? ", " + x.blocked + " blocked" : "") + '">Casitas <b>' +
           (x.free <= 0 ? (x.free < 0 ? "over by " + -x.free : "FULL") : x.free + " free") + "</b> / " + stock + "</span>" : "") +
+        (rev.days[x.ds] ? '<span class="pill-rev" title="' + esc(revTip(rev.days[x.ds])) + '">Revenue <b>' + esc(peso(rev.days[x.ds].achieved)) + "</b> of " +
+          esc(kPeso(rev.days[x.ds].max_total)) + " · <b>" + pct(rev.days[x.ds].achieved, rev.days[x.ds].max_total) + "%</b>" +
+          (+rev.days[x.ds].lost_blocked ? " · blocked " + esc(kPeso(rev.days[x.ds].lost_blocked)) : "") + "</span>" : "") +
         '<span class="dcal-cap">' + x.active.length + " arriving · " + x.inHouse.length + " in-house · " + x.leaving.length + " leaving · <b>" + x.guestsIn + "</b> guests tonight</span>" +
         '<button type="button" class="btn-sm ghost dcal-add vcal-add" data-date="' + x.ds + '">+ Add</button></div></td></tr>');
       shown.forEach(function (r) { html.push(rowHtml(r)); });
