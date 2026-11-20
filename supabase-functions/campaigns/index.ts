@@ -10,6 +10,7 @@
 //   suggest { count?, focus? } Claude proposes offers → campaigns 'suggested'.
 //   rewrite { campaign, instruction }  Claude rewrites one campaign's email.
 //   preview { campaign }      the email as a guest would get it (sample code).
+//   v82: offer.kind "none" = no promotion (no code/offer box); offer.layout = classic|letter|spotlight|news.
 //   send_test { campaign, to? }  that email, to one address.
 //   process                   send the next batch now (also every 5 min by pg_cron).
 // Cron (header x-webhook-secret = cb_webhook_secret()): process, import_guests.
@@ -287,68 +288,98 @@ export function offerTerms(o: Any, expires: unknown): string[] {
   t.push("One booking per code; it's linked to this email address. Subject to availability.");
   return t;
 }
-function ctaUrl(o: Any, code: string) {
+// v82: an email can go out with no promotion at all (offer.kind "none" — no code, no offer box, no terms)
+export const hasPromo = (o: Any) => !!o && o.kind !== "none";
+// v82: email layouts staff can pick in the editor
+export const LAYOUTS: Record<string, string> = {
+  classic: "Classic — big photo, message, offer box, two photos",
+  letter: "Personal letter — text first, signed by the team, one photo",
+  spotlight: "Photo spotlight — edge-to-edge photos, short centred text",
+  news: "Announcement — coloured headline banner, then photo and message",
+};
+export const layoutOf = (o: Any) => (o && String(o.layout) in LAYOUTS ? String(o.layout) : "classic");
+function ctaUrl(o: Any, code: string | null | undefined, slug = "") {
   const kinds: string[] = Array.isArray(o?.booking_kinds) && o.booking_kinds.length ? o.booking_kinds : ["overnight"];
   const page = kinds.includes("overnight") ? "book-stay/" : "book/";
+  if (!code) return `${SITE}/${page}?utm_source=campaign_email&utm_medium=email&utm_campaign=${encodeURIComponent(slug || "newsletter")}`;
   return `${SITE}/${page}?code=${encodeURIComponent(code)}&utm_source=offer_email&utm_medium=email&utm_campaign=${encodeURIComponent(String(code).split("-")[0].toLowerCase())}`;
 }
 function fill(t: unknown, v: Record<string, string>) {
   return String(t || "").replace(/\{(first_name|name|code|expires|offer)\}/g, (_, k) => v[k] ?? "");
 }
+const slugOf = (c: Any) => String(c?.code_prefix || c?.name || "newsletter").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 40) || "newsletter";
 
-export function renderEmail(c: Any, r: { name?: string; code: string; unsub?: string }) {
+export function renderEmail(c: Any, r: { name?: string; code?: string | null; unsub?: string }) {
   const o = c.offer || {};
-  const v = { first_name: firstName(r.name) || "there", name: String(r.name || ""), code: r.code, expires: fmtDate(c.expires_on), offer: offerLine(o) };
+  const promo = hasPromo(o);
+  const layout = layoutOf(o);
+  const code = promo ? String(r.code || "") : "";
+  const v = { first_name: firstName(r.name) || "there", name: String(r.name || ""), code, expires: fmtDate(c.expires_on), offer: promo ? offerLine(o) : "" };
   const subject = noCove(fill(c.subject, v));
-  const headline = noCove(fill(c.headline || offerLine(o), v));
+  const headline = noCove(fill(c.headline || (promo ? offerLine(o) : c.subject), v));
   const paras = noCove(fill(c.body, v)).split(/\n\s*\n/).map((p) => p.trim()).filter(Boolean);
-  const url = ctaUrl(o, r.code);
+  const url = ctaUrl(o, code || null, slugOf(c));
   const unsub = r.unsub ? `${SITE}/unsubscribe/?t=${encodeURIComponent(r.unsub)}` : `${SITE}/unsubscribe/`;
-  const terms = offerTerms(o, c.expires_on);
+  const terms = promo ? offerTerms(o, c.expires_on) : [];
   const photos = pickPhotos(c);
   const img = (k: string) => PHOTO_BASE + k + ".jpg";
   const [hero, ...more] = photos;
   const tag = soundbite(c);
+  const cta = c.cta_label || (promo ? "Book with my code" : "Plan your visit");
+  const preheader = promo ? `${offerLine(o)} — your personal code ${code}` : (paras.find((p) => !/^hi\b/i.test(p)) || headline).replace(/\s+/g, " ").slice(0, 110);
   // the website's look: Fraunces headings, Manrope text, sand / lagoon colours
   const SERIF = `font-family:Fraunces,'Iowan Old Style','Palatino Linotype',Georgia,serif`;
   const SANS = `font-family:Manrope,-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif`;
   const INK = "#23241f", SOFT = "#6b6559", LAGOON = "#1f7a72", DEEP = "#14524c", TINT = "#e4f1ee", LINE = "#ddd2ba", SAND = "#f6f1e6", SURF = "#fffdf8";
   const eyebrow = `${SANS};font-size:11px;font-weight:700;letter-spacing:.18em;text-transform:uppercase;color:${DEEP}`;
+  const center = layout === "spotlight";
   const tile = (k: string) => `<td class="tile" width="50%" valign="top" style="padding:0 6px">
 <a href="${esc(url)}" style="text-decoration:none"><img src="${img(k)}" width="264" alt="${esc(PHOTOS[k].alt)}" style="display:block;width:100%;max-width:264px;height:auto;border:0;border-radius:14px"></a>
 <div style="${SANS};font-size:11px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:${DEEP};padding:10px 2px 0">${esc(PHOTOS[k].caption)}</div></td>`;
+  const tiles = more.length ? `<tr><td style="padding:22px 24px 4px"><table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>${more.map(tile).join("")}${more.length === 1 ? '<td class="tile" width="50%"></td>' : ""}</tr></table></td></tr>` : "";
+  const heroRow = (k: string | undefined, edge = false) => k ? `<tr><td style="padding:${edge ? "0" : "0 20px"}"><a href="${esc(url)}"><img src="${img(k)}" width="${edge ? 600 : 560}" alt="${esc(PHOTOS[k].alt)}" style="display:block;width:100%;height:auto;border:0${edge ? "" : ";border-radius:14px"}"></a></td></tr>` : "";
+  const bigPhoto = (k: string) => `<tr><td style="padding:22px 0 0"><a href="${esc(url)}"><img src="${img(k)}" width="600" alt="${esc(PHOTOS[k].alt)}" style="display:block;width:100%;height:auto;border:0"></a>
+<div style="${SANS};font-size:11px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:${DEEP};padding:10px 36px 0;text-align:center">${esc(PHOTOS[k].caption)}</div></td></tr>`;
+  const eyebrowRow = `<tr><td class="pad" style="padding:26px 36px 0${center ? ";text-align:center" : ""}"><div style="${eyebrow}">${esc(tag)}</div></td></tr>`;
+  const headRow = `<tr><td class="pad" style="padding:12px 36px 22px${center ? ";text-align:center" : ""}"><h1 class="h1" style="margin:0;${SERIF};font-weight:460;font-size:31px;line-height:1.15;color:${INK}">${esc(headline)}</h1></td></tr>`;
+  const banner = `<tr><td style="background:${DEEP};padding:30px 36px 28px" class="pad"><div style="${SANS};font-size:11px;font-weight:700;letter-spacing:.18em;text-transform:uppercase;color:#bfe3dc">${esc(tag)}</div>
+<h1 class="h1" style="margin:10px 0 0;${SERIF};font-weight:460;font-size:31px;line-height:1.15;color:#ffffff">${esc(headline)}</h1></td></tr>`;
+  const msgRow = (top = 26) => `<tr><td class="pad" style="padding:${top}px 36px 6px${center ? ";text-align:center" : ""}">
+${paras.map((p) => `<p style="margin:0 0 15px;font-size:16px;line-height:1.65;color:${layout === "letter" ? INK : SOFT}">${esc(p).replace(/\n/g, "<br>")}</p>`).join("")}</td></tr>`;
+  const signRow = `<tr><td class="pad" style="padding:0 36px 8px"><p style="margin:4px 0 0;font-size:16px;line-height:1.6;color:${INK}">Warm regards,<br><span style="${SERIF};font-size:19px">The Virgin Beach Resort team</span></p></td></tr>`;
+  const promoRow = promo ? `<tr><td class="pad" style="padding:6px 36px 4px"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:${TINT};border-radius:14px">
+<tr><td align="center" style="padding:22px 18px"><div style="${eyebrow}">Your offer</div>
+<div style="${SERIF};font-size:23px;font-weight:500;line-height:1.25;color:${INK};margin:8px 0 14px">${esc(offerLine(o))}</div>
+<div style="${SANS};font-size:12px;color:${SOFT}">Your personal code</div>
+<div style="font-family:'Courier New',monospace;font-size:24px;font-weight:bold;letter-spacing:.14em;color:${DEEP};margin-top:4px">${esc(code)}</div></td></tr></table></td></tr>` : "";
+  const ctaRow = `<tr><td align="center" style="padding:24px 28px 8px"><a href="${esc(url)}" style="display:inline-block;background:${LAGOON};color:#ffffff;text-decoration:none;${SANS};font-weight:700;font-size:13px;letter-spacing:.08em;text-transform:uppercase;padding:16px 32px;border-radius:999px">${esc(cta)}</a>
+${promo ? `<div style="font-size:12px;color:${SOFT};margin-top:12px">The code is filled in for you — or enter it on the booking page.</div>` : ""}</td></tr>`;
+  const termsRow = terms.length ? `<tr><td class="pad" style="padding:18px 36px 24px"><ul style="margin:0;padding-left:18px;font-size:12px;line-height:1.65;color:${SOFT}">${terms.map((t) => `<li>${esc(t)}</li>`).join("")}</ul></td></tr>` : `<tr><td style="padding:12px 0 0"></td></tr>`;
+  let main = "";
+  if (layout === "letter") main = eyebrowRow + headRow.replace("padding:12px 36px 22px", "padding:12px 36px 4px") + msgRow(18) + signRow + (promo ? `<tr><td style="padding:14px 0 0"></td></tr>` + promoRow : "") + ctaRow + (hero ? `<tr><td style="padding:22px 20px 0"><a href="${esc(url)}"><img src="${img(hero)}" width="560" alt="${esc(PHOTOS[hero].alt)}" style="display:block;width:100%;height:auto;border:0;border-radius:14px"></a></td></tr>` : "") + termsRow;
+  else if (layout === "spotlight") main = heroRow(hero, true) + eyebrowRow + headRow + msgRow(0) + promoRow + ctaRow + more.map(bigPhoto).join("") + termsRow;
+  else if (layout === "news") main = banner + (hero ? `<tr><td style="padding:22px 20px 0"><a href="${esc(url)}"><img src="${img(hero)}" width="560" alt="${esc(PHOTOS[hero].alt)}" style="display:block;width:100%;height:auto;border:0;border-radius:14px"></a></td></tr>` : "") + msgRow() + ctaRow + (promo ? `<tr><td style="padding:16px 0 0"></td></tr>` + promoRow : "") + tiles + termsRow;
+  else main = eyebrowRow + headRow + heroRow(hero) + msgRow() + promoRow + ctaRow + tiles + termsRow;
   const html = `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400..600&family=Manrope:wght@400;600;700&display=swap" rel="stylesheet">
 <style>@media (max-width:520px){.pad{padding-left:20px!important;padding-right:20px!important}.tile{display:block!important;width:100%!important;padding:0 0 16px!important}.tile img{max-width:100%!important}.h1{font-size:26px!important}}</style></head>
 <body style="margin:0;padding:0;background:${SAND}">
-<div style="display:none;max-height:0;overflow:hidden">${esc(offerLine(o))} — your personal code ${esc(r.code)}</div>
+<div style="display:none;max-height:0;overflow:hidden">${esc(preheader)}</div>
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:${SAND}"><tr><td align="center" style="padding:24px 10px">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:600px;background:${SURF};border:1px solid ${LINE};border-radius:18px;overflow:hidden;${SANS};color:${INK}">
 <tr><td><a href="${SITE}/"><img src="${img("header-logo")}" width="600" alt="Virgin Beach Resort" style="display:block;width:100%;height:auto;border:0"></a></td></tr>
-<tr><td class="pad" style="padding:26px 36px 0"><div style="${eyebrow}">${esc(tag)}</div></td></tr>
-<tr><td class="pad" style="padding:12px 36px 22px"><h1 class="h1" style="margin:0;${SERIF};font-weight:460;font-size:31px;line-height:1.15;color:${INK}">${esc(headline)}</h1></td></tr>
-${hero ? `<tr><td style="padding:0 20px"><a href="${esc(url)}"><img src="${img(hero)}" width="560" alt="${esc(PHOTOS[hero].alt)}" style="display:block;width:100%;height:auto;border:0;border-radius:14px"></a></td></tr>` : ""}
-<tr><td class="pad" style="padding:26px 36px 6px">
-${paras.map((p) => `<p style="margin:0 0 15px;font-size:16px;line-height:1.65;color:${SOFT}">${esc(p).replace(/\n/g, "<br>")}</p>`).join("")}</td></tr>
-<tr><td class="pad" style="padding:6px 36px 4px"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:${TINT};border-radius:14px">
-<tr><td align="center" style="padding:22px 18px"><div style="${eyebrow}">Your offer</div>
-<div style="${SERIF};font-size:23px;font-weight:500;line-height:1.25;color:${INK};margin:8px 0 14px">${esc(offerLine(o))}</div>
-<div style="${SANS};font-size:12px;color:${SOFT}">Your personal code</div>
-<div style="font-family:'Courier New',monospace;font-size:24px;font-weight:bold;letter-spacing:.14em;color:${DEEP};margin-top:4px">${esc(r.code)}</div></td></tr></table></td></tr>
-<tr><td align="center" style="padding:24px 28px 8px"><a href="${esc(url)}" style="display:inline-block;background:${LAGOON};color:#ffffff;text-decoration:none;${SANS};font-weight:700;font-size:13px;letter-spacing:.08em;text-transform:uppercase;padding:16px 32px;border-radius:999px">${esc(c.cta_label || "Book with my code")}</a>
-<div style="font-size:12px;color:${SOFT};margin-top:12px">The code is filled in for you — or enter it on the booking page.</div></td></tr>
-${more.length ? `<tr><td style="padding:22px 24px 4px"><table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>${more.map(tile).join("")}${more.length === 1 ? '<td class="tile" width="50%"></td>' : ""}</tr></table></td></tr>` : ""}
-<tr><td class="pad" style="padding:18px 36px 24px"><ul style="margin:0;padding-left:18px;font-size:12px;line-height:1.65;color:${SOFT}">${terms.map((t) => `<li>${esc(t)}</li>`).join("")}</ul></td></tr>
+${main}
 <tr><td align="center" style="padding:4px 28px 22px;${SERIF};font-style:italic;font-size:17px;line-height:1.5;color:${INK}">Private villa resort on a virgin white sand beach —<br>just a drive away, about 3 hours from Manila.</td></tr>
 <tr><td><img src="${img("footer-beach")}" width="600" alt="" style="display:block;width:100%;height:auto;border:0"></td></tr>
 <tr><td style="background:${SAND};padding:20px 32px;font-size:12px;line-height:1.7;color:${SOFT}">
 Questions? Reply to this email or call +63 917 792 0712 · <a href="${SITE}/" style="color:${LAGOON}">virginbeachresort.com</a><br>
-You're getting this because you've been our guest. <a href="${esc(unsub)}" style="color:${SOFT}">Unsubscribe from offers</a>.<br>
+You're getting this because you've been our guest. <a href="${esc(unsub)}" style="color:${SOFT}">Unsubscribe from ${promo ? "offers" : "these emails"}</a>.<br>
 Virgin Beach Resort · Laiya, San Juan, Batangas, Philippines</td></tr>
 </table></td></tr></table></body></html>`;
-  const text = [headline, "", ...paras.flatMap((p) => [p, ""]), `Your offer: ${offerLine(o)}`, `Your personal code: ${r.code}`, `Book: ${url}`, "",
-    ...terms.map((t) => "• " + t), "", "Virgin Beach Resort — private villa resort on a virgin white sand beach, about 3 hours from Manila.",
-    "Questions? Reply to this email or call +63 917 792 0712.", `Unsubscribe from offers: ${unsub}`].join("\n");
+  const text = [headline, "", ...paras.flatMap((p) => [p, ""]), ...(layout === "letter" ? ["Warm regards,", "The Virgin Beach Resort team", ""] : []),
+    ...(promo ? [`Your offer: ${offerLine(o)}`, `Your personal code: ${code}`] : []), `${promo ? "Book" : cta}: ${url}`, "",
+    ...(terms.length ? [...terms.map((t) => "• " + t), ""] : []), "Virgin Beach Resort — private villa resort on a virgin white sand beach, about 3 hours from Manila.",
+    "Questions? Reply to this email or call +63 917 792 0712.", `Unsubscribe: ${unsub}`].join("\n");
   return { subject, html, text, unsub, images: photos };
 }
 
@@ -445,6 +476,8 @@ function cleanSuggestion(s: Any, today: string) {
   const imgs = validPhotos(s.images ?? o.images);
   offer.images = imgs.length ? imgs : pickPhotos({ ...s, offer });
   if (s.tagline && !/cove/i.test(String(s.tagline))) offer.tagline = String(s.tagline).slice(0, 70);
+  if (String(o.layout || s.layout || "") in LAYOUTS) offer.layout = String(o.layout || s.layout);
+  delete s.layout;
   const txt: Any = {};
   for (const k of ["name", "rationale", "audience_label", "subject", "headline", "body", "cta_label"]) if (s[k] !== undefined) txt[k] = noCove(s[k]);
   delete s.images; delete s.tagline;
@@ -483,7 +516,7 @@ async function rewrite(c: Any, instruction: string) {
   const sys = SYSTEM.split("Answer ONLY")[0] +
     "Rewrite the email for the campaign below as instructed. Answer ONLY with a JSON object with keys subject, headline, body, cta_label.";
   const text = await claude(sys, `Instruction from staff: ${instruction || "Make it warmer and shorter."}\n\nCampaign (JSON):\n${JSON.stringify({
-    name: c.name, audience_label: c.audience_label, offer: c.offer, offer_line: offerLine(c.offer || {}), expires_on: c.expires_on,
+    name: c.name, audience_label: c.audience_label, offer: c.offer, offer_line: hasPromo(c.offer) ? offerLine(c.offer || {}) : "NO PROMOTION — this email has no discount, freebie or code; don't mention one", expires_on: hasPromo(c.offer) ? c.expires_on : null,
     subject: c.subject, headline: c.headline, body: c.body, cta_label: c.cta_label })}`, 3000);
   const m = text.match(/\{[\s\S]*\}/);
   if (!m) throw new Error("The AI's answer couldn't be read; please try again.");
@@ -542,7 +575,7 @@ export async function handle(req: Request): Promise<Response> {
       case "preview": {
         const c = body.campaign || {};
         const m = renderEmail(c, { name: body.name || "Maria Santos", code: (String(c.code_prefix || "VBR").toUpperCase().replace(/[^A-Z0-9]/g, "") || "VBR") + "-SAMPLE" });
-        return json({ subject: m.subject, html: m.html, offer_line: offerLine(c.offer || {}), images: m.images,
+        return json({ subject: m.subject, html: m.html, offer_line: hasPromo(c.offer) ? offerLine(c.offer || {}) : "No promotion", images: m.images, layouts: LAYOUTS,
           photos: body.catalog ? Object.entries(PHOTOS).map(([k, p]) => ({ key: k, topic: p.topic, alt: p.alt, caption: p.caption, url: PHOTO_BASE + k + ".jpg" })) : undefined });
       }
       case "send_test": {
