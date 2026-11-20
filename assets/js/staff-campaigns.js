@@ -58,6 +58,7 @@
     o = o || {};
     var kinds = o.booking_kinds && o.booking_kinds.length ? o.booking_kinds : ["overnight"];
     var what = kinds.indexOf("overnight") > -1 && kinds.indexOf("day_trip") > -1 ? "stay or day trip" : kinds.indexOf("day_trip") > -1 ? "day trip" : "stay";
+    if (o.kind === "none") return "No promotion";
     if (o.kind === "perk") return "Freebie: " + (o.perk || "—");
     if (o.kind === "fixed") return money(o.amount) + " off the " + what;
     var on = o.applies_to === "rooms" ? (what === "day trip" ? "cabana rental" : "casita rates") : o.applies_to === "add_ons" ? "add-ons" : "whole " + what;
@@ -112,6 +113,18 @@
     ".cm-t tr.cd-row{cursor:pointer}.cm-t tr.cd-row:hover td{background:var(--sand)}.cd-h3{font-family:var(--font-display);font-weight:600;font-size:1.05rem;margin:26px 0 10px}" +
     ".cm-avail{margin:10px 0;padding:10px 12px;border-radius:10px;font-size:.84rem;line-height:1.45;background:var(--lagoon-tint);color:var(--lagoon-deep)}.cm-avail small{display:block;opacity:.8}" +
     ".cm-avail.tight{background:#fbe8c2;color:#7f5200}.cm-avail.full{background:#f7dcd6;color:#8a2a1a}" +
+    // v82: promotion on/off and the layout picker
+    ".cm-promo-tg{display:flex;gap:10px;align-items:flex-start;padding:10px 12px;margin:0 0 12px;border:1px solid var(--line);border-radius:12px;cursor:pointer;background:var(--surface,#fff)}.cm-promo-tg input{margin-top:3px}.cm-promo-tg small{display:block;color:var(--muted,#6b6559);font-size:.8rem;line-height:1.4;margin-top:2px}" +
+    ".cm-layouts{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin:4px 0 12px}@media(max-width:700px){.cm-layouts{grid-template-columns:1fr 1fr}}" +
+    ".cm-lay{position:relative;display:flex;flex-direction:column;gap:3px;padding:8px;border:1px solid var(--line);border-radius:12px;cursor:pointer;font-size:.8rem;line-height:1.3;background:var(--surface,#fff)}.cm-lay input{position:absolute;opacity:0;pointer-events:none}" +
+    ".cm-lay.on{border-color:var(--lagoon,#1f7a72);box-shadow:0 0 0 2px var(--lagoon-tint,#e4f1ee)}.cm-lay small{color:var(--muted,#6b6559);font-size:.72rem}" +
+    ".cm-lay-pic{display:flex;flex-direction:column;gap:3px;height:62px;padding:5px;border-radius:6px;background:#f6f1e6;margin-bottom:4px;overflow:hidden}.cm-lay-pic i{display:block;border-radius:2px;background:#d9ccb0}" +
+    ".cm-lay-classic i:nth-child(1),.cm-lay-letter i:nth-child(1),.cm-lay-spotlight i:nth-child(2){height:4px;width:70%;background:#23241f}" +
+    ".cm-lay-classic i:nth-child(2),.cm-lay-news i:nth-child(2){height:20px}.cm-lay-classic i:nth-child(3),.cm-lay-news i:nth-child(3),.cm-lay-spotlight i:nth-child(3){height:8px;background:repeating-linear-gradient(#bcb3a3 0 2px,transparent 2px 4px)}" +
+    ".cm-lay-classic i:nth-child(4),.cm-lay-news i:nth-child(4){height:10px;background:linear-gradient(90deg,#d9ccb0 48%,transparent 48% 52%,#d9ccb0 52%)}" +
+    ".cm-lay-letter i:nth-child(2){height:22px;background:repeating-linear-gradient(#bcb3a3 0 2px,transparent 2px 4px)}.cm-lay-letter i:nth-child(3){height:3px;width:45%;background:#23241f}.cm-lay-letter i:nth-child(4){height:12px}" +
+    ".cm-lay-spotlight{padding:0 0 5px}.cm-lay-spotlight i:nth-child(1){height:22px;border-radius:0}.cm-lay-spotlight i:nth-child(2),.cm-lay-spotlight i:nth-child(3){margin:0 auto;width:70%}.cm-lay-spotlight i:nth-child(4){height:14px;border-radius:0}" +
+    ".cm-lay-news{padding:0 5px 5px}.cm-lay-news i:nth-child(1){height:14px;margin:0 -5px;border-radius:0;background:#14524c}" +
     ".cm-pgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}.cm-pslot{display:flex;flex-direction:column;gap:6px;min-width:0}" +
     ".cm-pimg{aspect-ratio:3/2;border-radius:8px;overflow:hidden;background:var(--sand,#efe7da)}.cm-pimg img{width:100%;height:100%;object-fit:cover;display:block}" +
     ".cm-pslot select{width:100%;font:inherit;font-size:.8rem;padding:5px 6px;border:1px solid var(--line);border-radius:8px;background:#fff}.cm-pslot small{color:var(--ink-soft,#6b7774);font-size:.72rem}" +
@@ -388,6 +401,14 @@
   var detail = null;
   var ed = null, audTimer = null, prevTimer = null, audSeq = 0, prevSeq = 0;
   var photoCat = null, shownPhotos = [];
+  // v82: email layouts (same keys as the campaigns edge function)
+  var LAYOUTS = [
+    ["classic", "Classic", "Big photo, message, offer box, two photos"],
+    ["letter", "Personal letter", "Text first, signed by the team, one photo"],
+    ["spotlight", "Photo spotlight", "Edge-to-edge photos, short centred text"],
+    ["news", "Announcement", "Coloured headline banner, then photo and message"]
+  ];
+  var CTA_PROMO = "Book with my code", CTA_PLAIN = "Plan your visit";
   function blank() {
     return { id: null, name: "", status: "draft", source: "staff", audience: { segments: [], skip_contacted_days: 14 }, audience_label: "",
       offer: { kind: "percent", percent: 10, applies_to: "rooms", booking_kinds: ["overnight"] }, code_prefix: "", expires_on: addDays(todayStr(), 30),
@@ -401,6 +422,7 @@
       return '<div class="cm-checks">' + opts.map(function (x) { return '<label><input type="checkbox" data-a="' + name + '" value="' + x[0] + '"' + ((vals || []).indexOf(x[0]) > -1 ? " checked" : "") + ">" + esc(x[1]) + "</label>"; }).join("") + "</div>";
     };
     var kinds = o.booking_kinds && o.booking_kinds.length ? o.booking_kinds : ["overnight"];
+    var promo = o.kind !== "none", lay = o.layout || "classic";
     openModal(ed.id ? (ed.status === "suggested" ? "Review AI suggestion" : "Edit campaign") : "New campaign",
       '<div class="cm-mbody"><div>' +
       (ed.rationale ? '<div class="cm-why-box"><b>' + (ed.source === "ai" ? "Why the AI suggests this: " : "Notes: ") + "</b>" + esc(ed.rationale) + "</div>" : "") +
@@ -421,6 +443,8 @@
       '<div class="cm-f"><label for="eAudLabel">Audience description (staff only)</label><input id="eAudLabel" value="' + esc(ed.audience_label || "") + '" placeholder="e.g. Families who came in summer, not back for a year"></div>' +
       '<div class="cm-aud" id="eAud">Counting…</div></div>' +
       '<div class="cm-sec"><h4>The offer</h4>' +
+      '<label class="cm-promo-tg"><input type="checkbox" id="ePromo"' + (promo ? " checked" : "") + '><span><b>Include a promotion</b><small>A discount or freebie with a personal code for each guest. Untick to send a plain email blast — no offer box, no codes.</small></span></label>' +
+      '<div id="wPromo">' +
       '<div class="cm-checks"><label><input type="radio" name="eKind" value="percent"' + (o.kind !== "fixed" && o.kind !== "perk" ? " checked" : "") + ">% off</label>" +
       '<label><input type="radio" name="eKind" value="fixed"' + (o.kind === "fixed" ? " checked" : "") + ">₱ off</label>" +
       '<label><input type="radio" name="eKind" value="perk"' + (o.kind === "perk" ? " checked" : "") + ">Freebie</label></div>" +
@@ -428,21 +452,26 @@
       '<div class="cm-f" id="wAmt"><label for="eAmt">Pesos off</label><input id="eAmt" type="number" min="1" step="100" value="' + esc(o.amount || 1000) + '"></div>' +
       '<div class="cm-f" id="wPerk" style="grid-column:span 2"><label for="ePerk">The freebie (shown to the guest and on the booking)</label><input id="ePerk" value="' + esc(o.perk || "") + '" placeholder="e.g. Free 60-minute massage for two"></div>' +
       '<div class="cm-f" id="wOn"><label for="eOn">Off what</label><select id="eOn"><option value="rooms"' + (o.applies_to === "rooms" ? " selected" : "") + '>Casita rates / cabana</option><option value="all"' + (o.applies_to === "all" ? " selected" : "") + '>The whole booking</option><option value="add_ons"' + (o.applies_to === "add_ons" ? " selected" : "") + ">Add-ons (stays only)</option></select></div></div>" +
-      '<span class="cm-lbl">Good for</span><div class="cm-checks"><label><input type="checkbox" data-k="overnight"' + (kinds.indexOf("overnight") > -1 ? " checked" : "") + '>Casita stays</label><label><input type="checkbox" data-k="day_trip"' + (kinds.indexOf("day_trip") > -1 ? " checked" : "") + ">Day trips</label></div>" +
-      '<div class="cm-row"><div class="cm-f"><label for="eFrom">Stay / visit from</label><input id="eFrom" type="date" value="' + esc(o.stay_from || "") + '"></div>' +
+      "</div>" +
+      '<span class="cm-lbl" id="eKindsLbl">Good for</span><div class="cm-checks"><label><input type="checkbox" data-k="overnight"' + (kinds.indexOf("overnight") > -1 ? " checked" : "") + '>Casita stays</label><label><input type="checkbox" data-k="day_trip"' + (kinds.indexOf("day_trip") > -1 ? " checked" : "") + ">Day trips</label></div>" +
+      '<div class="cm-row" id="wTerms"><div class="cm-f"><label for="eFrom">Stay / visit from</label><input id="eFrom" type="date" value="' + esc(o.stay_from || "") + '"></div>' +
       '<div class="cm-f"><label for="eTo">Stay / visit until</label><input id="eTo" type="date" value="' + esc(o.stay_to || "") + '"></div>' +
       '<div class="cm-f"><label for="eMinN">Minimum nights</label><input id="eMinN" type="number" min="0" value="' + esc(o.min_nights || "") + '"></div>' +
       '<div class="cm-f"><label for="eMinT">Minimum booking ₱</label><input id="eMinT" type="number" min="0" step="1000" value="' + esc(o.min_total || "") + '"></div>' +
       '<div class="cm-f"><label for="eExp">Book by (code expires)</label><input id="eExp" type="date" value="' + esc(ed.expires_on || "") + '"></div>' +
       '<div class="cm-f"><label for="ePrefix">Code starts with</label><input id="ePrefix" maxlength="12" value="' + esc(ed.code_prefix || "") + '" placeholder="e.g. SUMMER"></div></div>' +
       '<div class="cm-avail" id="eAvail">Checking Cloudbeds availability…</div>' +
-      '<p class="cm-note" style="margin:0">Each guest gets their own code (e.g. ' + esc((ed.code_prefix || "VBR").toUpperCase()) + '-7KQ2M): one booking, only with their email address. The website applies it automatically.</p></div>' +
+      '<p class="cm-note" id="eCodeNote" style="margin:0">Each guest gets their own code (e.g. ' + esc((ed.code_prefix || "VBR").toUpperCase()) + '-7KQ2M): one booking, only with their email address. The website applies it automatically.</p></div>' +
       '<div class="cm-sec"><h4>The email</h4>' +
+      '<span class="cm-lbl">Layout</span><div class="cm-layouts" id="eLayouts">' + LAYOUTS.map(function (l) {
+        return '<label class="cm-lay' + (l[0] === lay ? " on" : "") + '"><input type="radio" name="eLayout" value="' + l[0] + '"' + (l[0] === lay ? " checked" : "") + '>' +
+          '<span class="cm-lay-pic cm-lay-' + l[0] + '"><i></i><i></i><i></i><i></i></span><b>' + esc(l[1]) + "</b><small>" + esc(l[2]) + "</small></label>";
+      }).join("") + "</div>" +
       '<div class="cm-f"><label for="eSubj">Subject</label><input id="eSubj" maxlength="120" value="' + esc(ed.subject || "") + '"></div>' +
       '<div class="cm-f"><label for="eHead">Headline</label><input id="eHead" maxlength="140" value="' + esc(ed.headline || "") + '"></div>' +
       '<div class="cm-f"><label for="eBodyT">Message</label><textarea id="eBodyT">' + esc(ed.body || "") + "</textarea></div>" +
       '<div class="cm-f"><label for="eCta">Button</label><input id="eCta" maxlength="40" value="' + esc(ed.cta_label || "") + '"></div>' +
-      '<p class="cm-note" style="margin:0 0 8px">{first_name} becomes the guest\'s first name. The offer, code, terms and unsubscribe link are added below the message automatically.</p>' +
+      '<p class="cm-note" id="eBodyNote" style="margin:0 0 8px"></p>' +
       '<div class="cm-bar" style="margin:0"><input type="text" class="grow" id="eInstr" placeholder="Ask the AI to rewrite — e.g. shorter, more playful, mention the bonfire"><button type="button" class="btn-sm ghost" id="eRewrite">✨ Rewrite</button></div></div>' +
       '<div class="cm-sec"><h4>Photos</h4><div id="ePhotos" class="cm-photos"><p class="cm-note">Loading photos…</p></div>' +
       '<div class="cm-f" style="margin-top:10px"><label for="eTag">Line above the photo</label><select id="eTag"><option value="">Automatic</option>' +
@@ -462,6 +491,7 @@
   var availSeq = 0, availTimer = null;
   function checkAvail() {
     var c = collect(); if (!c || !$("eAvail")) return;
+    if (c.offer.kind === "none") { ed.avail = null; return; }
     var seq = ++availSeq;
     call("campaign_window_check", { p_offer: c.offer, p_expires: c.expires_on || null }).then(function (r) {
       if (seq !== availSeq || !$("eAvail")) return;
@@ -496,19 +526,30 @@
     if (kind === "fixed") o.amount = numv("eAmt");
     if (kind === "perk") o.perk = $("ePerk").value.trim();
     o.applies_to = kind === "perk" ? "all" : $("eOn").value;
+    if (!$("ePromo").checked) { o = { kind: "none", applies_to: "all" }; kind = "none"; }
+    o.layout = (($("cmEd").querySelector('input[name="eLayout"]:checked') || {}).value) || "classic";
     o.booking_kinds = Array.prototype.filter.call($("cmEd").querySelectorAll("input[data-k]"), function (x) { return x.checked; }).map(function (x) { return x.getAttribute("data-k"); });
     if (!o.booking_kinds.length) o.booking_kinds = ["overnight"];
-    if ($("eFrom").value) o.stay_from = $("eFrom").value;
-    if ($("eTo").value) o.stay_to = $("eTo").value;
-    if (numv("eMinN")) o.min_nights = numv("eMinN");
-    if (numv("eMinT")) o.min_total = numv("eMinT");
+    if (kind !== "none" && $("eFrom").value) o.stay_from = $("eFrom").value;
+    if (kind !== "none" && $("eTo").value) o.stay_to = $("eTo").value;
+    if (kind !== "none" && numv("eMinN")) o.min_nights = numv("eMinN");
+    if (kind !== "none" && numv("eMinT")) o.min_total = numv("eMinT");
     if (ed.offer && ed.offer.images && ed.offer.images.length) o.images = ed.offer.images.slice(0, 3);
     if ($("eTag") && $("eTag").value) o.tagline = $("eTag").value;
     return { id: ed.id, name: $("eName").value.trim(), status: ed.status, source: ed.source, rationale: ed.rationale || null, audience: a, audience_label: $("eAudLabel").value.trim() || ruleText(a),
-      offer: o, code_prefix: $("ePrefix").value.trim(), expires_on: $("eExp").value, subject: $("eSubj").value.trim(), headline: $("eHead").value.trim(),
-      body: $("eBodyT").value, cta_label: $("eCta").value.trim() || "Book with my code" };
+      offer: o, code_prefix: $("ePrefix").value.trim(), expires_on: kind === "none" ? "" : $("eExp").value, subject: $("eSubj").value.trim(), headline: $("eHead").value.trim(),
+      body: $("eBodyT").value, cta_label: $("eCta").value.trim() || (kind === "none" ? CTA_PLAIN : CTA_PROMO) };
   }
   function syncKind() {
+    var promo = $("ePromo").checked;
+    $("wPromo").style.display = promo ? "" : "none";
+    $("wTerms").style.display = promo ? "" : "none";
+    $("eAvail").style.display = promo ? "" : "none";
+    $("eCodeNote").style.display = promo ? "" : "none";
+    $("eKindsLbl").textContent = promo ? "Good for" : "Button goes to the booking page for";
+    $("eBodyNote").textContent = "{first_name} becomes the guest's first name. " + (promo ? "The offer box, code, terms and unsubscribe link are added automatically." : "No offer box or code — just your message, photos, the button and the unsubscribe link.");
+    var cta = $("eCta"); if (cta && (cta.value === CTA_PROMO || cta.value === CTA_PLAIN || !cta.value)) cta.value = promo ? CTA_PROMO : CTA_PLAIN;
+    Array.prototype.forEach.call($("cmEd").querySelectorAll(".cm-lay"), function (l) { l.classList.toggle("on", l.querySelector("input").checked); });
     var kind = (($("cmEd").querySelector('input[name="eKind"]:checked') || {}).value) || "percent";
     $("wPct").style.display = kind === "percent" ? "" : "none";
     $("wAmt").style.display = kind === "fixed" ? "" : "none";
@@ -573,7 +614,8 @@
   });
   $("cmEd").addEventListener("change", function (e) {
     if (!ed) return;
-    if (e.target.name === "eKind") { syncKind(); preview(); }
+    if (e.target.name === "eKind" || e.target.name === "eLayout") { syncKind(); preview(); }
+    if (e.target.id === "ePromo") { syncKind(); preview(); checkAvail(); }
     if (e.target.matches("input[type=checkbox],select") && e.target.closest(".cm-sec") && e.target.closest(".cm-sec").querySelector("#eAud")) { clearTimeout(audTimer); audTimer = setTimeout(countAudience, 200); }
     if (e.target.matches("input[data-k],#eOn,#eTag")) preview();
     if (e.target.matches("input[data-k],#eFrom,#eTo,#eExp")) { clearTimeout(availTimer); availTimer = setTimeout(checkAvail, 300); }
@@ -613,13 +655,15 @@
     if (e.target.closest("#eLaunch")) {
       var c = collect();
       if (!c.subject || !c.body.replace(/Hi \{first_name\},?/, "").trim()) { edMsg("Write the subject and the message first.", true); return; }
-      if (!c.expires_on || c.expires_on < todayStr()) { edMsg("Set a code expiry date in the future.", true); return; }
+      var plain = c.offer.kind === "none";
+      if (!plain && (!c.expires_on || c.expires_on < todayStr())) { edMsg("Set a code expiry date in the future.", true); return; }
       if (!num(ed.count)) { edMsg("No guests match this audience.", true); return; }
-      if (ed.avail && ed.avail.verdict === "full") { edMsg("These dates are full in Cloudbeds — change the stay dates first.", true); return; }
-      if (ed.avail && ed.avail.verdict === "tight" && !confirm("Most of these dates are already full in Cloudbeds:\n" + ed.avail.note + "\n\nSend anyway?")) return;
+      if (!plain && ed.avail && ed.avail.verdict === "full") { edMsg("These dates are full in Cloudbeds — change the stay dates first.", true); return; }
+      if (!plain && ed.avail && ed.avail.verdict === "tight" && !confirm("Most of these dates are already full in Cloudbeds:\n" + ed.avail.note + "\n\nSend anyway?")) return;
       if (!confirm("Send “" + c.name + "” to " + plural(ed.count, "guest") + "?\n\nOffer: " + offerLine(c.offer) + "\nSubject: " + c.subject +
-        "\n\nEach guest gets a personal code. Emails go out a few at a time (up to your daily limit); you can pause or cancel from the Campaigns tab.")) return;
-      edMsg("Creating codes…");
+        (plain ? "\n\nNo promotion and no codes — a plain email blast. Emails go out" : "\n\nEach guest gets a personal code. Emails go out")
+        + " a few at a time (up to your daily limit); you can pause or cancel from the Campaigns tab.")) return;
+      edMsg(plain ? "Queuing emails…" : "Creating codes…");
       save().then(function (id) { return call("campaign_launch", { p_id: id }); }).then(function (r) {
         fn({ action: "process" }).catch(function () { return null; }); // first batch right away
         closeModal(); tab = "campaigns"; store("vbr.cmTab", tab);
