@@ -57,6 +57,21 @@ async function rpc(name: string, args: Record<string, unknown> = {}, jwt?: strin
   }
   return text ? JSON.parse(text) : null;
 }
+// the name we hold for an email address (guest records), "" if none; drops "TEST" markers
+const cleanName = (n: unknown) => String(n || "").replace(/\btest\b/gi, " ").replace(/\s+-\s*$/, "").replace(/\s+/g, " ").trim();
+export async function nameForEmail(email: string): Promise<string> {
+  const e = email.trim().replace(/([\\%_])/g, "\\$1");
+  for (const t of ["cb_guest_contacts", "guest_profiles"]) {
+    const res = await fetch(`${SB_URL()}/rest/v1/${t}?select=name&email=ilike.${encodeURIComponent(e)}&name=not.is.null&order=updated_at.desc&limit=10`,
+      { headers: { apikey: SR(), Authorization: `Bearer ${SR()}` } }).catch(() => null);
+    const rows: Any[] = res?.ok ? await res.json().catch(() => []) : [];
+    // prefer a full name, then any name with a usable first name
+    const names = rows.map((r) => cleanName(r?.name)).filter((n) => firstName(n));
+    const best = names.find((n) => n.includes(" ")) || names[0];
+    if (best) return best;
+  }
+  return "";
+}
 let secretCache: string | null = null;
 async function secret() { if (!secretCache) secretCache = await rpc("cb_webhook_secret").catch(() => null); return secretCache; }
 
@@ -536,7 +551,9 @@ export async function handle(req: Request): Promise<Response> {
         // internal calls may only send to the configured test address
         const to = String((isCron ? "" : body.to) || settings.test_email || "").trim();
         if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(to)) return json({ error: "Enter an email address for the test" }, 400);
-        const m = renderEmail(c, { name: body.name || "Maria Santos", code: (String(c.code_prefix || "VBR").toUpperCase().replace(/[^A-Z0-9]/g, "") || "VBR") + "-SAMPLE" });
+        // greet the test recipient by their own name (from the guest records), never a stand-in
+        const name = String(body.name || "").trim() || await nameForEmail(to);
+        const m = renderEmail(c, { name, code: (String(c.code_prefix || "VBR").toUpperCase().replace(/[^A-Z0-9]/g, "") || "VBR") + "-SAMPLE" });
         await sendMail(to, { ...m, subject: "[TEST] " + m.subject });
         return json({ sent: true, to });
       }
