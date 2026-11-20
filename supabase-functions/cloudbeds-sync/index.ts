@@ -25,6 +25,12 @@
 //   rates_preview  { date } what Cloudbeds says for one night (nothing saved).
 //   ledger_preview { from, to } v82: Cloudbeds posted transactions (Accounting
 //            API) by service date, summed by code — nothing saved.
+//   manager_sync      v83: Cloudbeds transactions, reservations with nightly
+//            rates and room blocks changed since the last run → cb_* copies
+//            for the Manager's Report (pg_cron).
+//   manager_backfill  { kind: ledger|nights|blocks, from, to } one-off fill.
+//            v84: manager_sync also keeps Cloudbeds' pending (not yet audited)
+//            charges — the forecast part of the Manager's Report.
 //   test     check the API key.
 // v21 (Cloudbeds first): the website sends only the quotation for these
 // villa bookings; Cloudbeds' own emails take over (status changes are pushed
@@ -1044,7 +1050,7 @@ function background(p: Promise<unknown>) {
 // Cloudbeds Accounting API (replaced getTransactions, Dec 2025): posted
 // transactions by service date — the basis of the Manager's Report revenue.
 const ACC = "https://api.cloudbeds.com/accounting/v1.0";
-async function accTransactions(filters: Any, auth: "x-api-key" | "bearer", maxPages = 40): Promise<Any[]> {
+async function accTransactions(filters: Any, auth: "x-api-key" | "bearer", maxPages = 40, path = "transactions"): Promise<Any[]> {
   const key = env("CLOUDBEDS_API_KEY");
   if (!key) throw new Error("CLOUDBEDS_API_KEY is not set (Edge Functions → Secrets)");
   const out: Any[] = [];
@@ -1053,7 +1059,7 @@ async function accTransactions(filters: Any, auth: "x-api-key" | "bearer", maxPa
     const wait = lastCall + 220 - Date.now();
     if (wait > 0) await sleep(wait);
     lastCall = Date.now();
-    const res = await fetch(`${ACC}/transactions`, {
+    const res = await fetch(`${ACC}/${path}`, {
       method: "POST",
       headers: {
         ...(auth === "bearer" ? { Authorization: `Bearer ${key}` } : { "x-api-key": key }),
@@ -1070,7 +1076,7 @@ async function accTransactions(filters: Any, auth: "x-api-key" | "bearer", maxPa
       throw err;
     }
     const j = JSON.parse(text || "{}");
-    out.push(...(j.transactions || []));
+    out.push(...(j.transactions || j.pendingTransactions || j.data || []));
     pageToken = j.nextPageToken || null;
     if (!pageToken) break;
   }
@@ -1079,7 +1085,7 @@ async function accTransactions(filters: Any, auth: "x-api-key" | "bearer", maxPa
 
 // Dry run: Cloudbeds posted transactions for a service-date range, summed by
 // internal transaction code. Nothing is saved; no guest details are returned.
-async function ledgerPreview(from: string, to: string): Promise<Any> {
+async function ledgerPreview(from: string, to: string, pending = false): Promise<Any> {
   const filters = { and: [
     { field: "service_date", operator: "greater_than_or_equal", value: from },
     { field: "service_date", operator: "less_than_or_equal", value: to },
@@ -1087,7 +1093,7 @@ async function ledgerPreview(from: string, to: string): Promise<Any> {
   const tried: Any = {};
   let rows: Any[] | null = null, auth = "";
   for (const a of ["x-api-key", "bearer"] as const) {
-    try { rows = await accTransactions(filters, a); auth = a; break; } catch (e) { tried[a] = String((e as Error).message || e).slice(0, 300); }
+    try { rows = await accTransactions(filters, a, 40, pending ? "pending-transactions" : "transactions"); auth = a; break; } catch (e) { tried[a] = String((e as Error).message || e).slice(0, 300); }
   }
   if (!rows) return { ok: false, tried };
   const by: Record<string, Any> = {};
@@ -1098,6 +1104,174 @@ async function ledgerPreview(from: string, to: string): Promise<Any> {
   }
   const sample = rows[0] ? Object.fromEntries(Object.entries(rows[0]).filter(([k]) => /code|amount|scale|currency|kind|date|routed|parent|root/i.test(k))) : null;
   return { ok: true, auth, from, to, count: rows.length, groups: Object.values(by).sort((x: Any, y: Any) => String(x.code).localeCompare(String(y.code))), sample, tried };
+}
+
+// ---------------------------------------------------------------- manager report (v83)
+// Copies of Cloudbeds' own data for the Manager's Report on the website
+// (cb_transactions, cb_reservations, cb_room_nights, cb_room_blocks — see
+// supabase-functions/booking-v83-cloudbeds-manager-report.sql). Cloudbeds is
+// the official data; nothing here is calculated, only copied.
+const stateGet = async (key: string): Promise<Any> => {
+  const res = await fetch(`${SB_URL()}/rest/v1/cb_sync_state?key=eq.${encodeURIComponent(key)}&select=value`, {
+    headers: { apikey: SR(), Authorization: `Bearer ${SR()}` },
+  });
+  const rows = await res.json().catch(() => []);
+  return Array.isArray(rows) && rows[0] ? rows[0].value : null;
+};
+const sid = (v: unknown) => (v === null || v === undefined || v === "" ? null : String(v));
+
+export function txRow(t: Any) {
+  return {
+    id: String(t.id), code: t.internalTransactionCode, amount: Number(t.amount), currency: t.currency ?? null,
+    service_date: t.serviceDate ?? null, business_date: t.businessDate ?? null, txn_at: t.transactionDatetime ?? null,
+    source_kind: t.sourceKind ?? null, reservation_id: sid(t.sourceIdentifier), sub_reservation_id: sid(t.subSourceIdentifier),
+    relation_kind: t.externalRelationKind ?? null, relation_id: sid(t.externalRelationId), routed_from: sid(t.routedFrom),
+    parent_id: sid(t.parentId),
+  };
+}
+
+async function ledgerStore(filters: Any): Promise<number> {
+  const rows = (await accTransactions(filters, "x-api-key", 60)).map(txRow);
+  let n = 0;
+  for (let i = 0; i < rows.length; i += 1000) n += Number(await rpc("cb_ledger_upsert", { p: rows.slice(i, i + 1000) })) || 0;
+  return n;
+}
+
+// v84: charges Cloudbeds holds for nights not yet through night audit (room
+// rate net of inclusive taxes, taxes, fees) — Cloudbeds' own forecast. They
+// change until posted, so the whole window is replaced each time.
+async function pendingStore(from: string): Promise<number> {
+  const rows = (await accTransactions({ and: [
+    { field: "service_date", operator: "greater_than_or_equal", value: from },
+    { field: "service_date", operator: "less_than_or_equal", value: addDays(from, 730) },
+  ] }, "x-api-key", 60, "pending-transactions"))
+    .map(txRow).filter((r) => r.service_date && r.service_date >= from);
+  return Number(await rpc("cb_pending_replace", { p_from: from, p: rows })) || 0;
+}
+
+const addDays = (s: string, n: number) => ymd(new Date(new Date(s + "T00:00:00Z").getTime() + n * 86_400_000));
+
+// getReservationsWithRateDetails → the shape cb_nights_apply() expects
+export function nightsRow(d: Any) {
+  const rooms = (Array.isArray(d.rooms) ? d.rooms : []).filter((r: Any) => !r.roomTypeIsVirtual).map((r: Any, i: number) => {
+    let rates: Record<string, Any> = r.detailedRoomRates && typeof r.detailedRoomRates === "object" && !Array.isArray(r.detailedRoomRates) ? r.detailedRoomRates : {};
+    const ci = String(r.roomCheckIn || d.reservationCheckIn || "").slice(0, 10);
+    const co = String(r.roomCheckOut || d.reservationCheckOut || "").slice(0, 10);
+    if (!Object.keys(rates).length && /^\d{4}-\d{2}-\d{2}$/.test(ci) && co > ci) {
+      rates = {}; // no nightly rates from Cloudbeds: keep the nights, rate unknown
+      for (let n = ci; n < co; n = addDays(n, 1)) rates[n] = null;
+    }
+    return {
+      sub: sid(r.subReservationID) ?? sid(r.reservationRoomID) ?? `room${i + 1}`,
+      room_id: sid(r.roomID), room_type_id: sid(r.roomTypeID), check_in: ci || null, check_out: co || null,
+      room_status: r.roomStatus ?? null, adults: r.adults ?? 0, children: r.children ?? 0, rates,
+    };
+  });
+  return {
+    id: String(d.reservationID), status: d.status ?? null, deleted: d.isDeleted === true || d.isDeleted === "1",
+    created: manila(d.dateCreated), cancelled: manila(d.dateCancelled), modified: manila(d.dateModified),
+    check_in: d.reservationCheckIn ? String(d.reservationCheckIn).slice(0, 10) : null,
+    check_out: d.reservationCheckOut ? String(d.reservationCheckOut).slice(0, 10) : null,
+    source: d.sourceName ?? null, rooms,
+  };
+}
+
+// one page (100) of reservations with nightly rates → cb_nights_apply
+async function nightsPage(params: Record<string, unknown>, page: number): Promise<{ n: number; more: boolean }> {
+  const res = await cb("GET", "getReservationsWithRateDetails", { ...params, includeDeleted: true, pageSize: 100, pageNumber: page });
+  const items = Array.isArray(res.data) ? res.data : [];
+  if (items.length) await rpc("cb_nights_apply", { p: items.map(nightsRow) });
+  return { n: items.length, more: items.length === 100 };
+}
+
+async function blocksStore(from: string, to: string): Promise<number> {
+  const blocks = new Map<string, Any>();
+  for (let a = from; a < to; a = addDays(a, 35)) {
+    const b = addDays(a, 34) < to ? addDays(a, 34) : to;
+    for (let page = 1; page <= 20; page++) {
+      const res = await cb("GET", "getRoomBlocks", { startDate: a, endDate: b, pageSize: 100, pageNumber: page });
+      const list = (Array.isArray(res.data) ? res.data.flatMap((d: Any) => d.roomBlocks || []) : res.data?.roomBlocks) || [];
+      for (const k of list) {
+        blocks.set(String(k.roomBlockID), {
+          block_id: String(k.roomBlockID), type: k.roomBlockType, reason: k.roomBlockReason,
+          start: k.startDate, end: k.endDate, rooms: (k.rooms || []).map((r: Any) => String(r.roomID)),
+        });
+      }
+      if (list.length < 100) break;
+    }
+  }
+  return Number(await rpc("cb_blocks_store", { p_from: from, p_to: to, p: [...blocks.values()] })) || 0;
+}
+
+function chain(body: Record<string, unknown>) {
+  return secret().then((s) => fetch(SELF(), {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "x-webhook-secret": s || "" },
+    body: JSON.stringify(body),
+  })).catch(() => null);
+}
+
+// every few minutes (pg_cron): what changed in Cloudbeds since the last run
+async function managerSync(): Promise<Any> {
+  const started = new Date().toISOString();
+  const out: Any = { at: started, errors: [] as string[] };
+  const cur = (await stateGet("manager_cursor")) || {};
+  const since = (iso: string | undefined, backMin: number) =>
+    new Date((iso ? Date.parse(iso) : Date.now() - 2 * 86_400_000) - backMin * 60_000).toISOString();
+  try {
+    // Cloudbeds needs a closed range here (an open ">=" alone is refused)
+    out.transactions = await ledgerStore({ and: [
+      { field: "transaction_datetime", operator: "greater_than_or_equal", value: since(cur.ledger, 30).replace(/\.\d+Z$/, "Z") },
+      { field: "transaction_datetime", operator: "less_than_or_equal", value: new Date(Date.now() + 86_400_000).toISOString().replace(/\.\d+Z$/, "Z") },
+    ] });
+    cur.ledger = started;
+  } catch (e) { out.errors.push(String((e as Error).message || e)); }
+  try {
+    const from = since(cur.nights, 15);
+    const modifiedFrom = from.slice(0, 19).replace("T", " ");
+    let n = 0;
+    for (let page = 1; page <= 20; page++) { const r = await nightsPage({ modifiedFrom }, page); n += r.n; if (!r.more) break; }
+    out.reservations = n;
+    cur.nights = started;
+  } catch (e) { out.errors.push(String((e as Error).message || e)); }
+  try {
+    out.pending = await pendingStore(addDays(ymd(manilaToday()), -3));
+  } catch (e) { out.errors.push(String((e as Error).message || e)); }
+  try {
+    const today = ymd(manilaToday());
+    out.blocks = await blocksStore(addDays(today, -35), addDays(today, 400));
+  } catch (e) { out.errors.push(String((e as Error).message || e)); }
+  await stateSet("manager_cursor", cur);
+  await stateSet("last_manager_sync", out);
+  return out;
+}
+
+// one-off fill: { kind: "ledger" | "nights" | "blocks", from, to } (chains itself)
+async function managerBackfill(body: Any): Promise<Any> {
+  const kind = String(body.kind || ""), from = String(body.from || ""), to = String(body.to || "");
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(from) || !/^\d{4}-\d{2}-\d{2}$/.test(to) || to < from) return { error: "from / to (YYYY-MM-DD) needed" };
+  let out: Any;
+  if (kind === "ledger") {
+    // a month at a time, then the next month in a fresh invocation
+    const end = addDays(from, 30) < to ? addDays(from, 30) : to;
+    const n = await ledgerStore({ and: [
+      { field: "service_date", operator: "greater_than_or_equal", value: from },
+      { field: "service_date", operator: "less_than_or_equal", value: end },
+    ] });
+    out = { kind, from, to: end, transactions: n, more: end < to };
+    if (end < to) await chain({ action: "manager_backfill", kind, from: addDays(end, 1), to });
+  } else if (kind === "nights") {
+    const page = Number(body.page) || 1;
+    const deadline = Date.now() + 90_000;
+    let p = page, n = 0, more = true;
+    while (more && Date.now() < deadline) { const r = await nightsPage({ reservationCheckOutFrom: from, reservationCheckOutTo: to }, p); n += r.n; more = r.more; p++; }
+    out = { kind, from, to, pages: `${page}-${p - 1}`, reservations: n, more };
+    if (more) await chain({ action: "manager_backfill", kind, from, to, page: p });
+  } else if (kind === "blocks") {
+    out = { kind, from, to, blocks: await blocksStore(from, to) };
+  } else return { error: "kind must be ledger, nights or blocks" };
+  await stateSet("last_manager_backfill", out);
+  return out;
 }
 
 export async function handle(req: Request): Promise<Response> {
@@ -1145,11 +1319,13 @@ export async function handle(req: Request): Promise<Response> {
         const from = body.from ? new Date(String(body.from) + "T00:00:00Z") : manilaToday();
         return json(await syncRatesRange(from, Math.min(Number(body.days) || 30, 100), Date.now() + 100_000));
       }
+      case "manager_sync": return json(await managerSync());
+      case "manager_backfill": background(managerBackfill(body)); return json({ started: true });
       case "ledger_preview": {
         // dry run: Cloudbeds posted transactions by service date, summed by code (nothing saved)
         const ok = (d: unknown) => /^\d{4}-\d{2}-\d{2}$/.test(String(d));
         if (!ok(body.from) || !ok(body.to)) return json({ error: "from and to (YYYY-MM-DD) are required" }, 400);
-        return json(await ledgerPreview(String(body.from), String(body.to)));
+        return json(await ledgerPreview(String(body.from), String(body.to), body.pending === true));
       }
       case "rates_preview": {
         // dry run: what Cloudbeds says for one night (nothing is saved)
