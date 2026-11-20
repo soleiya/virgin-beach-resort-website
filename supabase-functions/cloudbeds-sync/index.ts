@@ -23,6 +23,8 @@
 //   rates    { from, days } Cloudbeds nightly prices + open nights → cb_rates
 //            (v36); also part of every pull (14 nights + 30 in rotation).
 //   rates_preview  { date } what Cloudbeds says for one night (nothing saved).
+//   ledger_preview { from, to } v82: Cloudbeds posted transactions (Accounting
+//            API) by service date, summed by code — nothing saved.
 //   test     check the API key.
 // v21 (Cloudbeds first): the website sends only the quotation for these
 // villa bookings; Cloudbeds' own emails take over (status changes are pushed
@@ -1038,6 +1040,66 @@ function background(p: Promise<unknown>) {
   return done;
 }
 
+// ---------------------------------------------------------------- ledger (v82)
+// Cloudbeds Accounting API (replaced getTransactions, Dec 2025): posted
+// transactions by service date — the basis of the Manager's Report revenue.
+const ACC = "https://api.cloudbeds.com/accounting/v1.0";
+async function accTransactions(filters: Any, auth: "x-api-key" | "bearer", maxPages = 40): Promise<Any[]> {
+  const key = env("CLOUDBEDS_API_KEY");
+  if (!key) throw new Error("CLOUDBEDS_API_KEY is not set (Edge Functions → Secrets)");
+  const out: Any[] = [];
+  let pageToken: string | null = null;
+  for (let page = 0; page < maxPages; page++) {
+    const wait = lastCall + 220 - Date.now();
+    if (wait > 0) await sleep(wait);
+    lastCall = Date.now();
+    const res = await fetch(`${ACC}/transactions`, {
+      method: "POST",
+      headers: {
+        ...(auth === "bearer" ? { Authorization: `Bearer ${key}` } : { "x-api-key": key }),
+        "X-Property-ID": PROPERTY(),
+        "Content-Type": "application/json",
+        Accept: "application/json",
+      },
+      body: JSON.stringify({ filters, limit: 1100, pageToken, sort: [{ field: "id", direction: "asc" }] }),
+    });
+    const text = await res.text();
+    if (!res.ok) {
+      const err = new Error(`accounting/transactions: HTTP ${res.status} ${text.slice(0, 300)}`);
+      (err as Any).status = res.status;
+      throw err;
+    }
+    const j = JSON.parse(text || "{}");
+    out.push(...(j.transactions || []));
+    pageToken = j.nextPageToken || null;
+    if (!pageToken) break;
+  }
+  return out;
+}
+
+// Dry run: Cloudbeds posted transactions for a service-date range, summed by
+// internal transaction code. Nothing is saved; no guest details are returned.
+async function ledgerPreview(from: string, to: string): Promise<Any> {
+  const filters = { and: [
+    { field: "service_date", operator: "greater_than_or_equal", value: from },
+    { field: "service_date", operator: "less_than_or_equal", value: to },
+  ] };
+  const tried: Any = {};
+  let rows: Any[] | null = null, auth = "";
+  for (const a of ["x-api-key", "bearer"] as const) {
+    try { rows = await accTransactions(filters, a); auth = a; break; } catch (e) { tried[a] = String((e as Error).message || e).slice(0, 300); }
+  }
+  if (!rows) return { ok: false, tried };
+  const by: Record<string, Any> = {};
+  for (const t of rows) {
+    const k = `${t.internalTransactionCode}|${t.sourceKind}|${t.routedFrom ? "routed" : ""}`;
+    const b = by[k] ||= { code: t.internalTransactionCode, source_kind: t.sourceKind, routed: !!t.routedFrom, n: 0, amount: 0, scale: t.currencyScale };
+    b.n++; b.amount += Number(t.amount) || 0;
+  }
+  const sample = rows[0] ? Object.fromEntries(Object.entries(rows[0]).filter(([k]) => /code|amount|scale|currency|kind|date|routed|parent|root/i.test(k))) : null;
+  return { ok: true, auth, from, to, count: rows.length, groups: Object.values(by).sort((x: Any, y: Any) => String(x.code).localeCompare(String(y.code))), sample, tried };
+}
+
 export async function handle(req: Request): Promise<Response> {
   if (req.method !== "POST") return new Response("Method not allowed", { status: 405 });
   const given = req.headers.get("x-webhook-secret") || "";
@@ -1082,6 +1144,12 @@ export async function handle(req: Request): Promise<Response> {
         // { from: "YYYY-MM-DD", days } — refresh a stretch of nights now (max 100)
         const from = body.from ? new Date(String(body.from) + "T00:00:00Z") : manilaToday();
         return json(await syncRatesRange(from, Math.min(Number(body.days) || 30, 100), Date.now() + 100_000));
+      }
+      case "ledger_preview": {
+        // dry run: Cloudbeds posted transactions by service date, summed by code (nothing saved)
+        const ok = (d: unknown) => /^\d{4}-\d{2}-\d{2}$/.test(String(d));
+        if (!ok(body.from) || !ok(body.to)) return json({ error: "from and to (YYYY-MM-DD) are required" }, 400);
+        return json(await ledgerPreview(String(body.from), String(body.to)));
       }
       case "rates_preview": {
         // dry run: what Cloudbeds says for one night (nothing is saved)
