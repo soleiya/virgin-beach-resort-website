@@ -318,9 +318,9 @@
     $("vcalRev").innerHTML = rev.err ? '<div class="dcal-kpi"><span>Revenue</span><b>—</b><small>' + esc(rev.err) + "</small></div>" :
       '<div class="dcal-kpi" title="Every casita sold every night at its room rate, plus full-board meals at base occupancy"><span>' + esc(mName) + " max revenue</span><b>" +
         (rReady ? esc(kPeso(mr.max)) : "…") + "</b><small>all casitas, rooms + meals</small></div>" +
-      '<div class="dcal-kpi" title="' + (rReady ? esc(peso(mr.ach) + " of " + peso(mr.max) + (mr.pen ? " · " + peso(mr.pen) + " more pending, not counted" : "")) : "") + '"><span>Achieved (confirmed)</span><b>' +
+      '<div class="dcal-kpi" title="' + (rReady ? esc(peso(mr.ach) + " of " + peso(mr.max) + " · remaining " + peso(Math.max(0, mr.max - mr.ach)) + " (blocked " + peso(mr.lost) + " · still open " + peso(Math.max(0, mr.max - mr.ach - mr.lost)) + ")" + (mr.pen ? " · " + peso(mr.pen) + " more pending, not counted" : "")) : "") + '"><span>Achieved (confirmed)</span><b>' +
         (rReady ? esc(kPeso(mr.ach)) + " <i>" + pct(mr.ach, mr.max) + "%</i>" : "…") + "</b>" + (rReady ? vbar(mr.ach, mr.lost, mr.max) : "") +
-        "<small>" + (rReady && mr.pen ? esc(kPeso(mr.pen)) + " pending not counted" : "of the month's max") + "</small></div>" +
+        "<small>" + (rReady ? esc(kPeso(Math.max(0, mr.max - mr.ach - mr.lost))) + " still open to sell" + (mr.pen ? " · " + esc(kPeso(mr.pen)) + " pending" : "") : "of the month's max") + "</small></div>" +
       '<div class="dcal-kpi"><span>Lost to blocks</span><b>' + (rReady ? esc(kPeso(mr.lost)) + " <i>" + pct(mr.lost, mr.max) + "%</i>" : "…") +
         "</b><small>blocked / held casitas</small></div>" +
       '<div class="dcal-kpi" title="' + (yr ? esc("From today to " + yr.to + ": " + peso(yr.ach) + " of " + peso(yr.max) + " · blocked " + peso(yr.lost) + " · still open " + peso(Math.max(0, yr.max - yr.ach - yr.lost))) : "") +
