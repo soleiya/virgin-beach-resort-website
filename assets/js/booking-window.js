@@ -15,7 +15,7 @@
   "use strict";
   var FALLBACK = "2026-12-31"; // used until the live setting loads (or if it can't)
   var cfg = window.SUPABASE_CONFIG || {};
-  var W = (window.VBRBookingWindow = { until: FALLBACK, stayUntil: null, requestUntil: null, requestFrom: null });
+  var W = (window.VBRBookingWindow = { until: FALLBACK, stayUntil: null, requestUntil: null, requestFrom: null, closedFrom: null, closedUntil: null });
   // v36: casitas (data-booking-date checkin/checkout) can have their own, later
   // window (booking_settings.villa_bookings_open_until); day trips use until.
   function untilFor(kind) { return (kind === "checkin" || kind === "checkout") && W.stayUntil ? W.stayUntil : W.until; }
@@ -114,7 +114,11 @@
   function stayNote() {
     var u = untilFor("checkin");
     if (!u || manilaToday() > u) return "";
-    return "Online booking is open for stays through " + fmt(u) + ". For other dates up to " + fmt(W.requestLimit()) + ", you can send us a booking request." +
+    // v86: weekends & holidays in the closure period are open for neither
+    var closedYr = W.closedFrom && W.closedFrom <= W.requestLimit() ? W.closedFrom.slice(0, 4) : "";
+    return "Online booking is open for " + (closedYr ? "weekday " : "") + "stays through " + fmt(u) + ". For other " + (closedYr ? "weekday " : "") +
+      "dates up to " + fmt(W.requestLimit()) + ", you can send us a booking request." +
+      (closedYr ? " Weekends and holidays in " + closedYr + " aren’t open yet." : "") +
       (W.earlyBird() ? " " + W.earlyBird() : "");
   }
   function noteText(kind) {
@@ -180,7 +184,9 @@
         W.until = rows[0].bookings_open_until || null;
         W.stayUntil = rows[0].villa_bookings_open_until || null;
         W.requestUntil = rows[0].requests_open_until || null;
-        W.requestFrom = rows[0].cloudbeds_rates ? rows[0].cloudbeds_rates_from || null : null; // v63
+        W.requestFrom = null; // v86: v63 undone — a night closed in Cloudbeds can't be requested
+        W.closedFrom = rows[0].closed_weekends_from || null; // v86: weekend / holiday closure
+        W.closedUntil = rows[0].closed_weekends_until || null;
         applyMax();
         refreshRateNote();
         recheckPrefilled();
