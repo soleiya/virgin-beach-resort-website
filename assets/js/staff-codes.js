@@ -45,6 +45,14 @@
     backdrop.addEventListener("click", function (e) { if (e.target === backdrop) close(); });
     $("codesBtn").addEventListener("click", function () { backdrop.classList.add("open"); resetForm(); load(); });
     $("cdNew").addEventListener("click", resetForm);
+    // v88: the campaign (personal) codes are in Campaigns → Codes
+    $("cdToCampaignCodes").addEventListener("click", function () {
+      close();
+      var b = Array.prototype.filter.call(document.querySelectorAll("button"), function (x) { return x.textContent.trim() === "Campaigns" && x.closest(".view-tabs, [role=group], nav, .dash-views") ; })[0]
+        || Array.prototype.filter.call(document.querySelectorAll("button"), function (x) { return x.textContent.trim() === "Campaigns"; })[0];
+      if (b) b.click();
+      setTimeout(function () { if (window.VBRCampaignCodes) window.VBRCampaignCodes.show(""); }, 300);
+    });
 
     function syncForm() {
       var fixed = $("cdKind").value === "fixed";
@@ -58,6 +66,7 @@
       if (addOn.disabled && $("cdApplies").value === "add_ons") $("cdApplies").value = "rooms";
       $("cdTypesWrap").style.opacity = stays ? "1" : "0.45";
       $("cdMinNights").disabled = !stays;
+      $("cdWeekdays").disabled = !stays;
     }
     ["cdKind", "cdKOvernight", "cdKDay", "cdApplies"].forEach(function (id) { $(id).addEventListener("change", syncForm); });
 
@@ -104,6 +113,7 @@
       $("cdMinNights").value = Number(c.min_nights) > 1 ? c.min_nights : "";
       $("cdMaxUses").value = c.max_uses || "";
       $("cdOnce").checked = !!c.once_per_guest;
+      $("cdWeekdays").checked = !!c.weekdays_only;  // v88
       $("cdLabel").value = c.label || "";
       $("cdActive").checked = !!c.active;
       drawTypes(c.room_types || []);
@@ -150,6 +160,7 @@
       if (c.room_types && c.room_types.length) out.push(c.room_types.map(typeName).join(", "));
       if (c.max_uses) out.push("Max " + c.max_uses + " use" + (c.max_uses === 1 ? "" : "s"));
       if (c.once_per_guest) out.push("Once per guest");
+      if (c.weekdays_only) out.push("Weeknights only");
       return out.length ? '<span class="cd-cond">' + out.map(esc).join("<br>") + "</span>" : '<span class="muted">—</span>';
     }
 
@@ -215,6 +226,7 @@
         room_types: types.length && roomTypes && types.length < roomTypes.length ? types : null,
         max_uses: parseInt($("cdMaxUses").value, 10) || null,
         once_per_guest: $("cdOnce").checked,
+        weekdays_only: stays && $("cdWeekdays").checked,  // v88
         label: $("cdLabel").value.trim() || null,
         active: $("cdActive").checked,
       };

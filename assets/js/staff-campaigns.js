@@ -201,11 +201,12 @@
     $("cmSub").textContent = "Personal offers to past guests — suggested by AI, approved by you. Guest list updated " + (ov.profiles_at ? fmtTime(ov.profiles_at) : "never") + ".";
   }
   function drawTabs() {
-    var nSug = (list || []).filter(function (c) { return c.status === "suggested" || c.status === "draft"; }).length;
+    var nSug = (list || []).filter(function (c) { return c.status === "suggested"; }).length;
+    var nDraft = (list || []).filter(function (c) { return c.status === "draft"; }).length;
     Array.prototype.forEach.call($("cmTabs").querySelectorAll("button"), function (b) {
       var t = b.getAttribute("data-t");
       b.classList.toggle("on", t === tab);
-      b.innerHTML = { suggest: "Suggestions", campaigns: "Campaigns", codes: "Codes", guests: "Guests", settings: "Settings" }[t] + (t === "suggest" && nSug ? "<b>" + nSug + "</b>" : "");
+      b.innerHTML = { suggest: "AI ideas", campaigns: "Campaigns", codes: "Codes", guests: "Guests", settings: "Settings" }[t] + (t === "suggest" && nSug ? "<b>" + nSug + "</b>" : "") + (t === "campaigns" && nDraft ? "<b>" + nDraft + "</b>" : "");
     });
   }
   function draw() {
@@ -218,7 +219,7 @@
 
   // ---------------------------------------------------------------- suggestions
   function drawSuggest() {
-    var items = (list || []).filter(function (c) { return c.status === "suggested" || c.status === "draft"; });
+    var items = (list || []).filter(function (c) { return c.status === "suggested"; });
     var noGuests = ov && num(ov.emailable) < 50;
     $("cmBody").innerHTML =
       '<div class="cm-bar"><input type="text" class="grow" id="cmFocus" placeholder="Optional focus for the AI — e.g. fill weekdays in February, Valentine\'s couples, corporate Christmas 2027" value="' + esc(store("vbr.cmFocus") || "") + '">' +
@@ -227,7 +228,7 @@
       (noGuests ? '<p class="cm-note">⚠ Only ' + n0(ov.emailable) + ' guests have an email on file so far. Go to <b>Guests → Refresh from Cloudbeds</b> to bring in the emails of past Cloudbeds guests first.</p>' : "") +
       flash +
       (items.length ? '<div class="cm-cards">' + items.map(card).join("") + "</div>"
-        : '<div class="cm-empty">No suggestions waiting. Ask the AI for ideas, or start a <a href="#" data-new="1">new campaign</a> yourself.</div>');
+        : '<div class="cm-empty">No AI ideas waiting. Ask the AI for ideas, or start a <a href="#" data-new="1">new campaign</a> yourself. Your drafts are under <b>Campaigns</b>.</div>');
   }
   function card(c) {
     var st = c.stats || {};
@@ -241,7 +242,7 @@
       (c.rationale ? '<div class="cm-why">' + esc(c.rationale) + "</div>" : "") +
       '<div class="cm-subj">✉ <b>' + esc(c.subject || "(no subject yet)") + "</b></div>" +
       '<div class="cm-why">Code valid until ' + esc(fmtDay(c.expires_on)) + (num(c.est_revenue) ? " · AI estimate: " + esc(n0(c.est_bookings)) + " bookings, " + esc(money(c.est_revenue)) : "") + "</div>" +
-      '<div class="cm-acts"><button type="button" class="btn-sm primary" data-edit="' + esc(c.id) + '">Review &amp; send…</button>' +
+      '<div class="cm-acts"><button type="button" class="btn-sm primary" data-edit="' + esc(c.id) + '">' + (c.status === "draft" ? "Edit, preview &amp; send…" : "Review &amp; send…") + "</button>" +
       '<button type="button" class="btn-sm danger" data-decline="' + esc(c.id) + '">Decline</button></div>' +
       "</div>";
   }
@@ -265,8 +266,12 @@
 
   // ---------------------------------------------------------------- campaigns
   function drawCampaigns() {
+    var drafts = (list || []).filter(function (c) { return c.status === "draft"; });
     var items = (list || []).filter(function (c) { return c.status !== "suggested" && c.status !== "draft"; });
-    $("cmBody").innerHTML = flash + (items.length ? '<div class="cm-twrap"><table class="cm-t"><thead><tr><th>Campaign</th><th>Status</th><th>Offer</th><th class="num">Sent</th><th class="num">Waiting</th><th class="num">Failed</th><th class="num">Redeemed</th><th class="num">Booking value</th><th>Started</th></tr></thead><tbody>' +
+    // v88: drafts sit at the top of Campaigns, each with Edit / preview / send
+    var draftBox = drafts.length ? '<h3 class="cm-h3" style="margin:4px 0 8px">Drafts — not sent yet</h3><div class="cm-cards">' + drafts.map(card).join("") + "</div>" +
+      (items.length ? '<h3 class="cm-h3" style="margin:22px 0 8px">Sent &amp; past campaigns</h3>' : "") : "";
+    $("cmBody").innerHTML = flash + draftBox + (items.length ? '<div class="cm-twrap"><table class="cm-t"><thead><tr><th>Campaign</th><th>Status</th><th>Offer</th><th class="num">Sent</th><th class="num">Waiting</th><th class="num">Failed</th><th class="num">Redeemed</th><th class="num">Booking value</th><th>Started</th></tr></thead><tbody>' +
       items.map(function (c) {
         var s = c.stats || {};
         return '<tr class="click" data-open="' + esc(c.id) + '"><td><b>' + esc(c.name) + '</b><span class="cm-sub">' + esc(c.audience_label || ruleText(c.audience)) + "</span></td>" +
@@ -276,7 +281,7 @@
           '<td class="num"><b>' + n0(s.redeemed) + "</b>" + (num(s.sent) ? '<span class="cm-sub">' + (Math.round(num(s.redeemed) / num(s.sent) * 1000) / 10) + "%</span>" : "") + "</td>" +
           '<td class="num">' + money(s.revenue) + (num(s.discount_given) ? '<span class="cm-sub">−' + money(s.discount_given) + " discount</span>" : "") + "</td>" +
           "<td>" + esc(c.launched_at ? fmtTime(c.launched_at) : "—") + "</td></tr>";
-      }).join("") + "</tbody></table></div>" : '<div class="cm-empty">Nothing sent yet. Approve a suggestion to start your first campaign.</div>');
+      }).join("") + "</tbody></table></div>" : (drafts.length ? "" : '<div class="cm-empty">Nothing sent yet. Approve a suggestion or start a <a href="#" data-new="1">new campaign</a>.</div>'));
   }
   function openDetail(id) {
     openModal("Loading…", '<div style="padding:24px">Loading…</div>');
@@ -474,7 +479,9 @@
       }).join("") + "</div>" +
       '<div id="wRooms"><span class="cm-lbl">Casitas to show (only nights still open in Cloudbeds appear)</span><div class="cm-checks cm-rooms">' + ROOMS.map(function (r) {
         return '<label><input type="checkbox" data-room="' + r[0] + '"' + ((o.rooms || []).indexOf(r[0]) > -1 ? " checked" : "") + ">" + esc(r[1]) + "</label>";
-      }).join("") + '</div><p class="cm-note" style="margin:0 0 8px">None ticked = picked for the audience (couples get the king casitas).</p></div>' +
+      }).join("") + '</div><p class="cm-note" style="margin:0 0 8px">None ticked = picked for the audience (couples get the king casitas).</p>' +
+      '<span class="cm-lbl">Casita style</span><div class="cm-checks"><label><input type="radio" name="eRoomStyle" value="cards"' + (o.room_style !== "list" ? " checked" : "") + '>Big cards — photos, price, open nights, button</label>' +
+      '<label><input type="radio" name="eRoomStyle" value="list"' + (o.room_style === "list" ? " checked" : "") + ">Compact list — small photo and a link</label></div></div>" +
       '<div class="cm-checks"><label><input type="checkbox" id="eSafety"' + (o.safety === true || (o.safety !== false && lay === "rooms") ? " checked" : "") + '>Add the fake-website safety notice (book only on virginbeachresort.com, pay only by our secure link)</label></div>' +
       '<div class="cm-f"><label for="ePre">Inbox preview text (the grey line after the subject)</label><input id="ePre" maxlength="140" value="' + esc(o.preheader || "") + '" placeholder="Automatic"></div>' +
       '<div class="cm-f"><label for="eSubj">Subject</label><input id="eSubj" maxlength="120" value="' + esc(ed.subject || "") + '"></div>' +
@@ -552,7 +559,11 @@
     if ($("ePre") && $("ePre").value.trim()) o.preheader = $("ePre").value.trim();
     if (ed.offer && ed.offer.rooms_title) o.rooms_title = ed.offer.rooms_title;
     var rooms = Array.prototype.filter.call($("cmEd").querySelectorAll("input[data-room]"), function (x) { return x.checked; }).map(function (x) { return x.getAttribute("data-room"); });
+    var prevRooms = (ed.offer && ed.offer.rooms) || [];  // keep the saved order, new ticks go last
+    rooms.sort(function (a, b) { var ia = prevRooms.indexOf(a), ib = prevRooms.indexOf(b); return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib); });
     if (o.layout === "rooms" && rooms.length) o.rooms = rooms;
+    var rs = ($("cmEd").querySelector('input[name="eRoomStyle"]:checked') || {}).value;
+    if (o.layout === "rooms" && rs === "list") o.room_style = "list";
     return { id: ed.id, name: $("eName").value.trim(), status: ed.status, source: ed.source, rationale: ed.rationale || null, audience: a, audience_label: $("eAudLabel").value.trim() || ruleText(a),
       offer: o, code_prefix: $("ePrefix").value.trim(), expires_on: kind === "none" ? "" : $("eExp").value, subject: $("eSubj").value.trim(), headline: $("eHead").value.trim(),
       body: $("eBodyT").value, cta_label: $("eCta").value.trim() || (kind === "none" ? CTA_PLAIN : CTA_PROMO) };
@@ -638,7 +649,7 @@
     if (e.target.name === "eKind" || e.target.name === "eLayout") { syncKind(); preview(); }
     if (e.target.id === "ePromo") { syncKind(); preview(); checkAvail(); }
     if (e.target.matches("input[type=checkbox],select") && e.target.closest(".cm-sec") && e.target.closest(".cm-sec").querySelector("#eAud")) { clearTimeout(audTimer); audTimer = setTimeout(countAudience, 200); }
-    if (e.target.matches("input[data-k],#eOn,#eTag,#eWkOnly,#eSafety,input[data-room]")) preview();
+    if (e.target.matches("input[data-k],#eOn,#eTag,#eWkOnly,#eSafety,input[data-room],input[name=eRoomStyle]")) preview();
     if (e.target.matches("input[data-k],#eFrom,#eTo,#eExp")) { clearTimeout(availTimer); availTimer = setTimeout(checkAvail, 300); }
     if (e.target.matches("select[data-photo]")) {
       var imgs = shownPhotos.slice(0, 3); imgs[Number(e.target.getAttribute("data-photo"))] = e.target.value;
@@ -719,6 +730,12 @@
     if (e.target.closest("#cmRefresh")) { setFlash(""); loadAll(); return; }
     if (e.target.closest("#cmNew") || e.target.closest("[data-new]")) { e.preventDefault(); openEditor(null); return; }
     if (e.target.closest("#cmAsk")) { ask(); return; }
+    if (e.target.closest("#cmToShared")) {  // v88: jump to the shared Discount Codes panel
+      var nv = Array.prototype.filter.call(document.querySelectorAll("button"), function (x) { return x.textContent.trim() === "New version"; })[0];
+      if (nv) nv.click();
+      setTimeout(function () { var cb = document.getElementById("codesBtn"); if (cb) cb.click(); }, 300);
+      return;
+    }
     var ed1 = e.target.closest("[data-edit]");
     if (ed1) { var c = byId(ed1.getAttribute("data-edit")); if (c) openEditor(c); return; }
     var dc = e.target.closest("[data-decline]");
@@ -744,6 +761,7 @@
   function drawCodes() {
     $("cmBody").innerHTML = flash +
       '<p class="cm-ro-note">View only — this account can look at codes but not change them.</p>' +
+      '<p class="cm-note" style="margin:0 0 10px">Personal codes sent in email campaigns (one per guest). Shared codes like SUMMER25 are under <button type="button" class="linkish" id="cmToShared">New version &rarr; Discount Codes</button> — same system, same checkout.</p>' +
       '<div class="cm-tiles" id="cdTiles"></div>' +
       '<div class="cd-filters"><input type="search" id="cdQ" placeholder="Search code, guest, email or booking no." value="' + esc(codesF.search) + '">' +
       '<select id="cdCamp"><option value="">All campaigns</option></select>' +
