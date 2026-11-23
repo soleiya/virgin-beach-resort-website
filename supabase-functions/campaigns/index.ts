@@ -11,6 +11,10 @@
 //   rewrite { campaign, instruction }  Claude rewrites one campaign's email.
 //   preview { campaign }      the email as a guest would get it (sample code).
 //   v82: offer.kind "none" = no promotion (no code/offer box); offer.layout = classic|letter|spotlight|news.
+//   v88: offer.layout "rooms" = room showcase: each casita in offer.rooms with its own photos, weeknight
+//        price and the nights still open (live from cb_rates). offer.safety = the fake-website safety
+//        notice (any layout; on by default for "rooms"). offer.preheader = the inbox preview line.
+//        offer.weekdays_only = the code only takes % off Sun–Thu (non-peak) casita nights (booking-v88).
 //   send_test { campaign, to? }  that email, to one address.
 //   process                   send the next batch now (also every 5 min by pg_cron).
 // Cron (header x-webhook-secret = cb_webhook_secret()): process, import_guests.
@@ -282,8 +286,11 @@ export function offerTerms(o: Any, expires: unknown): string[] {
   const kinds: string[] = Array.isArray(o?.booking_kinds) && o.booking_kinds.length ? o.booking_kinds : ["overnight"];
   t.push(kinds.includes("overnight") && kinds.includes("day_trip") ? "For casita stays and day trips." : kinds.includes("day_trip") ? "For day trips." : "For overnight casita stays.");
   if (o?.stay_from || o?.stay_to) t.push(`For ${kinds.includes("overnight") ? "check-ins" : "visits"}${o.stay_from ? " from " + fmtDate(o.stay_from) : ""}${o.stay_to ? " until " + fmtDate(o.stay_to) : ""}.`);
+  if (o?.layout === "rooms") t.push("Nights shown were still open when this email was sent and go first-come, first-served.");
   if (Number(o?.min_nights) > 1) t.push(`Minimum stay of ${o.min_nights} nights.`);
   if (Number(o?.min_total) > 0) t.push(`For bookings over ${peso(o.min_total)}.`);
+  if (o?.weekdays_only) t.push("Your code applies to weeknights only (Sunday to Thursday nights, not holiday eves). Friday and Saturday nights are at the regular rate.");
+  if (o?.layout === "rooms" && kinds.includes("overnight")) t.push("Full-board meals (buffet breakfast, lunch and dinner) are ₱2,695 per adult per night, not discounted.");
   if (expires) t.push(`Book by ${fmtDate(expires)}.`);
   t.push("One booking per code; it's linked to this email address. Subject to availability.");
   return t;
@@ -296,6 +303,7 @@ export const LAYOUTS: Record<string, string> = {
   letter: "Personal letter — text first, signed by the team, one photo",
   spotlight: "Photo spotlight — edge-to-edge photos, short centred text",
   news: "Announcement — coloured headline banner, then photo and message",
+  rooms: "Room showcase — safety notice, then each casita with photos, price and open nights",
 };
 export const layoutOf = (o: Any) => (o && String(o.layout) in LAYOUTS ? String(o.layout) : "classic");
 function ctaUrl(o: Any, code: string | null | undefined, slug = "") {
@@ -309,7 +317,72 @@ function fill(t: unknown, v: Record<string, string>) {
 }
 const slugOf = (c: Any) => String(c?.code_prefix || c?.name || "newsletter").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 40) || "newsletter";
 
-export function renderEmail(c: Any, r: { name?: string; code?: string | null; unsub?: string }) {
+// ---------------------------------------------------------------- v88: room showcase
+// Casita photos live on the website (assets/images/casitas/<room_type>-0N.jpg).
+// Words come from each casita's page; price and open nights are read live.
+export const ROOM_INFO: Record<string, { facts: string; pitch: string }> = {
+  "sunrise-casita": { facts: "Sleeps 4 · 2 queen beds · 42 m²", pitch: "Sliding glass doors open straight toward the sea. Made for early risers who can't wait to hit the sand." },
+  "louver-window-casita": { facts: "Sleeps 4 (+1 extra) · 2 queen beds · 42 m²", pitch: "Wooden jalousies keep it cool, dim and private. Perfect for late risers and long afternoon naps." },
+  "bamboo-casita": { facts: "Sleeps 4 · 2 queen beds · 31 m²", pitch: "Classic Filipino bamboo build with floor-to-ceiling doors you can slide open to the sea breeze." },
+  "double-queen-casita": { facts: "Sleeps 4 (+1 extra) · 2 queen beds · 118 m² with garden", pitch: "Our largest casita, with its own private garden, a bathtub and an outdoor shower." },
+  "deluxe-king-casita": { facts: "For 2 (+1 extra) · king bed · 107 m² with garden", pitch: "A private garden, a daybed, a bathtub and an outdoor shower. Our most romantic casita." },
+  "bamboo-king-casita": { facts: "For 2 · king bed · 31 m²", pitch: "A cozy bamboo hideaway for two, with an elevated patio made for slow mornings and sunset drinks." },
+};
+export const ROOM_ORDER = ["sunrise-casita", "louver-window-casita", "bamboo-casita", "double-queen-casita", "deluxe-king-casita", "bamboo-king-casita"];
+// the casitas a campaign shows: staff's pick, else by the audience's kind of group
+export function roomsFor(c: Any): string[] {
+  const o = c?.offer || {};
+  const picked = Array.isArray(o.rooms) ? o.rooms.map(String).filter((k: string) => k in ROOM_INFO) : [];
+  if (picked.length) return [...new Set(picked)].slice(0, 6) as string[];
+  const segs: string[] = Array.isArray(c?.audience?.segments) ? c.audience.segments : [];
+  if (segs.length && segs.every((x) => x === "couple" || x === "solo")) return ["deluxe-king-casita", "bamboo-king-casita", "sunrise-casita"];
+  return ["sunrise-casita", "louver-window-casita", "bamboo-casita", "double-queen-casita"];
+}
+export type RoomCard = { slug: string; name: string; rate: number; nights: string[] };
+async function rest(path: string): Promise<Any> {
+  const res = await fetch(`${SB_URL()}/rest/v1/${path}`, { headers: { apikey: SR(), Authorization: `Bearer ${SR()}` } });
+  if (!res.ok) throw new Error(`rest ${path.split("?")[0]}: ${res.status}`);
+  return res.json();
+}
+const manilaToday = () => new Date(Date.now() + 8 * 3600_000).toISOString().slice(0, 10);
+// open nights per casita type, inside the offer's stay window (from tomorrow), Cloudbeds rooms_available > 0.
+// weekdays_only → Sun–Thu nights that aren't peak / holiday eves.
+export async function loadRooms(c: Any): Promise<RoomCard[]> {
+  const o = c?.offer || {};
+  const slugs = roomsFor(c);
+  const tomorrow = new Date(Date.parse(manilaToday() + "T00:00:00Z") + 86400_000).toISOString().slice(0, 10);
+  const from = [String(o.stay_from || "").slice(0, 10), tomorrow].filter(Boolean).sort().pop() as string;
+  const toDefault = new Date(Date.parse(from + "T00:00:00Z") + 60 * 86400_000).toISOString().slice(0, 10);
+  const to = String(o.stay_to || "").slice(0, 10) || toDefault;
+  const villas: Any[] = await rest(`villas?select=room_type,room_type_name,weekday_rate,cb_room_type_id&active=eq.true&room_type=in.(${slugs.join(",")})`);
+  const types = [...new Set(villas.map((v) => v.cb_room_type_id).filter(Boolean))];
+  const rates: Any[] = types.length && from <= to
+    ? await rest(`cb_rates?select=cb_room_type_id,night,rooms_available&night=gte.${from}&night=lte.${to}&cb_room_type_id=in.(${types.join(",")})&order=night`)
+    : [];
+  const peak = new Set(((await rest(`peak_dates?select=night&night=gte.${from}&night=lte.${to}`).catch(() => [])) as Any[]).map((p) => String(p.night)));
+  const weeknight = (d: string) => { const w = new Date(d + "T00:00:00Z").getUTCDay(); return w !== 5 && w !== 6 && !peak.has(d); };
+  return slugs.map((slug) => {
+    const v = villas.find((x) => x.room_type === slug);
+    if (!v) return null;
+    const nights = rates.filter((r) => r.cb_room_type_id === v.cb_room_type_id && Number(r.rooms_available) > 0 && (!o.weekdays_only || weeknight(String(r.night)))).map((r) => String(r.night));
+    return { slug, name: String(v.room_type_name), rate: Number(v.weekday_rate), nights };
+  }).filter((x): x is RoomCard => !!x && x.nights.length > 0);
+}
+// the safety notice (fake websites / pages) — v88
+export const SAFETY = {
+  title: "Please watch out for fake Virgin Beach Resort pages",
+  lead: "We've been alerted to fake websites and social media pages using our name and photos to take payments. Here's how to know it's really us:",
+  items: [
+    { ok: true, b: "Book only on virginbeachresort.com.", t: "Check the address bar before you enter any details." },
+    { ok: true, b: "Pay only through our secure payment link.", t: "You'll get it on our website right after booking, or in an email from @virginbeachresort.com. It opens a checkout page run by our payment partner, Xendit." },
+    { ok: false, b: "We never ask you to send money to a GCash or Maya number, or to a personal bank account.", t: "GCash and Maya only work inside our secure checkout." },
+    { ok: true, b: "Bookings are only confirmed by email from @virginbeachresort.com.", t: "You're welcome to message us on Facebook, Instagram or Viber, but we never confirm a booking or take a payment there." },
+  ],
+  verify: "Not sure about a page, a message or a payment request? Call us on +63 917 792 0712 or email reservations@virginbeachresort.com before you pay.",
+};
+export const safetyOn = (o: Any) => o?.safety === true || (o?.safety !== false && layoutOf(o) === "rooms");
+
+export function renderEmail(c: Any, r: { name?: string; code?: string | null; unsub?: string }, rooms: RoomCard[] = []) {
   const o = c.offer || {};
   const promo = hasPromo(o);
   const layout = layoutOf(o);
@@ -324,9 +397,10 @@ export function renderEmail(c: Any, r: { name?: string; code?: string | null; un
   const photos = pickPhotos(c);
   const img = (k: string) => PHOTO_BASE + k + ".jpg";
   const [hero, ...more] = photos;
-  const tag = soundbite(c);
+  const tag = layout === "rooms" && safetyOn(o) && !String(o.tagline || "").trim() ? "Security notice · Virgin Beach Resort" : soundbite(c);  // v88
   const cta = c.cta_label || (promo ? "Book with my code" : "Plan your visit");
-  const preheader = promo ? `${offerLine(o)} — your personal code ${code}` : (paras.find((p) => !/^hi\b/i.test(p)) || headline).replace(/\s+/g, " ").slice(0, 110);
+  const preheader = String(o.preheader || "").trim() ? noCove(fill(o.preheader, v)).replace(/\s+/g, " ").slice(0, 140)
+    : promo ? `${offerLine(o)} — your personal code ${code}` : (paras.find((p) => !/^hi\b/i.test(p)) || headline).replace(/\s+/g, " ").slice(0, 110);
   // the website's look: Fraunces headings, Manrope text, sand / lagoon colours
   const SERIF = `font-family:Fraunces,'Iowan Old Style','Palatino Linotype',Georgia,serif`;
   const SANS = `font-family:Manrope,-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif`;
@@ -355,11 +429,44 @@ ${paras.map((p) => `<p style="margin:0 0 15px;font-size:16px;line-height:1.65;co
   const ctaRow = `<tr><td align="center" style="padding:24px 28px 8px"><a href="${esc(url)}" style="display:inline-block;background:${LAGOON};color:#ffffff;text-decoration:none;${SANS};font-weight:700;font-size:13px;letter-spacing:.08em;text-transform:uppercase;padding:16px 32px;border-radius:999px">${esc(cta)}</a>
 ${promo ? `<div style="font-size:12px;color:${SOFT};margin-top:12px">The code is filled in for you — or enter it on the booking page.</div>` : ""}</td></tr>`;
   const termsRow = terms.length ? `<tr><td class="pad" style="padding:18px 36px 24px"><ul style="margin:0;padding-left:18px;font-size:12px;line-height:1.65;color:${SOFT}">${terms.map((t) => `<li>${esc(t)}</li>`).join("")}</ul></td></tr>` : `<tr><td style="padding:12px 0 0"></td></tr>`;
+  // v88: safety notice + room showcase
+  const RED = "#a4473a";
+  const safetyRow = safetyOn(o) ? `<tr><td class="pad" style="padding:8px 36px 22px"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#ffffff;border:1px solid ${LINE};border-left:4px solid ${DEEP};border-radius:12px">
+<tr><td style="padding:20px 22px 18px"><div style="${SERIF};font-size:20px;font-weight:600;line-height:1.25;color:${INK}">${esc(SAFETY.title)}</div>
+<p style="margin:6px 0 10px;font-size:14px;line-height:1.55;color:${SOFT}">${esc(SAFETY.lead)}</p>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0">${SAFETY.items.map((it) => `<tr><td width="20" valign="top" style="padding:12px 0 8px;border-top:1px solid #efe8da"><div style="width:9px;height:9px;border-radius:50%;background:${it.ok ? DEEP : RED}"></div></td>
+<td style="padding:8px 0;border-top:1px solid #efe8da;font-size:14px;line-height:1.5;color:${SOFT}"><b style="color:${INK}">${esc(it.b)}</b> ${esc(it.t)}</td></tr>`).join("")}</table>
+<p style="margin:10px 0 0;font-size:13px;line-height:1.5;color:${SOFT}">${esc(SAFETY.verify)}</p></td></tr></table></td></tr>` : "";
+  const roomUrl = (slug: string) => `${SITE}/book-stay/?casita=${encodeURIComponent(slug)}${code ? "&code=" + encodeURIComponent(code) : ""}&utm_source=${code ? "offer_email" : "campaign_email"}&utm_medium=email&utm_campaign=${encodeURIComponent(code ? String(code).split("-")[0].toLowerCase() : slugOf(c))}`;
+  const chips = (nights: string[]) => {
+    const by: Record<string, Date[]> = {};
+    for (const n of nights) { const d = new Date(n + "T00:00:00Z"); const m = d.toLocaleDateString("en-US", { timeZone: "UTC", month: "long" }); (by[m] ||= []).push(d); }
+    return Object.entries(by).map(([m, ds]) => `<div style="${SANS};font-size:11px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:#9a907f;margin:10px 0 6px">${m}</div><div>${ds.map((d) =>
+      `<span style="display:inline-block;margin:0 4px 6px 0;padding:5px 0;width:38px;text-align:center;border-radius:8px;background:${TINT};color:${DEEP};${SANS};font-size:11px;font-weight:600;line-height:1.2">${d.toLocaleDateString("en-US", { timeZone: "UTC", weekday: "short" }).slice(0, 2)}<br><b style="font-size:15px">${d.getUTCDate()}</b></span>`).join("")}</div>`).join("");
+  };
+  const casitaImg = (slug: string, n: number) => `${SITE}/assets/images/casitas/${slug}-0${n}.jpg`;
+  const roomCard = (rm: RoomCard) => { const info = ROOM_INFO[rm.slug]; const u = roomUrl(rm.slug); const sale = promo && o.kind === "percent" ? rm.rate * (1 - Number(o.percent || 0) / 100) : 0;
+    return `<tr><td class="pad" style="padding:0 36px 26px"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#ffffff;border:1px solid ${LINE};border-radius:16px;overflow:hidden">
+<tr><td style="padding:0"><a href="${esc(u)}"><img src="${casitaImg(rm.slug, 1)}" width="528" alt="${esc(rm.name)}" style="display:block;width:100%;height:auto;border:0"></a></td></tr>
+<tr><td style="padding:3px 0 0"><table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td width="50%" style="padding:0 1.5px 0 0"><img src="${casitaImg(rm.slug, 2)}" width="263" alt="" style="display:block;width:100%;height:auto;border:0"></td><td width="50%" style="padding:0 0 0 1.5px"><img src="${casitaImg(rm.slug, 3)}" width="263" alt="" style="display:block;width:100%;height:auto;border:0"></td></tr></table></td></tr>
+<tr><td style="padding:20px 22px 22px"><div style="${SERIF};font-size:23px;font-weight:600;line-height:1.2;color:${INK}">${esc(rm.name)}</div>
+<div style="font-size:13px;color:#7a6f5e;margin-top:4px">${esc(info?.facts || "")}</div>
+<p style="margin:10px 0 0;font-size:15px;line-height:1.55;color:${SOFT}">${esc(info?.pitch || "")}</p>
+<p style="margin:14px 0 0;font-size:15px;color:${SOFT}">${sale ? `Weeknight rate with your code: <b style="color:${INK};font-size:17px">${peso(sale)}</b> <span style="color:#7a6f5e;font-size:13px">(regular ${peso(rm.rate)})</span>` : `Weeknight rate: <b style="color:${INK};font-size:17px">${peso(rm.rate)}</b>`}</p>
+<div style="${SANS};font-size:11px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:${DEEP};margin-top:16px">Open ${o.weekdays_only ? "weeknights" : "nights"}</div>
+${chips(rm.nights)}
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:12px"><tr><td align="center" style="background:${DEEP};border-radius:999px"><a href="${esc(u)}" style="display:block;padding:13px 10px;color:#ffffff;text-decoration:none;${SANS};font-weight:600;font-size:15px">Book the ${esc(rm.name)}</a></td></tr></table>
+<div style="text-align:center;font-size:12px;color:#7a6f5e;margin-top:8px">Opens virginbeachresort.com</div></td></tr></table></td></tr>`; };
+  const codeRow = promo ? `<tr><td class="pad" style="padding:0 36px 6px"><p style="margin:0 0 15px;font-size:16px;line-height:1.65;color:${SOFT}">Your personal code is <b style="font-family:'Courier New',monospace;color:${DEEP};letter-spacing:.06em">${esc(code)}</b>. It takes ${esc(offerLine(o).replace(/^(\d+%) off /, "$1 off the "))}${o.weekdays_only ? " for weeknights" : ""} and is already applied when you book through the buttons below, which take you to <b style="color:${INK}">virginbeachresort.com</b>.</p></td></tr>` : "";
+  const expRow = photos.length ? `<tr><td style="padding:4px 30px 8px"><table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>${photos.map((k) => `<td class="tile" width="33%" valign="top" style="padding:0 6px"><img src="${img(k)}" width="170" alt="${esc(PHOTOS[k].alt)}" style="display:block;width:100%;height:auto;border:0;border-radius:12px"><div style="${SANS};font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:${DEEP};padding:8px 2px 0;line-height:1.35">${esc(PHOTOS[k].caption)}</div></td>`).join("")}</tr></table></td></tr>` : "";
+  const noRooms = `<tr><td class="pad" style="padding:0 36px 20px"><p style="margin:0;font-size:15px;line-height:1.6;color:${SOFT}">Our casitas for these dates have filled up. Reply to this email or call us and we'll find you the next best nights.</p></td></tr>`;
   let main = "";
-  if (layout === "letter") main = eyebrowRow + headRow.replace("padding:12px 36px 22px", "padding:12px 36px 4px") + msgRow(18) + signRow + (promo ? `<tr><td style="padding:14px 0 0"></td></tr>` + promoRow : "") + ctaRow + (hero ? `<tr><td style="padding:22px 20px 0"><a href="${esc(url)}"><img src="${img(hero)}" width="560" alt="${esc(PHOTOS[hero].alt)}" style="display:block;width:100%;height:auto;border:0;border-radius:14px"></a></td></tr>` : "") + termsRow;
+  if (layout === "rooms") main = eyebrowRow + headRow + msgRow(0) + safetyRow + codeRow + (rooms.length ? rooms.map(roomCard).join("") : noRooms) + expRow + termsRow;
+  else if (layout === "letter") main = eyebrowRow + headRow.replace("padding:12px 36px 22px", "padding:12px 36px 4px") + msgRow(18) + signRow + (promo ? `<tr><td style="padding:14px 0 0"></td></tr>` + promoRow : "") + ctaRow + (hero ? `<tr><td style="padding:22px 20px 0"><a href="${esc(url)}"><img src="${img(hero)}" width="560" alt="${esc(PHOTOS[hero].alt)}" style="display:block;width:100%;height:auto;border:0;border-radius:14px"></a></td></tr>` : "") + termsRow;
   else if (layout === "spotlight") main = heroRow(hero, true) + eyebrowRow + headRow + msgRow(0) + promoRow + ctaRow + more.map(bigPhoto).join("") + termsRow;
   else if (layout === "news") main = banner + (hero ? `<tr><td style="padding:22px 20px 0"><a href="${esc(url)}"><img src="${img(hero)}" width="560" alt="${esc(PHOTOS[hero].alt)}" style="display:block;width:100%;height:auto;border:0;border-radius:14px"></a></td></tr>` : "") + msgRow() + ctaRow + (promo ? `<tr><td style="padding:16px 0 0"></td></tr>` + promoRow : "") + tiles + termsRow;
   else main = eyebrowRow + headRow + heroRow(hero) + msgRow() + promoRow + ctaRow + tiles + termsRow;
+  if (layout !== "rooms" && safetyRow) main = main.replace(termsRow, safetyRow + termsRow);
   const html = `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400..600&family=Manrope:wght@400;600;700&display=swap" rel="stylesheet">
 <style>@media (max-width:520px){.pad{padding-left:20px!important;padding-right:20px!important}.tile{display:block!important;width:100%!important;padding:0 0 16px!important}.tile img{max-width:100%!important}.h1{font-size:26px!important}}</style></head>
@@ -376,11 +483,13 @@ Questions? Reply to this email or call +63 917 792 0712 · <a href="${SITE}/" st
 You're getting this because you've been our guest. <a href="${esc(unsub)}" style="color:${SOFT}">Unsubscribe from ${promo ? "offers" : "these emails"}</a>.<br>
 Virgin Beach Resort · Laiya, San Juan, Batangas, Philippines</td></tr>
 </table></td></tr></table></body></html>`;
-  const text = [headline, "", ...paras.flatMap((p) => [p, ""]), ...(layout === "letter" ? ["Warm regards,", "The Virgin Beach Resort team", ""] : []),
+  const safetyText = safetyOn(o) ? [SAFETY.title.toUpperCase(), SAFETY.lead, ...SAFETY.items.map((it) => `• ${it.b} ${it.t}`), SAFETY.verify, ""] : [];
+  const roomText = layout === "rooms" ? rooms.flatMap((rm) => [`${rm.name} — ${ROOM_INFO[rm.slug]?.facts || ""}`, `Open: ${rm.nights.map((n) => fmtDate(n).replace(/, \d{4}$/, "")).join(", ")}`, `Book: ${roomUrl(rm.slug)}`, ""]) : [];
+  const text = [headline, "", ...paras.flatMap((p) => [p, ""]), ...safetyText, ...roomText, ...(layout === "letter" ? ["Warm regards,", "The Virgin Beach Resort team", ""] : []),
     ...(promo ? [`Your offer: ${offerLine(o)}`, `Your personal code: ${code}`] : []), `${promo ? "Book" : cta}: ${url}`, "",
     ...(terms.length ? [...terms.map((t) => "• " + t), ""] : []), "Virgin Beach Resort — private villa resort on a virgin white sand beach, about 3 hours from Manila.",
     "Questions? Reply to this email or call +63 917 792 0712.", `Unsubscribe: ${unsub}`].join("\n");
-  return { subject, html, text, unsub, images: photos };
+  return { subject, html, text, unsub, images: photos, rooms: rooms.map((x) => ({ slug: x.slug, name: x.name, nights: x.nights.length })) };
 }
 
 let transporter: Any = null;
@@ -405,10 +514,13 @@ async function processQueue() {
   let sent = 0, failed = 0;
   const errors: string[] = [];
   const batch = await rpc("campaign_claim_batch", {});
+  const roomCache: Record<string, RoomCard[]> = {};  // v88: one live room lookup per campaign per batch
   for (const it of (batch?.items || []) as Any[]) {
     if (Date.now() > deadline) break;
     try {
-      await sendMail(it.email, renderEmail(it.campaign, { name: it.name, code: it.code, unsub: it.unsub_token }));
+      const cid = String(it.campaign?.id || "");
+      if (layoutOf(it.campaign?.offer) === "rooms" && !(cid in roomCache)) roomCache[cid] = await loadRooms(it.campaign);
+      await sendMail(it.email, renderEmail(it.campaign, { name: it.name, code: it.code, unsub: it.unsub_token }, roomCache[cid] || []));
       await rpc("campaign_mark", { p_id: it.id, p_ok: true, p_error: null });
       sent++;
       await sleep(400); // gentle on Gmail
@@ -574,8 +686,9 @@ export async function handle(req: Request): Promise<Response> {
       case "rewrite": return json(await rewrite(body.campaign || {}, String(body.instruction || "").slice(0, 400)));
       case "preview": {
         const c = body.campaign || {};
-        const m = renderEmail(c, { name: body.name || "Maria Santos", code: (String(c.code_prefix || "VBR").toUpperCase().replace(/[^A-Z0-9]/g, "") || "VBR") + "-SAMPLE" });
-        return json({ subject: m.subject, html: m.html, offer_line: hasPromo(c.offer) ? offerLine(c.offer || {}) : "No promotion", images: m.images, layouts: LAYOUTS,
+        const rooms = layoutOf(c.offer) === "rooms" ? await loadRooms(c) : [];
+        const m = renderEmail(c, { name: body.name || "Maria Santos", code: (String(c.code_prefix || "VBR").toUpperCase().replace(/[^A-Z0-9]/g, "") || "VBR") + "-SAMPLE" }, rooms);
+        return json({ subject: m.subject, html: m.html, rooms: m.rooms, room_choices: ROOM_ORDER.map((k) => ({ key: k, facts: ROOM_INFO[k].facts })), offer_line: hasPromo(c.offer) ? offerLine(c.offer || {}) : "No promotion", images: m.images, layouts: LAYOUTS,
           photos: body.catalog ? Object.entries(PHOTOS).map(([k, p]) => ({ key: k, topic: p.topic, alt: p.alt, caption: p.caption, url: PHOTO_BASE + k + ".jpg" })) : undefined });
       }
       case "send_test": {
@@ -586,7 +699,8 @@ export async function handle(req: Request): Promise<Response> {
         if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(to)) return json({ error: "Enter an email address for the test" }, 400);
         // greet the test recipient by their own name (from the guest records), never a stand-in
         const name = String(body.name || "").trim() || await nameForEmail(to);
-        const m = renderEmail(c, { name, code: (String(c.code_prefix || "VBR").toUpperCase().replace(/[^A-Z0-9]/g, "") || "VBR") + "-SAMPLE" });
+        const rooms = layoutOf(c.offer) === "rooms" ? await loadRooms(c) : [];
+        const m = renderEmail(c, { name, code: (String(c.code_prefix || "VBR").toUpperCase().replace(/[^A-Z0-9]/g, "") || "VBR") + "-SAMPLE" }, rooms);
         await sendMail(to, { ...m, subject: "[TEST] " + m.subject });
         return json({ sent: true, to });
       }
