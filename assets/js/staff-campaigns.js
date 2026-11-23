@@ -115,7 +115,7 @@
     ".cm-avail.tight{background:#fbe8c2;color:#7f5200}.cm-avail.full{background:#f7dcd6;color:#8a2a1a}" +
     // v82: promotion on/off and the layout picker
     ".cm-promo-tg{display:flex;gap:10px;align-items:flex-start;padding:10px 12px;margin:0 0 12px;border:1px solid var(--line);border-radius:12px;cursor:pointer;background:var(--surface,#fff)}.cm-promo-tg input{margin-top:3px}.cm-promo-tg small{display:block;color:var(--muted,#6b6559);font-size:.8rem;line-height:1.4;margin-top:2px}" +
-    ".cm-layouts{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin:4px 0 12px}@media(max-width:700px){.cm-layouts{grid-template-columns:1fr 1fr}}" +
+    ".cm-layouts{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin:4px 0 12px}@media(max-width:700px){.cm-layouts{grid-template-columns:1fr 1fr}}" +
     ".cm-lay{position:relative;display:flex;flex-direction:column;gap:3px;padding:8px;border:1px solid var(--line);border-radius:12px;cursor:pointer;font-size:.8rem;line-height:1.3;background:var(--surface,#fff)}.cm-lay input{position:absolute;opacity:0;pointer-events:none}" +
     ".cm-lay.on{border-color:var(--lagoon,#1f7a72);box-shadow:0 0 0 2px var(--lagoon-tint,#e4f1ee)}.cm-lay small{color:var(--muted,#6b6559);font-size:.72rem}" +
     ".cm-lay-pic{display:flex;flex-direction:column;gap:3px;height:62px;padding:5px;border-radius:6px;background:#f6f1e6;margin-bottom:4px;overflow:hidden}.cm-lay-pic i{display:block;border-radius:2px;background:#d9ccb0}" +
@@ -124,7 +124,7 @@
     ".cm-lay-classic i:nth-child(4),.cm-lay-news i:nth-child(4){height:10px;background:linear-gradient(90deg,#d9ccb0 48%,transparent 48% 52%,#d9ccb0 52%)}" +
     ".cm-lay-letter i:nth-child(2){height:22px;background:repeating-linear-gradient(#bcb3a3 0 2px,transparent 2px 4px)}.cm-lay-letter i:nth-child(3){height:3px;width:45%;background:#23241f}.cm-lay-letter i:nth-child(4){height:12px}" +
     ".cm-lay-spotlight{padding:0 0 5px}.cm-lay-spotlight i:nth-child(1){height:22px;border-radius:0}.cm-lay-spotlight i:nth-child(2),.cm-lay-spotlight i:nth-child(3){margin:0 auto;width:70%}.cm-lay-spotlight i:nth-child(4){height:14px;border-radius:0}" +
-    ".cm-lay-news{padding:0 5px 5px}.cm-lay-news i:nth-child(1){height:14px;margin:0 -5px;border-radius:0;background:#14524c}" +
+    ".cm-lay-rooms i:nth-child(1){height:12px;border-left:3px solid #14524c;background:#fff}.cm-lay-rooms i:nth-child(2),.cm-lay-rooms i:nth-child(3){height:14px;background:linear-gradient(90deg,#d9ccb0 34%,#fff 34%)}.cm-lay-rooms i:nth-child(4){height:6px;width:60%;background:#1f7a72}.cm-rooms label{min-width:46%}.cm-lay-news{padding:0 5px 5px}.cm-lay-news i:nth-child(1){height:14px;margin:0 -5px;border-radius:0;background:#14524c}" +
     ".cm-pgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}.cm-pslot{display:flex;flex-direction:column;gap:6px;min-width:0}" +
     ".cm-pimg{aspect-ratio:3/2;border-radius:8px;overflow:hidden;background:var(--sand,#efe7da)}.cm-pimg img{width:100%;height:100%;object-fit:cover;display:block}" +
     ".cm-pslot select{width:100%;font:inherit;font-size:.8rem;padding:5px 6px;border:1px solid var(--line);border-radius:8px;background:#fff}.cm-pslot small{color:var(--ink-soft,#6b7774);font-size:.72rem}" +
@@ -406,8 +406,12 @@
     ["classic", "Classic", "Big photo, message, offer box, two photos"],
     ["letter", "Personal letter", "Text first, signed by the team, one photo"],
     ["spotlight", "Photo spotlight", "Edge-to-edge photos, short centred text"],
-    ["news", "Announcement", "Coloured headline banner, then photo and message"]
+    ["news", "Announcement", "Coloured headline banner, then photo and message"],
+    ["rooms", "Room showcase", "Safety notice, then each casita with photos, price and open nights"]
   ];
+  // v88: casitas the room showcase can show (same keys as the campaigns edge function)
+  var ROOMS = [["sunrise-casita", "Sunrise"], ["louver-window-casita", "Louver-Window"], ["bamboo-casita", "Bamboo"],
+    ["double-queen-casita", "Deluxe Double Queen"], ["deluxe-king-casita", "Deluxe King"], ["bamboo-king-casita", "Bamboo King"]];
   var CTA_PROMO = "Book with my code", CTA_PLAIN = "Plan your visit";
   function blank() {
     return { id: null, name: "", status: "draft", source: "staff", audience: { segments: [], skip_contacted_days: 14 }, audience_label: "",
@@ -460,6 +464,7 @@
       '<div class="cm-f"><label for="eMinT">Minimum booking ₱</label><input id="eMinT" type="number" min="0" step="1000" value="' + esc(o.min_total || "") + '"></div>' +
       '<div class="cm-f"><label for="eExp">Book by (code expires)</label><input id="eExp" type="date" value="' + esc(ed.expires_on || "") + '"></div>' +
       '<div class="cm-f"><label for="ePrefix">Code starts with</label><input id="ePrefix" maxlength="12" value="' + esc(ed.code_prefix || "") + '" placeholder="e.g. SUMMER"></div></div>' +
+      '<div class="cm-checks" id="wWk"><label><input type="checkbox" id="eWkOnly"' + (o.weekdays_only ? " checked" : "") + '>Weeknights only — the code takes its discount off Sunday–Thursday nights (not holiday eves); Fri/Sat nights stay at the regular rate</label></div>' +
       '<div class="cm-avail" id="eAvail">Checking Cloudbeds availability…</div>' +
       '<p class="cm-note" id="eCodeNote" style="margin:0">Each guest gets their own code (e.g. ' + esc((ed.code_prefix || "VBR").toUpperCase()) + '-7KQ2M): one booking, only with their email address. The website applies it automatically.</p></div>' +
       '<div class="cm-sec"><h4>The email</h4>' +
@@ -467,6 +472,11 @@
         return '<label class="cm-lay' + (l[0] === lay ? " on" : "") + '"><input type="radio" name="eLayout" value="' + l[0] + '"' + (l[0] === lay ? " checked" : "") + '>' +
           '<span class="cm-lay-pic cm-lay-' + l[0] + '"><i></i><i></i><i></i><i></i></span><b>' + esc(l[1]) + "</b><small>" + esc(l[2]) + "</small></label>";
       }).join("") + "</div>" +
+      '<div id="wRooms"><span class="cm-lbl">Casitas to show (only nights still open in Cloudbeds appear)</span><div class="cm-checks cm-rooms">' + ROOMS.map(function (r) {
+        return '<label><input type="checkbox" data-room="' + r[0] + '"' + ((o.rooms || []).indexOf(r[0]) > -1 ? " checked" : "") + ">" + esc(r[1]) + "</label>";
+      }).join("") + '</div><p class="cm-note" style="margin:0 0 8px">None ticked = picked for the audience (couples get the king casitas).</p></div>' +
+      '<div class="cm-checks"><label><input type="checkbox" id="eSafety"' + (o.safety === true || (o.safety !== false && lay === "rooms") ? " checked" : "") + '>Add the fake-website safety notice (book only on virginbeachresort.com, pay only by our secure link)</label></div>' +
+      '<div class="cm-f"><label for="ePre">Inbox preview text (the grey line after the subject)</label><input id="ePre" maxlength="140" value="' + esc(o.preheader || "") + '" placeholder="Automatic"></div>' +
       '<div class="cm-f"><label for="eSubj">Subject</label><input id="eSubj" maxlength="120" value="' + esc(ed.subject || "") + '"></div>' +
       '<div class="cm-f"><label for="eHead">Headline</label><input id="eHead" maxlength="140" value="' + esc(ed.headline || "") + '"></div>' +
       '<div class="cm-f"><label for="eBodyT">Message</label><textarea id="eBodyT">' + esc(ed.body || "") + "</textarea></div>" +
@@ -536,6 +546,12 @@
     if (kind !== "none" && numv("eMinT")) o.min_total = numv("eMinT");
     if (ed.offer && ed.offer.images && ed.offer.images.length) o.images = ed.offer.images.slice(0, 3);
     if ($("eTag") && $("eTag").value) o.tagline = $("eTag").value;
+    // v88
+    if (kind !== "none" && $("eWkOnly") && $("eWkOnly").checked) o.weekdays_only = true;
+    if ($("eSafety")) o.safety = $("eSafety").checked;
+    if ($("ePre") && $("ePre").value.trim()) o.preheader = $("ePre").value.trim();
+    var rooms = Array.prototype.filter.call($("cmEd").querySelectorAll("input[data-room]"), function (x) { return x.checked; }).map(function (x) { return x.getAttribute("data-room"); });
+    if (o.layout === "rooms" && rooms.length) o.rooms = rooms;
     return { id: ed.id, name: $("eName").value.trim(), status: ed.status, source: ed.source, rationale: ed.rationale || null, audience: a, audience_label: $("eAudLabel").value.trim() || ruleText(a),
       offer: o, code_prefix: $("ePrefix").value.trim(), expires_on: kind === "none" ? "" : $("eExp").value, subject: $("eSubj").value.trim(), headline: $("eHead").value.trim(),
       body: $("eBodyT").value, cta_label: $("eCta").value.trim() || (kind === "none" ? CTA_PLAIN : CTA_PROMO) };
@@ -546,6 +562,9 @@
     $("wTerms").style.display = promo ? "" : "none";
     $("eAvail").style.display = promo ? "" : "none";
     $("eCodeNote").style.display = promo ? "" : "none";
+    if ($("wWk")) $("wWk").style.display = promo ? "" : "none";
+    var layNow = (($("cmEd").querySelector('input[name="eLayout"]:checked') || {}).value) || "classic";
+    if ($("wRooms")) $("wRooms").style.display = layNow === "rooms" ? "" : "none";
     $("eKindsLbl").textContent = promo ? "Good for" : "Button goes to the booking page for";
     $("eBodyNote").textContent = "{first_name} becomes the guest's first name. " + (promo ? "The offer box, code, terms and unsubscribe link are added automatically." : "No offer box or code — just your message, photos, the button and the unsubscribe link.");
     var cta = $("eCta"); if (cta && (cta.value === CTA_PROMO || cta.value === CTA_PLAIN || !cta.value)) cta.value = promo ? CTA_PROMO : CTA_PLAIN;
@@ -608,16 +627,17 @@
   $("cmEd").addEventListener("input", function (e) {
     if (!ed) return;
     if (e.target.closest(".cm-mbody > div:first-child")) {
-      if (e.target.matches("#eSubj,#eHead,#eBodyT,#eCta,#ePerk,#ePct,#eAmt,#eOn,#eFrom,#eTo,#eMinN,#eMinT,#eExp,#ePrefix,input[data-k]")) { clearTimeout(prevTimer); prevTimer = setTimeout(preview, 700); }
+      if (e.target.matches("#eSubj,#eHead,#eBodyT,#eCta,#ePerk,#ePct,#eAmt,#eOn,#eFrom,#eTo,#eMinN,#eMinT,#eExp,#ePrefix,#ePre,input[data-k]")) { clearTimeout(prevTimer); prevTimer = setTimeout(preview, 700); }
       if (e.target.closest(".cm-sec") && e.target.closest(".cm-sec").querySelector("#eAud")) { clearTimeout(audTimer); audTimer = setTimeout(countAudience, 400); }
     }
   });
   $("cmEd").addEventListener("change", function (e) {
     if (!ed) return;
+    if (e.target.name === "eLayout" && e.target.value === "rooms" && $("eSafety")) $("eSafety").checked = true;
     if (e.target.name === "eKind" || e.target.name === "eLayout") { syncKind(); preview(); }
     if (e.target.id === "ePromo") { syncKind(); preview(); checkAvail(); }
     if (e.target.matches("input[type=checkbox],select") && e.target.closest(".cm-sec") && e.target.closest(".cm-sec").querySelector("#eAud")) { clearTimeout(audTimer); audTimer = setTimeout(countAudience, 200); }
-    if (e.target.matches("input[data-k],#eOn,#eTag")) preview();
+    if (e.target.matches("input[data-k],#eOn,#eTag,#eWkOnly,#eSafety,input[data-room]")) preview();
     if (e.target.matches("input[data-k],#eFrom,#eTo,#eExp")) { clearTimeout(availTimer); availTimer = setTimeout(checkAvail, 300); }
     if (e.target.matches("select[data-photo]")) {
       var imgs = shownPhotos.slice(0, 3); imgs[Number(e.target.getAttribute("data-photo"))] = e.target.value;
