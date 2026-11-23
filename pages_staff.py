@@ -1584,6 +1584,7 @@ html = """<!doctype html>
   <div class="modal modal-wide web-modal">
     <h2>Discount Codes</h2>
     <p style="color:var(--ink-soft); font-size:0.85rem; margin:-10px 0 16px;">Codes guests can enter when booking on the website (overnight stays and/or day trips; staff can enter them in the villa booking form too). A code is checked against the day the booking is made; bookings keep their discount even after a code expires or is switched off.</p>
+    <p class="cd-campaign-note" style="color:var(--ink-soft); font-size:0.85rem; margin:-8px 0 16px; padding:10px 12px; border:1px solid var(--line); border-radius:10px;">These are <b>shared codes</b> (one code, many guests). The <b>personal codes</b> sent in email campaigns (e.g. WEEKDAY-7KQ2M, one per guest) live in the same system and are listed under <button type="button" class="linkish" id="cdToCampaignCodes">Campaigns &rarr; Codes</button>.</p>
     <form class="codes-form" id="codesForm" autocomplete="off">
       <h3 class="cd-h">The discount</h3>
       <div class="modal-row three">
@@ -1611,6 +1612,7 @@ html = """<!doctype html>
         <div class="modal-field"><label for="cdStayTo">Stay / visit dates to</label><input id="cdStayTo" type="date"></div>
         <div class="modal-field"><span class="field-hint cd-hint" style="margin-top:24px;display:block;">Check-in (or day-trip) date must fall in this range. Blank = any date.</span></div>
       </div>
+      <div class="modal-field"><label class="modal-check"><input type="checkbox" id="cdWeekdays"> Weeknights only <span class="muted">(stays: the discount comes off Sunday&ndash;Thursday nights, not holiday eves; Fri/Sat nights stay at the regular rate)</span></label></div>
       <div class="modal-field" id="cdTypesWrap"><label>Only for these casitas <span class="muted">(stays; none ticked = all casitas)</span></label><div class="cd-types" id="cdTypes"><span class="muted">Loading&hellip;</span></div></div>
       <h3 class="cd-h">Limits</h3>
       <div class="modal-row three">
