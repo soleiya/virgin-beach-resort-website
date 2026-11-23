@@ -550,6 +550,7 @@
     if (kind !== "none" && $("eWkOnly") && $("eWkOnly").checked) o.weekdays_only = true;
     if ($("eSafety")) o.safety = $("eSafety").checked;
     if ($("ePre") && $("ePre").value.trim()) o.preheader = $("ePre").value.trim();
+    if (ed.offer && ed.offer.rooms_title) o.rooms_title = ed.offer.rooms_title;
     var rooms = Array.prototype.filter.call($("cmEd").querySelectorAll("input[data-room]"), function (x) { return x.checked; }).map(function (x) { return x.getAttribute("data-room"); });
     if (o.layout === "rooms" && rooms.length) o.rooms = rooms;
     return { id: ed.id, name: $("eName").value.trim(), status: ed.status, source: ed.source, rationale: ed.rationale || null, audience: a, audience_label: $("eAudLabel").value.trim() || ruleText(a),
