@@ -250,6 +250,40 @@
     *, *:before, *:after { animation: none !important; transition: none !important; }
   }
 </style>
+<style>
+  .live { display: inline-flex; align-items: center; gap: 8px; font-size: .72rem; color: var(--ink-soft); font-weight: 700; white-space: nowrap; }
+  .live i { width: 8px; height: 8px; border-radius: 50%; background: var(--lagoon-hi); box-shadow: 0 0 0 0 rgba(95,211,200,.6); animation: pulse 2.2s infinite; }
+  .live.stale i { background: var(--gold-hi); animation: none; }
+  @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(95,211,200,.55); } 70% { box-shadow: 0 0 0 9px rgba(95,211,200,0); } 100% { box-shadow: 0 0 0 0 rgba(95,211,200,0); } }
+  .seg { display: inline-flex; border: 1px solid var(--line-2); border-radius: 999px; padding: 3px; gap: 2px; }
+  .seg button { border: 0; background: transparent; color: var(--ink-soft); font-size: .72rem; font-weight: 800; padding: 5px 11px; border-radius: 999px; cursor: pointer; white-space: nowrap; }
+  .seg button.on { background: rgba(95,211,200,.16); color: var(--lagoon-hi); }
+  .basis-note { font-size: .78rem; color: var(--ink-mute); margin-top: 10px; line-height: 1.5; }
+  .basis-note b { color: var(--ink-soft); }
+  .sw.books { background: rgba(47,168,158,.35); border: 1px dashed rgba(95,211,200,.7); }
+  .sw.l26 { background: #2fa89e; } .sw.l25 { background: #b88a3c; } .sw.l24 { background: #8f7fc4; }
+  .sw.mix-room { background: #2fa89e; } .sw.mix-other { background: #7fd3ca; } .sw.mix-dt { background: #b88a3c; }
+  .mix { display: flex; height: 22px; border-radius: 8px; overflow: hidden; gap: 2px; margin: 16px 0 14px; }
+  .mix i { display: block; height: 100%; transition: flex-grow 1.2s cubic-bezier(.2,.7,.2,1); flex-grow: 0; flex-basis: 0; }
+  .mix-rows { display: grid; gap: 10px; }
+  .mix-row { display: grid; grid-template-columns: 14px 1fr auto auto; gap: 10px; align-items: center; font-size: .86rem; }
+  .mix-row .sw { width: 12px; height: 12px; border-radius: 3px; }
+  .mix-row b { font-weight: 800; }
+  .mix-row span.p { color: var(--ink-mute); min-width: 48px; text-align: right; }
+  .recon { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 14px; }
+  .recon .mx-stat .v { font-size: 1.3rem; }
+  .yoy { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin: 4px 0 16px; }
+  .now-tile .meter { position: relative; height: 10px; border-radius: 99px; background: rgba(238,231,214,.08); margin-top: 12px; overflow: hidden; }
+  .now-tile .meter i { position: absolute; top: 0; bottom: 0; left: 0; width: 0; border-radius: 99px; transition: width 1.5s cubic-bezier(.2,.7,.2,1); }
+  .now-tile .meter i.a { background: var(--lagoon); z-index: 2; }
+  .now-tile .meter i.b { background: rgba(95,211,200,.30); z-index: 1; }
+  .now-tile .meter u { position: absolute; top: -3px; bottom: -3px; width: 2px; background: var(--gold-hi); z-index: 3; }
+  td .sub { display: block; font-size: .72rem; color: var(--ink-mute); font-weight: 600; }
+  td.pos { color: var(--lagoon-hi); }
+  .err-card { max-width: 420px; margin: 18vh auto; text-align: center; color: var(--ink-soft); }
+  @media (max-width: 980px) { .yoy { grid-template-columns: 1fr 1fr; } }
+  @media (max-width: 600px) { .top-right .live span { display: none; } .recon { grid-template-columns: 1fr; } .yoy { grid-template-columns: 1fr; } .seg button { padding: 5px 9px; } }
+</style>
 </head>
 <body>
 
@@ -282,7 +316,7 @@
         <div><b>Virgin Beach Resort</b><span>Executive Briefing</span></div>
       </div>
       <div class="top-right">
-        <span class="chip" id="asof"></span>
+        <span class="live" id="live" title=""><i></i><span id="liveTxt">Live</span></span>
         <button class="lock" id="lockBtn">Lock</button>
       </div>
     </header>
@@ -291,6 +325,13 @@
       <div class="eyebrow" id="helloEyebrow"></div>
       <h2 id="headline"></h2>
       <p id="subline"></p>
+      <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-top:16px">
+        <div class="seg" role="group" aria-label="Figures basis">
+          <button data-basis="blend" class="on">Accounting + live</button>
+          <button data-basis="live">Live system only</button>
+        </div>
+        <span class="basis-note" id="basisNote" style="margin:0"></span>
+      </div>
     </div>
 
     <div class="grid-hero">
@@ -315,12 +356,12 @@
       </div>
 
       <div class="tiles">
-        <div class="tile star reveal">
-          <div><div class="k" id="tStarK"></div><div class="v num" id="tStarV"></div></div>
-          <div class="s" id="tStarS"></div>
+        <div class="tile star now-tile reveal">
+          <div><div class="k" id="nowK"></div><div class="v num" id="nowV"></div></div>
+          <div><div class="s" id="nowS"></div><div class="meter"><i class="b" id="nowB"></i><i class="a" id="nowA"></i><u id="nowU"></u></div></div>
         </div>
         <div class="tile reveal">
-          <div><div class="k">Full-year target</div><div class="v num" id="tFyV"></div></div>
+          <div><div class="k" id="tFyK">Full-year target</div><div class="v num" id="tFyV"></div></div>
           <div><div class="s" id="tFyS"></div><div class="bar"><i id="tFyBar"></i></div></div>
         </div>
         <div class="tile reveal">
@@ -328,7 +369,7 @@
           <div class="s" id="tLeftS"></div>
         </div>
         <div class="tile reveal">
-          <div><div class="k">Year-end landing if Nov–Dec hit plan</div><div class="v num" id="tLandV"></div></div>
+          <div><div class="k" id="tLandK">Year-end landing</div><div class="v num" id="tLandV"></div></div>
           <div class="s" id="tLandS"></div>
         </div>
       </div>
@@ -338,8 +379,8 @@
 
     <section class="block panel reveal">
       <div class="chart-head">
-        <div><h3>Monthly sales vs target</h3><p class="lead">Each bar is actual sales; the gold line marks that month’s target.</p></div>
-        <div class="legend"><span><i class="sw actual"></i>Actual</span><span><i class="sw target"></i>Target</span></div>
+        <div><h3>Monthly sales vs target</h3><p class="lead">Solid = sales so far; light = already booked for later in the month; gold line = target.</p></div>
+        <div class="legend"><span><i class="sw actual"></i>Actual</span><span><i class="sw books"></i>On the books</span><span><i class="sw target"></i>Target</span></div>
       </div>
       <div class="scroll-x"><div class="chart" id="chartMain"></div></div>
     </section>
@@ -347,7 +388,7 @@
     <section class="block two">
       <div class="panel reveal">
         <div class="chart-head">
-          <div><h3>How far from target, by month</h3><p class="lead">Shortfall in ₱ millions, with % of target achieved.</p></div>
+          <div><h3>How far from target, by month</h3><p class="lead">Closed months: shortfall in ₱ millions, with % of target achieved.</p></div>
           <div class="legend"><span><i class="sw gap"></i>Below target</span></div>
         </div>
         <div class="scroll-x"><div class="chart" id="chartGap"></div></div>
@@ -358,6 +399,30 @@
         <div class="quarters" id="quarters"></div>
         <div class="q-note"><i></i>Gold marker = 100% of target</div>
       </div>
+    </section>
+
+    <section class="block two">
+      <div class="panel reveal">
+        <h3>Where the money comes from</h3>
+        <p class="lead" id="mixLead"></p>
+        <div class="mix" id="mixBar"></div>
+        <div class="mix-rows" id="mixRows"></div>
+      </div>
+      <div class="panel reveal">
+        <h3>Live system vs accounting</h3>
+        <p class="lead">Cloudbeds (casitas) + day-trip bookings, checked against what accounting reported.</p>
+        <div class="recon" id="recon"></div>
+        <p class="basis-note" id="reconNote"></p>
+      </div>
+    </section>
+
+    <section class="block panel reveal">
+      <div class="chart-head">
+        <div><h3>Day trips · year on year</h3><p class="lead" id="dtLead"></p></div>
+        <div class="legend" id="dtLegend"></div>
+      </div>
+      <div class="yoy" id="dtStats"></div>
+      <div class="scroll-x"><div class="chart" id="chartDt"></div></div>
     </section>
 
     <section class="block panel reveal maxrev">
@@ -382,50 +447,57 @@
   </div>
 </div>
 
+<script src="../assets/js/booking-config.js"></script>
 <script>
 (() => {
-  const PAYLOAD = {"v": 1, "iter": 600000, "salt": "4vDQQXJAXzieIXKO5wN9zA==", "iv": "ZqRgTdaozl4qWukc", "ct": "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"};
   const $ = (id) => document.getElementById(id);
+  const CFG = window.SUPABASE_CONFIG || {};
+  const MOCK = window.EXEC_MOCK || null;   // local preview only
+  const REFRESH_MS = 5 * 60 * 1000;
+  const NAMES = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 
   /* ---------- greeting by Manila time ---------- */
   const hr = Number(new Intl.DateTimeFormat("en-US", { hour: "numeric", hourCycle: "h23", timeZone: "Asia/Manila" }).format(new Date()));
-  const partOfDay = hr < 12 ? "Good morning" : hr < 18 ? "Good afternoon" : "Good evening";
-  $("greet").innerHTML = partOfDay + ", <em>Rommel</em>";
+  $("greet").innerHTML = (hr < 12 ? "Good morning" : hr < 18 ? "Good afternoon" : "Good evening") + ", <em>Rommel</em>";
+
+  /* ---------- server ---------- */
+  let PIN = null, RAW = null, basis = "blend", timer = null, firstRender = true;
+  async function fetchBriefing(pin) {
+    if (MOCK) { await new Promise((r) => setTimeout(r, 400)); return pin === MOCK.pin ? { ok: true, data: MOCK.data } : { ok: false, error: "wrong_pin" }; }
+    const res = await fetch(CFG.url + "/functions/v1/exec-briefing", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", apikey: CFG.anonKey, Authorization: "Bearer " + CFG.anonKey },
+      body: JSON.stringify({ pin }),
+    });
+    let j = {}; try { j = await res.json(); } catch (e) { /* empty */ }
+    return res.ok && j.data ? { ok: true, data: j.data } : { ok: false, error: j.error || "unavailable", retry_in: j.retry_in };
+  }
 
   /* ---------- PIN entry ---------- */
-  let pin = "", busy = false, fails = 0, lockUntil = 0;
+  let pin = "", busy = false;
   const dots = $("dots"), msg = $("msg");
   const paint = () => [...dots.children].forEach((d, i) => d.classList.toggle("on", i < pin.length));
   const say = (t, err) => { msg.textContent = t || " "; msg.classList.toggle("err", !!err); };
 
-  const b64 = (s) => Uint8Array.from(atob(s), (c) => c.charCodeAt(0));
-  async function unlock(code) {
-    const enc = new TextEncoder();
-    const base = await crypto.subtle.importKey("raw", enc.encode(code), "PBKDF2", false, ["deriveKey"]);
-    const key = await crypto.subtle.deriveKey(
-      { name: "PBKDF2", salt: b64(PAYLOAD.salt), iterations: PAYLOAD.iter, hash: "SHA-256" },
-      base, { name: "AES-GCM", length: 256 }, false, ["decrypt"]);
-    const plain = await crypto.subtle.decrypt({ name: "AES-GCM", iv: b64(PAYLOAD.iv) }, key, b64(PAYLOAD.ct));
-    return JSON.parse(new TextDecoder().decode(plain));
-  }
-
   async function submit() {
     busy = true; say("Unlocking…");
-    try {
-      const data = await unlock(pin);
-      dots.classList.add("ok"); say("");
-      setTimeout(() => open(data), 350);
-    } catch (e) {
-      fails++;
-      dots.classList.add("bad"); say(fails >= 3 ? "Incorrect PIN. Please wait a moment." : "That PIN didn’t match. Try again.", true);
-      if (fails >= 3) lockUntil = Date.now() + Math.min(30000, 5000 * (fails - 2));
-      setTimeout(() => { dots.classList.remove("bad"); pin = ""; paint(); busy = false; }, 600);
+    let r;
+    try { r = await fetchBriefing(pin); } catch (e) { r = { ok: false, error: "offline" }; }
+    if (r.ok) {
+      PIN = pin; dots.classList.add("ok"); say("");
+      setTimeout(() => open(r.data), 350);
+      return;
     }
+    dots.classList.add("bad");
+    const t = r.error === "wrong_pin" ? "That PIN didn’t match. Try again."
+      : r.error === "locked" ? `Too many attempts. Try again in ${Math.max(1, Math.ceil((r.retry_in || 900) / 60))} min.`
+      : r.error === "not_configured" ? "The briefing isn’t switched on yet."
+      : "Can’t reach the server. Check the connection and try again.";
+    say(t, true);
+    setTimeout(() => { dots.classList.remove("bad"); pin = ""; paint(); busy = false; }, 650);
   }
-
   function press(k) {
     if (busy) return;
-    if (Date.now() < lockUntil) { say("Please wait a few seconds before trying again.", true); return; }
     if (k === "back") pin = pin.slice(0, -1);
     else if (k === "clear") pin = "";
     else if (/^\d$/.test(k) && pin.length < 4) pin += k;
@@ -440,155 +512,309 @@
     else if (e.key === "Escape") press("clear");
   });
   $("lockBtn").addEventListener("click", () => location.reload());
+  document.querySelectorAll("[data-basis]").forEach((b) => b.addEventListener("click", () => {
+    basis = b.dataset.basis;
+    document.querySelectorAll("[data-basis]").forEach((x) => x.classList.toggle("on", x === b));
+    render(RAW);
+  }));
 
   /* ---------- formatting ---------- */
-  const peso = (n, d = 2) => "₱" + n.toLocaleString("en-PH", { minimumFractionDigits: d, maximumFractionDigits: d });
-  const M = (n, d = 2) => "₱" + (n / 1e6).toFixed(d) + "M";
+  const peso = (n, d = 2) => "₱" + Number(n).toLocaleString("en-PH", { minimumFractionDigits: d, maximumFractionDigits: d });
+  const M = (n, d = 2) => (n < 0 ? "−" : "") + "₱" + (Math.abs(n) / 1e6).toFixed(d) + "M";
   const pct = (n, d = 1) => (n * 100).toFixed(d) + "%";
-  const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
-
+  const sum = (a, f) => a.reduce((s, x) => s + f(x), 0);
   function countUp(el, to, fmt, ms = 1600) {
+    if (!firstRender) { el.textContent = fmt(to); return; }
     const t0 = performance.now();
-    const step = (t) => {
-      const p = Math.min(1, (t - t0) / ms), e = 1 - Math.pow(1 - p, 3);
-      el.textContent = fmt(to * e);
-      if (p < 1) requestAnimationFrame(step);
-    };
+    const step = (t) => { const p = Math.min(1, (t - t0) / ms), e = 1 - Math.pow(1 - p, 3); el.textContent = fmt(to * e); if (p < 1) requestAnimationFrame(step); };
     requestAnimationFrame(step);
   }
+  const hhmm = (iso) => new Date(iso).toLocaleTimeString("en-PH", { hour: "numeric", minute: "2-digit", timeZone: "Asia/Manila" });
 
-  /* ---------- open dashboard ---------- */
-  function open(D) {
+  /* ---------- open + refresh ---------- */
+  function open(data) {
     $("gate").classList.add("done");
     const app = $("app"); app.style.display = "block";
     requestAnimationFrame(() => app.classList.add("show"));
-    render(D);
-    const io = new IntersectionObserver((es) => es.forEach((en) => { if (en.isIntersecting) { en.target.classList.add("in"); io.unobserve(en.target); } }), { threshold: 0.08 });
+    render(data);
+    firstRender = false;
+    const io = new IntersectionObserver((es) => es.forEach((en) => { if (en.isIntersecting) { en.target.classList.add("in"); io.unobserve(en.target); } }), { threshold: 0.06 });
     document.querySelectorAll(".reveal").forEach((el, i) => { el.style.transitionDelay = Math.min(i, 6) * 70 + "ms"; io.observe(el); });
+    timer = setInterval(refresh, REFRESH_MS);
+    document.addEventListener("visibilitychange", () => { if (!document.hidden && RAW && Date.now() - new Date(RAW.generated_at).getTime() > REFRESH_MS) refresh(); });
+  }
+  async function refresh() {
+    try {
+      const r = await fetchBriefing(PIN);
+      if (r.ok) { render(r.data); $("live").classList.remove("stale"); }
+      else if (r.error === "wrong_pin" || r.error === "locked") location.reload();
+      else $("live").classList.add("stale");
+    } catch (e) { $("live").classList.add("stale"); }
   }
 
-  function render(D) {
-    const MONTHS = D.months; // [{m, short, actual|null, target}]
-    const closed = MONTHS.filter((x) => x.actual != null);
-    const open_ = MONTHS.filter((x) => x.actual == null);
-    const sum = (a, f) => a.reduce((s, x) => s + f(x), 0);
-    const ytdA = sum(closed, (x) => x.actual), ytdT = sum(closed, (x) => x.target);
-    const fyT = sum(MONTHS, (x) => x.target), restT = sum(open_, (x) => x.target);
-    const gap = ytdT - ytdA, att = ytdA / ytdT;
-    const last = closed[closed.length - 1];
-    const lastAtt = last.actual / last.target;
-    const best = closed.reduce((a, b) => (b.actual / b.target > a.actual / a.target ? b : a));
-    const worst = closed.reduce((a, b) => (b.actual / b.target < a.actual / a.target ? b : a));
+  /* ---------- model ---------- */
+  // casita "other" revenue (meals, add-ons) is posted as guests stay; for nights still ahead we estimate it
+  // from this year's ratio of other to room revenue on audited nights.
+  function model(R) {
+    const today = R.today, curM = Number(today.slice(5, 7)), curY = Number(today.slice(0, 4));
+    const audited = R.months.filter((m) => m.nights_audited > 0);
+    const ratio = sum(audited, (m) => m.casita_other) / Math.max(1, sum(audited, (m) => m.casita_room));
+    const months = R.months.map((m) => {
+      const i = m.month - 1;
+      const state = R.year < curY || m.month < curM ? "closed" : m.month === curM && R.year === curY ? "current" : "future";
+      const casAct = m.casita_room + m.casita_other;
+      const casFc = m.casita_room_fc + Math.max(m.casita_other_fc, m.casita_room_fc * ratio);
+      const live = casAct + m.daytrip;
+      const books = casFc + m.daytrip_upcoming;
+      const rep = m.accounting_actual == null ? null : Number(m.accounting_actual);
+      const actual = basis === "blend" && rep != null ? rep : (state === "future" ? 0 : live);
+      return { ...m, i, m: NAMES[i], short: NAMES[i].slice(0, 3), state, casAct, casFc, live, books, rep, actual,
+               src: basis === "blend" && rep != null ? "accounting" : "live", target: Number(m.target || 0) };
+    });
+    return { R, months, ratio, curM, today };
+  }
+
+  /* ---------- render ---------- */
+  function render(R) {
+    RAW = R;
+    const X = model(R), MONTHS = X.months, Y = R.year;
+    const closed = MONTHS.filter((m) => m.state === "closed");
+    const cur = MONTHS.find((m) => m.state === "current");
+    const future = MONTHS.filter((m) => m.state === "future");
+    const last = closed[closed.length - 1], prev = closed[closed.length - 2];
+    const ytdA = sum(closed, (m) => m.actual), ytdT = sum(closed, (m) => m.target), gap = ytdT - ytdA, att = ytdA / ytdT;
+    const fyT = sum(MONTHS, (m) => m.target);
+    const curAct = cur ? cur.actual : 0, curBooks = cur ? cur.books : 0;
+    const futBooks = sum(future, (m) => m.books);
+    const onBooksYear = ytdA + curAct + curBooks + futBooks;
+    const restPlan = (cur ? cur.target : 0) + sum(future, (m) => m.target);
+    const throughLabel = `${closed[0].short}–${last.short}`;
+    const reported = MONTHS.filter((m) => m.rep != null);
+    const ratioOf = (m) => m.actual / m.target;
+    const best = closed.reduce((a, b) => (ratioOf(b) > ratioOf(a) ? b : a));
+    const worst = closed.reduce((a, b) => (ratioOf(b) < ratioOf(a) ? b : a));
     const peak = closed.reduce((a, b) => (b.actual > a.actual ? b : a));
     const byGap = [...closed].sort((a, b) => (b.target - b.actual) - (a.target - a.actual));
-    const throughLabel = `${closed[0].short}–${last.short}`;
 
-    $("asof").textContent = `FY ${D.year} · Closed through ${last.m}`;
-    $("helloEyebrow").textContent = `FY ${D.year} sales performance · ${throughLabel}`;
-    $("headline").innerHTML = `We’re at <em>${pct(att)}</em> of target for the year so far — and October nearly closed the gap.`;
-    $("subline").textContent = `${closed.length} months closed. Actual sales of ${M(ytdA)} against a ${M(ytdT)} target, ${M(gap)} short. ${last.m} landed at ${pct(lastAtt)} of target, the strongest month of the year.`;
+    /* header */
+    $("liveTxt").textContent = `Live · updated ${hhmm(R.generated_at)}`;
+    $("live").title = `Cloudbeds synced ${hhmm(R.cloudbeds_synced_at)} · night audit through ${R.audited_through} · refreshes every 5 minutes`;
+    $("basisNote").innerHTML = basis === "blend"
+      ? `${reported.length ? `<b>${reported[0].short}–${reported[reported.length - 1].short}</b>: as reported by accounting. ` : ""}<b>After that</b>: live from Cloudbeds + day-trip bookings.`
+      : `<b>All months</b>: live from Cloudbeds (casitas) + day-trip bookings.`;
+
+    /* hello */
+    $("helloEyebrow").textContent = `FY ${Y} sales performance · ${throughLabel} closed${cur ? ` · ${cur.m} in progress` : ""}`;
+    const lastAtt = ratioOf(last);
+    $("headline").innerHTML = `We’re at <em>${pct(att)}</em> of target for the year so far` +
+      (cur ? ` — and ${cur.m} is <em>${pct((curAct + curBooks) / cur.target, 0)}</em> booked against its target.` : ".");
+    $("subline").textContent = `${closed.length} months closed: ${M(ytdA)} in sales against a ${M(ytdT)} target, ${M(gap)} short. ` +
+      `${best.m} was the strongest month at ${pct(ratioOf(best))} of target.`;
 
     /* hero */
-    $("ytdLead").textContent = `${throughLabel} ${D.year}, ${closed.length} months closed`;
-    const C = 2 * Math.PI * 86;
-    setTimeout(() => { $("ringArc").style.strokeDashoffset = C * (1 - att); }, 200);
+    $("ytdLead").textContent = `${throughLabel} ${Y}, ${closed.length} months closed`;
+    setTimeout(() => { $("ringArc").style.strokeDashoffset = 2 * Math.PI * 86 * (1 - Math.min(1, att)); }, firstRender ? 200 : 0);
     countUp($("ringPct"), att * 100, (v) => v.toFixed(1), 2000);
     countUp($("fActual"), ytdA, (v) => M(v));
     countUp($("fTarget"), ytdT, (v) => M(v));
-    countUp($("fGap"), gap, (v) => "−" + M(v));
+    countUp($("fGap"), gap, (v) => (gap >= 0 ? "−" : "+") + M(Math.abs(v)));
     $("fActualS").textContent = peso(ytdA);
     $("fTargetS").textContent = peso(ytdT);
-    $("fGapS").textContent = `${pct(gap / ytdT)} below target`;
+    $("fGapS").textContent = gap >= 0 ? `${pct(gap / ytdT)} below target` : `${pct(-gap / ytdT)} above target`;
 
-    /* tiles */
-    $("tStarK").textContent = `${last.m} · Best month vs target`;
-    countUp($("tStarV"), lastAtt * 100, (v) => v.toFixed(1) + "%");
-    $("tStarS").innerHTML = `Only <b>${peso(last.target - last.actual)}</b> short of a ${M(last.target)} target. Up from ${pct(closed[closed.length - 2].actual / closed[closed.length - 2].target)} in ${closed[closed.length - 2].m}.`;
+    /* this month tile */
+    if (cur) {
+      const dim = new Date(Y, cur.month, 0).getDate(), day = Number(X.today.slice(8, 10)) - 1;
+      const pace = cur.target * day / dim;
+      $("nowK").textContent = `${cur.m} · live`;
+      countUp($("nowV"), curAct + curBooks, (v) => M(v));
+      $("nowS").innerHTML = `On the books: <b>${pct((curAct + curBooks) / cur.target, 0)}</b> of the ${M(cur.target)} target. ` +
+        `${M(curAct)} earned to date${day > 0 ? ` (${pct(curAct / pace, 0)} of pace for ${day} days)` : ""}, ${M(curBooks)} still to come.`;
+      setTimeout(() => {
+        $("nowA").style.width = Math.min(100, curAct / cur.target * 100) + "%";
+        $("nowB").style.width = Math.min(100, (curAct + curBooks) / cur.target * 100) + "%";
+        $("nowU").style.left = "calc(" + Math.min(100, day / dim * 100) + "% - 1px)";
+      }, 300);
+    } else {
+      $("nowK").textContent = `${last.m} · closed`; $("nowV").textContent = pct(ratioOf(last)); $("nowS").textContent = "of target";
+    }
     countUp($("tFyV"), fyT, (v) => M(v));
-    $("tFyS").textContent = `${pct(ytdA / fyT)} achieved so far (${M(ytdA)})`;
-    setTimeout(() => { $("tFyBar").style.width = (ytdA / fyT * 100) + "%"; }, 300);
-    countUp($("tLeftV"), fyT - ytdA, (v) => M(v));
-    $("tLeftS").textContent = `${open_.map((x) => x.short).join(" + ")} targets total ${M(restT)}. Closing the full gap would take ${((fyT - ytdA) / restT).toFixed(1)}× that plan.`;
-    countUp($("tLandV"), ytdA + restT, (v) => M(v));
-    $("tLandS").textContent = `${pct((ytdA + restT) / fyT)} of the full-year target, a ${M(fyT - ytdA - restT)} shortfall for ${D.year}.`;
+    const doneSoFar = ytdA + curAct;
+    $("tFyS").textContent = `${pct(doneSoFar / fyT)} achieved so far (${M(doneSoFar)})`;
+    setTimeout(() => { $("tFyBar").style.width = Math.min(100, doneSoFar / fyT * 100) + "%"; }, 300);
+    countUp($("tLeftV"), Math.max(0, fyT - doneSoFar), (v) => M(v));
+    $("tLeftS").textContent = `${M(curBooks + futBooks)} of it is already booked. Without new bookings, ${Y} lands at ${M(onBooksYear)} (${pct(onBooksYear / fyT, 0)}).`;
+    const landPlan = ytdA + restPlan;
+    $("tLandK").textContent = `Year-end if ${[cur, ...future].filter(Boolean).map((m) => m.short).join("–")} hit plan`;
+    countUp($("tLandV"), landPlan, (v) => M(v));
+    $("tLandS").textContent = `${pct(landPlan / fyT)} of the full-year target, ${M(fyT - landPlan)} short for ${Y}.`;
 
     /* insights */
-    const q = (a, b) => MONTHS.slice(a, b);
-    const peakGap = sum(closed.filter((x) => ["March", "April", "May", "June"].includes(x.m)), (x) => x.target - x.actual);
+    const peakGap = sum(closed.filter((m) => m.month >= 3 && m.month <= 6), (m) => m.target - m.actual);
     const icon = {
       up: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17l6-6 4 4 8-8"/><path d="M14 7h7v7"/></svg>',
       gap: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4"/></svg>',
       flag: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 21V4"/><path d="M5 4h11l-2 4 2 4H5"/></svg>'
     };
     $("insights").innerHTML = [
-      { i: icon.up, tag: "Momentum", h: `${last.m} came within ${peso(last.target - last.actual, 0)} of target`,
-        p: `After a soft ${worst.m} (<b>${pct(worst.actual / worst.target)}</b>, the lowest of the year) and ${closed[closed.length - 2].m} (<b>${pct(closed[closed.length - 2].actual / closed[closed.length - 2].target)}</b>), ${last.m} reached <b>${pct(lastAtt)}</b> of target with ${M(last.actual)} in sales.` },
+      { i: icon.up, tag: "Momentum", h: `${last.m} reached ${pct(lastAtt)} of target`,
+        p: `${last.m} brought in <b>${M(last.actual)}</b>, ${last.target - last.actual >= 0 ? `${peso(last.target - last.actual, 0)} short of` : `${peso(last.actual - last.target, 0)} above`} target. ${prev ? `That’s up from <b>${pct(ratioOf(prev))}</b> in ${prev.m}; ` : ""}the lowest month was ${worst.m} at <b>${pct(ratioOf(worst))}</b>.` },
       { i: icon.gap, tag: "Where the gap is", h: `Peak season holds most of the shortfall`,
-        p: `March to June account for <b>${M(peakGap)}</b> (${pct(peakGap / gap, 0)}) of the ${M(gap)} YTD gap. The largest misses: ${byGap.slice(0, 3).map((x) => `${x.m} <b>−${M(x.target - x.actual)}</b>`).join(", ")}. ${peak.m} was the top month in sales at ${M(peak.actual)}.` },
-      { i: icon.flag, tag: "Year-end outlook", h: `Hitting Nov–Dec plan lands the year at ${pct((ytdA + restT) / fyT, 0)}`,
-        p: `November and December targets add up to <b>${M(restT)}</b>. Delivering both brings ${D.year} to <b>${M(ytdA + restT)}</b> against a ${M(fyT)} target. The full ${M(fyT - ytdA)} still open is ${((fyT - ytdA) / restT).toFixed(1)}× the remaining plan.` }
-    ].map((x) => `<div class="insight reveal"><div class="tag">${x.i}${x.tag}</div><h4>${x.h}</h4><p>${x.p}</p></div>`).join("");
+        p: `March to June account for <b>${M(peakGap)}</b> (${pct(peakGap / gap, 0)}) of the ${M(gap)} YTD gap. Largest misses: ${byGap.slice(0, 3).map((m) => `${m.m} <b>−${M(m.target - m.actual)}</b>`).join(", ")}. ${peak.m} was the top month at ${M(peak.actual)}.` },
+      { i: icon.flag, tag: "Year-end outlook", h: `${M(curBooks + futBooks)} is already booked for the rest of ${Y}`,
+        p: `The remaining plan is <b>${M(restPlan)}</b>. With what’s booked today, ${Y} lands at <b>${M(onBooksYear)}</b> (${pct(onBooksYear / fyT, 0)} of target); hitting plan would bring it to ${M(landPlan)} (${pct(landPlan / fyT, 0)}).` }
+    ].map((x) => `<div class="insight reveal${firstRender ? "" : " in"}"><div class="tag">${x.i}${x.tag}</div><h4>${x.h}</h4><p>${x.p}</p></div>`).join("");
 
-    /* charts */
     drawMain(MONTHS);
     drawGap(closed);
 
     /* quarters */
-    const quarters = [
-      { n: "Q1", s: "Jan–Mar", r: q(0, 3) }, { n: "Q2", s: "Apr–Jun", r: q(3, 6) },
-      { n: "Q3", s: "Jul–Sep", r: q(6, 9) }, { n: "Q4", s: "Oct, to date", r: closed.slice(9) }
-    ];
-    $("quarters").innerHTML = quarters.map((Q) => {
-      const a = sum(Q.r, (x) => x.actual), t = sum(Q.r, (x) => x.target);
-      return `<div class="q"><div class="name">${Q.n}<small>${Q.s}</small></div>
-        <div class="track" title="${pct(a / t)} of ${M(t)} target"><i data-w="${a / t * 100}"></i></div>
-        <div class="val num">${pct(a / t)}<small>−${M(t - a)}</small></div></div>`;
+    const qs = [{ n: "Q1", s: "Jan–Mar", a: 1, b: 3 }, { n: "Q2", s: "Apr–Jun", a: 4, b: 6 }, { n: "Q3", s: "Jul–Sep", a: 7, b: 9 }, { n: "Q4", s: "Oct–Dec", a: 10, b: 12 }];
+    $("quarters").innerHTML = qs.map((Q) => {
+      const rows = closed.filter((m) => m.month >= Q.a && m.month <= Q.b);
+      const live = cur && cur.month >= Q.a && cur.month <= Q.b;
+      if (!rows.length && !live) return `<div class="q"><div class="name">${Q.n}<small>${Q.s}</small></div><div class="track"></div><div class="val num" style="color:var(--ink-mute)">Ahead</div></div>`;
+      const all = [...rows, ...(live ? [cur] : [])];
+      const a = sum(rows, (m) => m.actual) + (live ? curAct : 0), t = sum(all, (m) => m.target);
+      const sub = rows.length === 3 ? Q.s : `${all[0].short}${all.length > 1 ? "–" + all[all.length - 1].short : ""}, to date`;
+      return `<div class="q"><div class="name">${Q.n}<small>${sub}</small></div>
+        <div class="track" title="${pct(a / t)} of ${M(t)} target"><i data-w="${Math.min(100, a / t * 100)}"></i></div>
+        <div class="val num">${pct(a / t)}<small>${a >= t ? "+" : "−"}${M(Math.abs(t - a))}</small></div></div>`;
     }).join("");
-    setTimeout(() => document.querySelectorAll(".q .track i").forEach((i) => { i.style.width = i.dataset.w + "%"; }), 500);
+    setTimeout(() => document.querySelectorAll(".q .track i").forEach((i) => { i.style.width = i.dataset.w + "%"; }), firstRender ? 500 : 0);
+
+    /* revenue mix (live, closed months) */
+    const room = sum(closed, (m) => m.casita_room), other = sum(closed, (m) => m.casita_other), dtS = sum(closed, (m) => m.daytrip), tot = room + other + dtS;
+    $("mixLead").textContent = `${throughLabel} ${Y}, from Cloudbeds and day-trip bookings (taxes and fees excluded).`;
+    const mix = [["mix-room", "#2fa89e", "Casitas · rooms", room], ["mix-other", "#7fd3ca", "Casitas · meals, add-ons & extras", other], ["mix-dt", "#b88a3c", "Day trips", dtS]];
+    $("mixBar").innerHTML = mix.map(([, c, n, v]) => `<i style="background:${c}" data-g="${v / tot}" title="${n}: ${M(v)} (${pct(v / tot, 0)})"></i>`).join("");
+    setTimeout(() => document.querySelectorAll("#mixBar i").forEach((i) => { i.style.flexGrow = i.dataset.g; }), firstRender ? 400 : 0);
+    $("mixRows").innerHTML = mix.map(([k, , n, v]) => `<div class="mix-row"><i class="sw ${k}"></i><span>${n}</span><b class="num">${M(v)}</b><span class="p num">${pct(v / tot, 0)}</span></div>`).join("") +
+      `<div class="mix-row" style="border-top:1px solid var(--line);padding-top:10px"><i></i><span><b>Total</b></span><b class="num">${M(tot)}</b><span class="p"></span></div>`;
+
+    /* reconciliation */
+    const recM = MONTHS.filter((m) => m.rep != null && m.state === "closed");
+    const recLive = sum(recM, (m) => m.live), recRep = sum(recM, (m) => m.rep);
+    const stat = (k, v, s) => `<div class="mx-stat"><div class="k">${k}</div><div class="v num">${v}</div><div class="s">${s}</div></div>`;
+    if (recM.length) {
+      const worstM = recM.reduce((a, b) => (Math.abs(b.live - b.rep) > Math.abs(a.live - a.rep) ? b : a));
+      $("recon").innerHTML = stat(`Accounting, ${recM[0].short}–${recM[recM.length - 1].short}`, M(recRep), "as reported by Sugar") +
+        stat("Live system, same months", M(recLive), `${recLive >= recRep ? "+" : "−"}${M(Math.abs(recLive - recRep))} (${pct(Math.abs(recLive - recRep) / recRep)} ${recLive >= recRep ? "over" : "under"})`);
+      $("reconNote").innerHTML = `The year totals agree closely. Single months can differ by up to <b>${M(Math.abs(worstM.live - worstM.rep))}</b> (${worstM.m}), mostly timing between when a sale is booked and when it is recorded. Months accounting hasn’t reported yet use the live figure.`;
+    } else { $("recon").innerHTML = ""; $("reconNote").textContent = "No months reported by accounting yet; all figures are live."; }
+
+    renderDaytrips(R, X);
+    renderMax(R, X);
 
     /* table */
-    $("tableLead").textContent = `Full detail from the sales summary. Variance is target minus actual.`;
-    const rows = MONTHS.map((x, i) => {
-      if (x.actual == null) {
-        const status = i === closed.length ? '<span class="pill-s live">In progress</span>' : '<span class="pill-s">Upcoming</span>';
-        return `<tr class="future"><td>${x.m}</td><td>${status}</td><td class="num">${peso(x.target)}</td><td>—</td><td>—</td></tr>`;
+    $("tableLead").textContent = basis === "blend" ? "Actual = accounting’s figure where reported, otherwise live. Variance is actual minus target." : "Actual = live system figure. Variance is actual minus target.";
+    const rows = MONTHS.map((m) => {
+      const repCell = m.rep != null ? peso(m.rep) : "—";
+      if (m.state === "future") {
+        return `<tr class="future"><td>${m.m} <span class="pill-s">Upcoming</span></td><td class="num">${peso(m.target)}</td><td>—</td><td class="num">${M(m.books)}<span class="sub">on the books</span></td><td>—</td><td class="num">${pct(m.books / m.target, 0)}<span class="sub">booked</span></td></tr>`;
       }
-      const v = x.target - x.actual, a = x.actual / x.target;
-      return `<tr><td><b>${x.m}</b></td><td class="num">${peso(x.actual)}</td><td class="num">${peso(x.target)}</td>
-        <td class="num neg">−${peso(v)}</td>
-        <td><span class="att num">${pct(a)}<span class="mini"><i style="width:${a * 100}%"></i></span></span></td></tr>`;
+      if (m.state === "current") {
+        return `<tr><td><b>${m.m}</b> <span class="pill-s live">In progress</span></td><td class="num">${peso(m.target)}</td><td>—</td><td class="num">${peso(m.live)}<span class="sub">+ ${M(m.books)} on the books</span></td><td class="num neg">−${peso(m.target - m.live)}<span class="sub">so far</span></td><td class="num">${pct(m.live / m.target)}<span class="sub">${pct((m.live + m.books) / m.target, 0)} with bookings</span></td></tr>`;
+      }
+      const v = m.actual - m.target, a = m.actual / m.target;
+      return `<tr><td><b>${m.m}</b></td><td class="num">${peso(m.target)}</td><td class="num">${repCell}</td><td class="num">${peso(m.live)}</td>
+        <td class="num ${v < 0 ? "neg" : "pos"}">${v < 0 ? "−" : "+"}${peso(Math.abs(v))}</td>
+        <td><span class="att num">${pct(a)}<span class="mini"><i style="width:${Math.min(100, a * 100)}%"></i></span></span></td></tr>`;
     }).join("");
-    $("tbl").innerHTML = `<thead><tr><th>Month</th><th>Actual</th><th>Target</th><th>Variance</th><th>% of target</th></tr></thead>
+    $("tbl").innerHTML = `<thead><tr><th>Month</th><th>Target</th><th>Accounting</th><th>Live system</th><th>Variance</th><th>% of target</th></tr></thead>
       <tbody>${rows}
-      <tr class="total"><td>YTD (${throughLabel})</td><td class="num">${peso(ytdA)}</td><td class="num">${peso(ytdT)}</td><td class="num neg">−${peso(gap)}</td><td class="num">${pct(att)}</td></tr>
-      <tr class="total" style="font-weight:600"><td>Full year ${D.year}</td><td class="num">${peso(ytdA)}</td><td class="num">${peso(fyT)}</td><td class="num neg">−${peso(fyT - ytdA)}</td><td class="num">${pct(ytdA / fyT)}</td></tr></tbody>`;
+      <tr class="total"><td>YTD (${throughLabel})</td><td class="num">${peso(ytdT)}</td><td class="num">${recM.length ? peso(recRep) : "—"}</td><td class="num">${peso(sum(closed, (m) => m.live))}</td><td class="num ${gap > 0 ? "neg" : "pos"}">${gap > 0 ? "−" : "+"}${peso(Math.abs(gap))}</td><td class="num">${pct(att)}</td></tr></tbody>`;
 
-    $("footSrc").textContent = D.source;
-    renderMax(D);
+    $("footSrc").innerHTML = `Targets: Sugar’s ${Y} sales summary. Actuals: accounting where reported; live = Cloudbeds Manager’s Report (casitas, net of taxes and fees; nights after the last night audit are Cloudbeds’ forecast, meals for those nights estimated) + day-trip bookings on their visit date. ` +
+      `Day trips before ${Y}: the Day Trip Calendar workbooks (approximate). Night audit through ${R.audited_through}; Cloudbeds synced ${hhmm(R.cloudbeds_synced_at)}.`;
+  }
+
+  /* ---------- day trips YoY ---------- */
+  function renderDaytrips(R, X) {
+    const Y = R.year, H = R.daytrip_history || [];
+    const years = [...new Set(H.map((h) => h.year))].sort().slice(-2);   // two previous years
+    const series = [...years.map((y) => ({ y, v: Array.from({ length: 12 }, (_, i) => { const r = H.find((h) => h.year === y && h.month === i + 1); return r ? Number(r.sales) : null; }) })),
+      { y: Y, v: X.months.map((m) => (m.state === "future" ? null : m.daytrip + (m.state === "current" ? m.daytrip_upcoming : 0))) }];
+    const cls = { [Y]: "l26", [Y - 1]: "l25", [Y - 2]: "l24" }, col = { [Y]: "#2fa89e", [Y - 1]: "#b88a3c", [Y - 2]: "#8f7fc4" };
+    $("dtLegend").innerHTML = [...series].reverse().map((s) => `<span><i class="sw ${cls[s.y]}"></i>${s.y}${s.y === Y ? "" : " (workbook)"}</span>`).join("");
+    const closedN = X.months.filter((m) => m.state === "closed").length;
+    const ytd = (s) => s.v.slice(0, closedN).reduce((a, b) => a + (b || 0), 0);
+    const cy = series[series.length - 1], py = series[series.length - 2], ppy = series[series.length - 3];
+    $("dtLead").textContent = `Day-trip sales by visit month. ${Y} is live from bookings; earlier years are from the Day Trip Calendar workbooks, so treat them as approximate.`;
+    const g = py ? ytd(cy) / ytd(py) - 1 : 0;
+    const guests = X.months.filter((m) => m.state === "closed").reduce((a, m) => a + m.daytrip_guests, 0);
+    const pyGuests = H.filter((h) => h.year === Y - 1 && h.month <= closedN).reduce((a, h) => a + (h.guests || 0), 0);
+    const stat = (k, v, s) => `<div class="mx-stat"><div class="k">${k}</div><div class="v num">${v}</div><div class="s">${s}</div></div>`;
+    const rng = `${NAMES[0].slice(0, 3)}–${NAMES[closedN - 1].slice(0, 3)}`;
+    $("dtStats").innerHTML =
+      stat(`Day trips ${rng} ${Y}`, M(ytd(cy)), `${guests.toLocaleString()} guests`) +
+      (py ? stat(`vs same months ${Y - 1}`, (g >= 0 ? "+" : "−") + pct(Math.abs(g), 0), `${M(ytd(py))} in ${Y - 1}${pyGuests ? ` · ${pyGuests.toLocaleString()} guests` : ""}`) : "") +
+      (ppy ? stat(`vs same months ${Y - 2}`, (ytd(cy) / ytd(ppy) - 1 >= 0 ? "+" : "−") + pct(Math.abs(ytd(cy) / ytd(ppy) - 1), 0), `${M(ytd(ppy))} in ${Y - 2}`) : "");
+
+    const host = $("chartDt"); host.innerHTML = "";
+    const W = 1100, Hh = 280, P = { l: 52, r: 56, t: 16, b: 34 };
+    const max = niceMax(Math.max(...series.flatMap((s) => s.v.filter((x) => x != null))), 2e6);
+    const iw = W - P.l - P.r, ih = Hh - P.t - P.b, step = iw / 11;
+    const x = (i) => P.l + i * step, y = (v) => P.t + ih - (v / max) * ih;
+    const svg = el("svg", { viewBox: `0 0 ${W} ${Hh}`, role: "img", "aria-label": "Day-trip sales by month, year on year" }, host);
+    for (let v = 0; v <= max; v += 2e6) {
+      el("line", { x1: P.l, x2: W - P.r, y1: y(v), y2: y(v), class: v ? "gridline" : "base" }, svg);
+      const t = el("text", { x: P.l - 10, y: y(v) + 4, "text-anchor": "end" }, svg); t.textContent = v ? v / 1e6 + "M" : "0";
+    }
+    NAMES.forEach((n, i) => { const t = el("text", { x: x(i), y: Hh - 12, "text-anchor": "middle" }, svg); t.textContent = n.slice(0, 3); });
+    // end labels: keep them at least 13px apart when lines finish close together
+    const ends = series.map((s) => { const i = s.v.map((v, j) => (v == null ? -1 : j)).filter((j) => j >= 0).pop(); return i == null ? null : { s, i, ly: y(s.v[i]) + 4 }; }).filter(Boolean);
+    ends.sort((a, b) => a.i - b.i || a.ly - b.ly);
+    for (let a = 1; a < ends.length; a++) if (ends[a].i === ends[a - 1].i && ends[a].ly - ends[a - 1].ly < 13) ends[a].ly = ends[a - 1].ly + 13;
+    const labelY = new Map(ends.map((e) => [e.s.y, e.ly]));
+    series.forEach((s) => {
+      const pts = s.v.map((v, i) => (v == null ? null : [x(i), y(v)])).filter(Boolean);
+      if (!pts.length) return;
+      const p = el("path", { d: "M" + pts.map((q) => q.join(",")).join(" L"), fill: "none", stroke: col[s.y], "stroke-width": s.y === Y ? 2.5 : 2, "stroke-linejoin": "round", "stroke-linecap": "round", ...(s.y === Y - 2 ? { "stroke-dasharray": "5 4" } : {}) }, svg);
+      if (firstRender) { const L = p.getTotalLength(); p.style.strokeDasharray = s.y === Y - 2 ? "5 4" : `${L}`; if (s.y !== Y - 2) { p.style.strokeDashoffset = L; p.style.transition = "stroke-dashoffset 1.6s ease .3s"; setTimeout(() => { p.style.strokeDashoffset = 0; }, 30); } }
+      const lp = pts[pts.length - 1];
+      el("circle", { cx: lp[0], cy: lp[1], r: 4, fill: col[s.y], stroke: "#15241f", "stroke-width": 2 }, svg);
+      const t = el("text", { x: lp[0] + 8, y: labelY.get(s.y) ?? lp[1] + 4, style:`fill:${col[s.y]};font-weight:800` }, svg); t.textContent = s.y;
+    });
+    const tip = tipFor(host);
+    const guide = el("line", { y1: P.t, y2: P.t + ih, stroke: "rgba(238,231,214,.25)", opacity: 0 }, svg);
+    NAMES.forEach((n, i) => {
+      const hit = el("rect", { x: x(i) - step / 2, y: P.t, width: step, height: ih, fill: "transparent" }, svg);
+      const show = () => {
+        const sx = host.getBoundingClientRect().width / W;
+        guide.setAttribute("x1", x(i)); guide.setAttribute("x2", x(i)); guide.setAttribute("opacity", 1);
+        tip.show(`<div class="t">${n}</div>` + [...series].reverse().map((s) => `<div class="r"><span>${s.y}</span><b>${s.v[i] == null ? "—" : peso(s.v[i], 0)}</b></div>`).join(""), x(i) * sx, P.t * sx + 40);
+      };
+      hit.addEventListener("mouseenter", show); hit.addEventListener("click", show);
+      hit.addEventListener("mouseleave", () => { tip.hide(); guide.setAttribute("opacity", 0); });
+    });
   }
 
   /* ---------- max revenue (casitas) ---------- */
-  function renderMax(D) {
-    const X = D.maxrev, R = X.months, sum = (a, f) => a.reduce((s, x) => s + f(x), 0);
-    const closedN = D.months.filter((x) => x.actual != null).length;
-    const past = R.slice(0, closedN), ahead = R.slice(closedN);
-    const fyMax = sum(R, (r) => r.max), pMax = sum(past, (r) => r.max), pBk = sum(past, (r) => r.booked);
-    const occ = sum(past, (r) => r.sold) / sum(past, (r) => r.nights);
-    const aOpen = sum(ahead, (r) => Math.max(0, r.max - r.booked - r.blocked)), aBlk = sum(ahead, (r) => r.blocked), aBk = sum(ahead, (r) => r.booked);
-    const rng = `${D.months[0].short}–${D.months[closedN - 1].short}`, aRng = ahead.map((r, i) => D.months[closedN + i].short).join("–");
-    $("mxLead").textContent = `What all ${X.casitas} casitas could earn if every one sold every night at its room rate, plus full-board meals. From the booking system, as of ${X.asOf}.`;
-    const stat = (k, v, s) => `<div class="mx-stat"><div class="k">${k}</div><div class="v num">${v}</div><div class="s">${s}</div></div>`;
+  // Max = every casita sold every night at its room rate + full-board meals (the villa calendar's formula, gross).
+  // Shown net of taxes like Cloudbeds: scaled by this year's Cloudbeds / booking-value ratio on closed months.
+  function renderMax(R, X) {
+    const Rm = X.months, closed = Rm.filter((m) => m.state === "closed");
+    const k = sum(closed, (m) => m.casAct) / Math.max(1, sum(closed, (m) => m.booked_gross));
+    const net = (v) => v * k;
+    const fyMax = net(sum(Rm, (m) => m.max_gross)), pMax = net(sum(closed, (m) => m.max_gross)), pBk = sum(closed, (m) => m.casAct);
+    const occ = sum(closed, (m) => m.rooms_sold) / Math.max(1, sum(closed, (m) => m.capacity));
+    const ahead = Rm.filter((m) => m.state !== "closed");
+    const aOpen = net(sum(ahead, (m) => Math.max(0, m.max_gross - m.booked_gross - m.blocked_gross))), aBlk = net(sum(ahead, (m) => m.blocked_gross)), aBk = sum(ahead, (m) => m.casAct + m.casFc);
+    const rng = `${closed[0].short}–${closed[closed.length - 1].short}`, aRng = ahead.length ? `${ahead[0].short}${ahead.length > 1 ? "–" + ahead[ahead.length - 1].short : ""}` : "";
+    const room = sum(closed, (m) => m.casita_room), sold = sum(closed, (m) => m.rooms_sold);
+    $("mxLead").textContent = `What all ${R.casitas} casitas could earn if every one sold every night at its room rate plus full-board meals, shown net of taxes (approximate). Booked and occupancy from Cloudbeds.`;
+    const stat = (kk, v, s) => `<div class="mx-stat"><div class="k">${kk}</div><div class="v num">${v}</div><div class="s">${s}</div></div>`;
     $("mxStats").innerHTML =
-      stat(`FY ${D.year} max revenue`, M(fyMax), `${X.casitas} casitas × 365 nights`) +
-      stat(`Captured, ${rng}`, pct(pBk / pMax), `${M(pBk)} booked of ${M(pMax)} possible`) +
-      stat(`Casita occupancy, ${rng}`, pct(occ), `${sum(past, (r) => r.sold).toLocaleString()} of ${sum(past, (r) => r.nights).toLocaleString()} casita-nights sold`) +
-      stat(`${aRng} still open to sell`, M(aOpen), `${M(aBk)} booked so far · ${M(aBlk)} blocked / held`);
+      stat(`FY ${R.year} max revenue`, M(fyMax), `${R.casitas} casitas × 365 nights`) +
+      stat(`Captured, ${rng}`, pct(pBk / pMax), `${M(pBk)} of ${M(pMax)} possible`) +
+      stat(`Occupancy, ${rng}`, pct(occ), `ADR ${peso(room / Math.max(1, sold), 0)} · RevPAR ${peso(room / Math.max(1, sum(closed, (m) => m.capacity)), 0)}`) +
+      (ahead.length ? stat(`${aRng} still open to sell`, M(aOpen), `${M(aBk)} booked or earned · ${M(aBlk)} blocked / held`) : "");
 
-    // chart
-    const host = $("chartMax");
+    const host = $("chartMax"); host.innerHTML = "";
     const W = 1100, H = 300, P = { l: 52, r: 12, t: 26, b: 34 };
-    const max = niceMax(Math.max(...R.map((r) => r.max)), 5e6);
-    const iw = W - P.l - P.r, ih = H - P.t - P.b, bw = iw / R.length;
+    const max = niceMax(Math.max(...Rm.map((m) => net(m.max_gross))), 5e6);
+    const iw = W - P.l - P.r, ih = H - P.t - P.b, bw = iw / Rm.length;
     const y = (v) => P.t + ih - (v / max) * ih;
     const svg = el("svg", { viewBox: `0 0 ${W} ${H}`, role: "img", "aria-label": "Casita max revenue versus booked by month" }, host);
     const defs = el("defs", {}, svg);
@@ -600,47 +826,44 @@
       const t = el("text", { x: P.l - 10, y: y(v) + 4, "text-anchor": "end" }, svg); t.textContent = v ? v / 1e6 + "M" : "0";
     }
     const tip = tipFor(host);
-    R.forEach((r, i) => {
-      const m = D.months[i], cx = P.l + bw * i + bw / 2, w = Math.min(46, bw * 0.56), x0 = cx - w / 2, g = el("g", {}, svg);
-      el("rect", { x: x0, y: y(r.max), width: w, height: P.t + ih - y(r.max), rx: 4, fill: "rgba(238,231,214,.03)", stroke: "rgba(238,231,214,.28)", "stroke-dasharray": "3 3" }, g);
-      const bTop = y(r.booked), kTop = y(r.booked + r.blocked);
-      const bk = el("rect", { x: x0, y: bTop, width: w, height: P.t + ih - bTop, rx: 4, fill: "#2fa89e" }, g);
-      bk.style.transformOrigin = `${cx}px ${P.t + ih}px`; bk.style.transform = "scaleY(0)";
-      bk.style.transition = `transform 1.1s cubic-bezier(.2,.7,.2,1) ${0.2 + i * 0.05}s`;
-      setTimeout(() => { bk.style.transform = "scaleY(1)"; }, 30);
-      if (r.blocked > 0) el("rect", { x: x0, y: kTop, width: w, height: Math.max(0, bTop - kTop - 2), rx: 3, fill: "url(#hatch)" }, g);
-      const cap = el("text", { x: cx, y: y(r.max) - 8, "text-anchor": "middle", style: `font-weight:700;fill:${i < closedN ? "#b8ae98" : "#e2b766"}` }, g);
-      cap.textContent = Math.round(r.booked / r.max * 100) + "%";
+    Rm.forEach((m, i) => {
+      const cx = P.l + bw * i + bw / 2, w = Math.min(46, bw * 0.56), x0 = cx - w / 2, g = el("g", {}, svg);
+      const mx = net(m.max_gross), bk = m.casAct + m.casFc, blk = net(m.blocked_gross);
+      el("rect", { x: x0, y: y(mx), width: w, height: P.t + ih - y(mx), rx: 4, fill: "rgba(238,231,214,.03)", stroke: "rgba(238,231,214,.28)", "stroke-dasharray": "3 3" }, g);
+      const bTop = y(Math.min(bk, mx)), kTop = y(Math.min(mx, bk + blk));
+      const r = el("rect", { x: x0, y: bTop, width: w, height: P.t + ih - bTop, rx: 4, fill: "#2fa89e" }, g);
+      if (firstRender) { r.style.transformOrigin = `${cx}px ${P.t + ih}px`; r.style.transform = "scaleY(0)"; r.style.transition = `transform 1.1s cubic-bezier(.2,.7,.2,1) ${0.2 + i * 0.05}s`; setTimeout(() => { r.style.transform = "scaleY(1)"; }, 30); }
+      if (blk > 0) el("rect", { x: x0, y: kTop, width: w, height: Math.max(0, bTop - kTop - 2), rx: 3, fill: "url(#hatch)" }, g);
+      const cap = el("text", { x: cx, y: y(mx) - 8, "text-anchor": "middle", style: `font-weight:700;fill:${m.state === "closed" ? "#b8ae98" : "#e2b766"}` }, g);
+      cap.textContent = Math.round(bk / mx * 100) + "%";
       const l = el("text", { x: cx, y: H - 12, "text-anchor": "middle" }, g); l.textContent = m.short;
       const hit = el("rect", { x: P.l + bw * i, y: P.t, width: bw, height: ih, fill: "transparent" }, g);
       const show = () => {
         const sx = host.getBoundingClientRect().width / W;
-        tip.show(`<div class="t">${m.m}${i >= closedN ? " · on the books" : ""}</div>
-          <div class="r"><span>Max revenue</span><b>${peso(r.max, 0)}</b></div>
-          <div class="r"><span>Booked</span><b>${peso(r.booked, 0)} · ${pct(r.booked / r.max)}</b></div>
-          ${r.blocked ? `<div class="r"><span>Blocked / held</span><b>${peso(r.blocked, 0)}</b></div>` : ""}
-          <div class="r neg"><span>Unsold</span><b>${peso(Math.max(0, r.max - r.booked - r.blocked), 0)}</b></div>
-          <div class="r"><span>Occupancy</span><b>${pct(r.sold / r.nights)} (${r.sold}/${r.nights})</b></div>
-          ${r.pending ? `<div class="r"><span>Pending, not counted</span><b>${peso(r.pending, 0)}</b></div>` : ""}`, cx * sx, y(r.max) * sx);
+        tip.show(`<div class="t">${m.m}${m.state !== "closed" ? " · on the books" : ""}</div>
+          <div class="r"><span>Max revenue (approx.)</span><b>${peso(mx, 0)}</b></div>
+          <div class="r"><span>${m.state === "closed" ? "Earned" : "Earned + booked"}</span><b>${peso(bk, 0)} · ${pct(bk / mx)}</b></div>
+          ${blk ? `<div class="r"><span>Blocked / held</span><b>${peso(blk, 0)}</b></div>` : ""}
+          <div class="r neg"><span>Unsold</span><b>${peso(Math.max(0, mx - bk - blk), 0)}</b></div>
+          <div class="r"><span>Occupancy</span><b>${pct(m.rooms_sold / Math.max(1, m.capacity))} (${m.rooms_sold}/${m.capacity})</b></div>`, cx * sx, y(mx) * sx);
         hit.setAttribute("fill", "rgba(238,231,214,.04)");
       };
       hit.addEventListener("mouseenter", show); hit.addEventListener("click", show);
       hit.addEventListener("mouseleave", () => { tip.hide(); hit.setAttribute("fill", "transparent"); });
     });
 
-    // notes
-    const cap = (r) => r.booked / r.max;
-    const best = past.reduce((a, b) => (cap(b) > cap(a) ? b : a)), bi = R.indexOf(best);
-    const low = [...past].sort((a, b) => cap(a) - cap(b)).slice(0, 2).sort((a, b) => R.indexOf(a) - R.indexOf(b));
-    const lowUnsold = sum(low, (r) => r.max - r.booked - r.blocked);
-    const dec = R[11];
+    const capOf = (m) => m.casAct / Math.max(1, net(m.max_gross));
+    const best = closed.reduce((a, b) => (capOf(b) > capOf(a) ? b : a));
+    const low = [...closed].sort((a, b) => capOf(a) - capOf(b)).slice(0, 2).sort((a, b) => a.month - b.month);
+    const lowUnsold = sum(low, (m) => Math.max(0, net(m.max_gross) - m.casAct - net(m.blocked_gross)));
+    const nxt = ahead[ahead.length - 1];
     $("mxNotes").innerHTML =
-      `<div><b>Best capture: ${D.months[bi].m} at ${pct(cap(best))}</b> of max, with ${pct(best.sold / best.nights)} occupancy. April to June all ran above 85%.</div>` +
-      `<div><b>${low.map((r) => D.months[R.indexOf(r)].m).join(" and ")} left ${M(lowUnsold)} unsold</b>, the most of any months, at ${low.map((r) => pct(cap(r), 0)).join(" and ")} capture. That is the clearest room to grow.</div>` +
-      `<div><b>December is ${pct(cap(dec), 0)} booked</b> so far (${M(dec.booked)} of ${M(dec.max)}), with ${M(dec.blocked)} in casitas blocked or held and ${M(Math.max(0, dec.max - dec.booked - dec.blocked))} open to sell.</div>`;
+      `<div><b>Best capture: ${best.m} at ${pct(capOf(best))}</b> of max, with ${pct(best.rooms_sold / Math.max(1, best.capacity))} occupancy.</div>` +
+      `<div><b>${low.map((m) => m.m).join(" and ")} left ${M(lowUnsold)} unsold</b>, the most of any months (${low.map((m) => pct(capOf(m), 0)).join(" and ")} captured). That is the clearest room to grow.</div>` +
+      (nxt ? `<div><b>${nxt.m} is ${pct((nxt.casAct + nxt.casFc) / net(nxt.max_gross), 0)} booked</b> so far (${M(nxt.casAct + nxt.casFc)} of ${M(net(nxt.max_gross))}), with ${M(net(nxt.blocked_gross))} blocked or held and ${M(Math.max(0, net(nxt.max_gross - nxt.blocked_gross) - nxt.casAct - nxt.casFc))} open to sell.</div>` : "");
   }
 
-  /* ---------- tooltip helper ---------- */
+  /* ---------- chart helpers ---------- */
   function tipFor(host) {
     const t = document.createElement("div"); t.className = "tip"; host.appendChild(t);
     return {
@@ -655,46 +878,55 @@
   }
   const svgNS = "http://www.w3.org/2000/svg";
   const el = (n, a, p) => { const e = document.createElementNS(svgNS, n); for (const k in a) e.setAttribute(k, a[k]); if (p) p.appendChild(e); return e; };
-  const niceMax = (v, s) => Math.ceil(v / s) * s;
+  const niceMax = (v, s) => Math.max(s, Math.ceil(v / s) * s);
+  const barPath = (x0, w, top, base, r) => `M${x0},${base} V${top + r} Q${x0},${top} ${x0 + r},${top} H${x0 + w - r} Q${x0 + w},${top} ${x0 + w},${top + r} V${base} Z`;
 
-  /* ---------- main chart: actual bars + target markers ---------- */
   function drawMain(MONTHS) {
-    const host = $("chartMain");
-    const W = 1100, H = 340, P = { l: 52, r: 12, t: 18, b: 34 };
-    const max = niceMax(Math.max(...MONTHS.map((x) => Math.max(x.target, x.actual || 0))), 5e6);
-    const iw = W - P.l - P.r, ih = H - P.t - P.b, bw = iw / MONTHS.length;
+    const host = $("chartMain"); host.innerHTML = "";
+    const W = 1100, H = 340, P = { l: 52, r: 12, t: 22, b: 34 };
+    const max = niceMax(Math.max(...MONTHS.map((m) => Math.max(m.target, m.actual + (m.state === "closed" ? 0 : m.books)))), 5e6);
+    const iw = W - P.l - P.r, ih = H - P.t - P.b, bw = iw / MONTHS.length, base = P.t + ih;
     const y = (v) => P.t + ih - (v / max) * ih;
-    const svg = el("svg", { viewBox: `0 0 ${W} ${H}`, role: "img", "aria-label": "Monthly actual sales versus target" }, host);
+    const svg = el("svg", { viewBox: `0 0 ${W} ${H}`, role: "img", "aria-label": "Monthly sales versus target" }, host);
     for (let v = 0; v <= max; v += 5e6) {
       el("line", { x1: P.l, x2: W - P.r, y1: y(v), y2: y(v), class: v ? "gridline" : "base" }, svg);
       const t = el("text", { x: P.l - 10, y: y(v) + 4, "text-anchor": "end" }, svg); t.textContent = v ? (v / 1e6) + "M" : "0";
     }
     const tip = tipFor(host);
     MONTHS.forEach((m, i) => {
-      const cx = P.l + bw * i + bw / 2, w = Math.min(46, bw * 0.56);
-      const g = el("g", {}, svg);
-      if (m.actual != null) {
-        const top = y(m.actual), h = P.t + ih - top, r = 4;
-        const path = el("path", { d: `M${cx - w / 2},${P.t + ih} V${top + r} Q${cx - w / 2},${top} ${cx - w / 2 + r},${top} H${cx + w / 2 - r} Q${cx + w / 2},${top} ${cx + w / 2},${top + r} V${P.t + ih} Z`, fill: "#2fa89e" }, g);
-        path.style.transformOrigin = `${cx}px ${P.t + ih}px`; path.style.transform = "scaleY(0)";
-        path.style.transition = `transform 1.1s cubic-bezier(.2,.7,.2,1) ${0.25 + i * 0.06}s`;
-        setTimeout(() => { path.style.transform = "scaleY(1)"; }, 30);
-      } else {
-        el("rect", { x: cx - w / 2, y: y(m.target), width: w, height: P.t + ih - y(m.target), rx: 4, fill: "none", stroke: "rgba(238,231,214,.22)", "stroke-dasharray": "4 4" }, g);
+      const cx = P.l + bw * i + bw / 2, w = Math.min(46, bw * 0.56), x0 = cx - w / 2, g = el("g", {}, svg);
+      const act = m.state === "future" ? 0 : m.actual, bk = m.state === "closed" ? 0 : m.books;
+      if (bk > 0) {
+        const top = y(act + bk);
+        el("path", { d: barPath(x0, w, top, y(act) - (act > 0 ? 0 : 0), 4), fill: "rgba(47,168,158,.30)", stroke: "rgba(95,211,200,.6)", "stroke-dasharray": "3 3" }, g);
       }
-      el("line", { x1: cx - w / 2 - 7, x2: cx + w / 2 + 7, y1: y(m.target), y2: y(m.target), stroke: "#e2b766", "stroke-width": 2.5, "stroke-linecap": "round" }, g);
+      if (act > 0) {
+        const top = y(act);
+        const p = el("path", { d: barPath(x0, w, top, base, bk > 0 ? 0 : 4), fill: "#2fa89e" }, g);
+        if (firstRender) { p.style.transformOrigin = `${cx}px ${base}px`; p.style.transform = "scaleY(0)"; p.style.transition = `transform 1.1s cubic-bezier(.2,.7,.2,1) ${0.25 + i * 0.06}s`; setTimeout(() => { p.style.transform = "scaleY(1)"; }, 30); }
+      }
+      el("line", { x1: x0 - 7, x2: x0 + w + 7, y1: y(m.target), y2: y(m.target), stroke: "#e2b766", "stroke-width": 2.5, "stroke-linecap": "round" }, g);
       const lbl = el("text", { x: cx, y: H - 12, "text-anchor": "middle" }, g); lbl.textContent = m.short;
-      if (m.actual != null && i === MONTHS.filter((x) => x.actual != null).length - 1) {
-        const tt = el("text", { x: cx, y: y(Math.max(m.actual, m.target)) - 10, "text-anchor": "middle", style: "fill:#5fd3c8;font-weight:800" }, g);
-        tt.textContent = (m.actual / m.target * 100).toFixed(1) + "%";
+      if (m.state !== "closed" || i === MONTHS.filter((x) => x.state === "closed").length - 1) {
+        const v = (act + bk) / m.target;
+        const tt = el("text", { x: cx, y: y(Math.max(act + bk, m.target)) - 9, "text-anchor": "middle", style: `fill:${m.state === "closed" ? "#5fd3c8" : "#e2b766"};font-weight:800` }, g);
+        tt.textContent = (v * 100).toFixed(m.state === "closed" ? 1 : 0) + "%";
       }
-      const hit = el("rect", { x: P.l + bw * i, y: P.t, width: bw, height: ih, fill: "transparent", style: "cursor:default" }, g);
-      const show = (ev) => {
-        const r = host.getBoundingClientRect(), sx = r.width / W;
-        const html = m.actual != null
-          ? `<div class="t">${m.m}</div><div class="r"><span>Actual</span><b>${peso(m.actual)}</b></div><div class="r"><span>Target</span><b>${peso(m.target)}</b></div><div class="r neg"><span>Variance</span><b>−${peso(m.target - m.actual)}</b></div><div class="r"><span>% of target</span><b>${pct(m.actual / m.target)}</b></div>`
-          : `<div class="t">${m.m}</div><div class="r"><span>Target</span><b>${peso(m.target)}</b></div><div class="r"><span>Actual</span><b>Not closed yet</b></div>`;
-        tip.show(html, cx * sx, y(Math.max(m.target, m.actual || 0)) * sx);
+      const hit = el("rect", { x: P.l + bw * i, y: P.t, width: bw, height: ih, fill: "transparent" }, g);
+      const show = () => {
+        const sx = host.getBoundingClientRect().width / W;
+        const rows = m.state === "closed"
+          ? `<div class="r"><span>Actual${m.src === "accounting" ? " (accounting)" : ""}</span><b>${peso(m.actual)}</b></div>
+             ${m.src === "accounting" ? `<div class="r"><span>Live system</span><b>${peso(m.live, 0)}</b></div>` : ""}
+             <div class="r"><span>Target</span><b>${peso(m.target)}</b></div>
+             <div class="r ${m.actual < m.target ? "neg" : ""}"><span>Variance</span><b>${m.actual < m.target ? "−" : "+"}${peso(Math.abs(m.target - m.actual))}</b></div>
+             <div class="r"><span>% of target</span><b>${pct(m.actual / m.target)}</b></div>`
+          : `<div class="r"><span>${m.state === "current" ? "Earned so far" : "Earned"}</span><b>${peso(act, 0)}</b></div>
+             <div class="r"><span>On the books</span><b>${peso(bk, 0)}</b></div>
+             <div class="r"><span>Target</span><b>${peso(m.target)}</b></div>
+             <div class="r"><span>Booked vs target</span><b>${pct((act + bk) / m.target)}</b></div>
+             <div class="r"><span>Casitas · day trips</span><b>${M(m.casAct + m.casFc)} · ${M(m.daytrip + m.daytrip_upcoming)}</b></div>`;
+        tip.show(`<div class="t">${m.m}${m.state === "current" ? " · in progress" : m.state === "future" ? " · upcoming" : ""}</div>${rows}`, cx * sx, y(Math.max(m.target, act + bk)) * sx);
         hit.setAttribute("fill", "rgba(238,231,214,.04)");
       };
       hit.addEventListener("mouseenter", show); hit.addEventListener("click", show);
@@ -702,11 +934,10 @@
     });
   }
 
-  /* ---------- gap chart: shortfall bars hanging below zero ---------- */
   function drawGap(closed) {
-    const host = $("chartGap");
+    const host = $("chartGap"); host.innerHTML = "";
     const W = 640, H = 300, P = { l: 44, r: 10, t: 30, b: 40 };
-    const gaps = closed.map((m) => m.target - m.actual);
+    const gaps = closed.map((m) => Math.max(0, m.target - m.actual));
     const max = niceMax(Math.max(...gaps), 1e6);
     const iw = W - P.l - P.r, ih = H - P.t - P.b, bw = iw / closed.length;
     const y = (v) => P.t + (v / max) * ih;
@@ -719,17 +950,16 @@
     closed.forEach((m, i) => {
       const cx = P.l + bw * i + bw / 2, w = Math.min(30, bw * 0.58), g = gaps[i], h = Math.max(2, y(g) - P.t), r = Math.min(4, h / 2);
       const grp = el("g", {}, svg);
-      const path = el("path", { d: `M${cx - w / 2},${P.t} V${P.t + h - r} Q${cx - w / 2},${P.t + h} ${cx - w / 2 + r},${P.t + h} H${cx + w / 2 - r} Q${cx + w / 2},${P.t + h} ${cx + w / 2},${P.t + h - r} V${P.t} Z`, fill: "#e07a64" }, grp);
-      path.style.transformOrigin = `${cx}px ${P.t}px`; path.style.transform = "scaleY(0)";
-      path.style.transition = `transform 1s cubic-bezier(.2,.7,.2,1) ${0.3 + i * 0.06}s`;
-      setTimeout(() => { path.style.transform = "scaleY(1)"; }, 30);
-      const a = el("text", { x: cx, y: P.t - 10, "text-anchor": "middle", style: `font-weight:700;fill:${m.actual / m.target > 0.95 ? "#5fd3c8" : "#b8ae98"}` }, grp);
-      { const r_ = m.actual / m.target * 100; a.textContent = (r_ >= 99 ? r_.toFixed(1) : Math.round(r_)) + "%"; }
+      const path = el("path", { d: `M${cx - w / 2},${P.t} V${P.t + h - r} Q${cx - w / 2},${P.t + h} ${cx - w / 2 + r},${P.t + h} H${cx + w / 2 - r} Q${cx + w / 2},${P.t + h} ${cx + w / 2},${P.t + h - r} V${P.t} Z`, fill: g > 0 ? "#e07a64" : "#5fd3c8" }, grp);
+      if (firstRender) { path.style.transformOrigin = `${cx}px ${P.t}px`; path.style.transform = "scaleY(0)"; path.style.transition = `transform 1s cubic-bezier(.2,.7,.2,1) ${0.3 + i * 0.06}s`; setTimeout(() => { path.style.transform = "scaleY(1)"; }, 30); }
+      const rr = m.actual / m.target * 100;
+      const a = el("text", { x: cx, y: P.t - 10, "text-anchor": "middle", style: `font-weight:700;fill:${rr >= 95 ? "#5fd3c8" : "#b8ae98"}` }, grp);
+      a.textContent = (rr >= 99 ? rr.toFixed(1) : Math.round(rr)) + "%";
       const l = el("text", { x: cx, y: H - 14, "text-anchor": "middle" }, grp); l.textContent = m.short;
       const hit = el("rect", { x: P.l + bw * i, y: 0, width: bw, height: H - P.b + 10, fill: "transparent" }, grp);
       const show = () => {
-        const r = host.getBoundingClientRect(), sx = r.width / W;
-        tip.show(`<div class="t">${m.m}</div><div class="r neg"><span>Below target by</span><b>${peso(g)}</b></div><div class="r"><span>% of target</span><b>${pct(m.actual / m.target)}</b></div>`, cx * sx, (P.t + h + 70) * sx);
+        const sx = host.getBoundingClientRect().width / W;
+        tip.show(`<div class="t">${m.m}</div><div class="r neg"><span>${g > 0 ? "Below target by" : "Above target by"}</span><b>${peso(Math.abs(m.target - m.actual))}</b></div><div class="r"><span>% of target</span><b>${pct(m.actual / m.target)}</b></div>`, cx * sx, (P.t + h + 70) * sx);
       };
       hit.addEventListener("mouseenter", show); hit.addEventListener("click", show);
       hit.addEventListener("mouseleave", () => tip.hide());
