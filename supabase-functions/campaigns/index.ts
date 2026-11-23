@@ -15,6 +15,7 @@
 //        price and the nights still open (live from cb_rates). offer.safety = the fake-website safety
 //        notice (any layout; on by default for "rooms"). offer.preheader = the inbox preview line.
 //        offer.weekdays_only = the code only takes % off Sun–Thu (non-peak) casita nights (booking-v88).
+//        With the safety notice on, the casitas show as a compact list under it (the notice leads).
 //   send_test { campaign, to? }  that email, to one address.
 //   process                   send the next batch now (also every 5 min by pg_cron).
 // Cron (header x-webhook-secret = cb_webhook_secret()): process, import_guests.
@@ -459,9 +460,32 @@ ${chips(rm.nights)}
 <div style="text-align:center;font-size:12px;color:#7a6f5e;margin-top:8px">Opens virginbeachresort.com</div></td></tr></table></td></tr>`; };
   const codeRow = promo ? `<tr><td class="pad" style="padding:0 36px 6px"><p style="margin:0 0 15px;font-size:16px;line-height:1.65;color:${SOFT}">Your personal code is <b style="font-family:'Courier New',monospace;color:${DEEP};letter-spacing:.06em">${esc(code)}</b>. It takes ${esc(offerLine(o).replace(/^(\d+%) off /, "$1 off the "))}${o.weekdays_only ? " for weeknights" : ""} and is already applied when you book through the buttons below, which take you to <b style="color:${INK}">virginbeachresort.com</b>.</p></td></tr>` : "";
   const expRow = photos.length ? `<tr><td style="padding:4px 30px 8px"><table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>${photos.map((k) => `<td class="tile" width="33%" valign="top" style="padding:0 6px"><img src="${img(k)}" width="170" alt="${esc(PHOTOS[k].alt)}" style="display:block;width:100%;height:auto;border:0;border-radius:12px"><div style="${SANS};font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:${DEEP};padding:8px 2px 0;line-height:1.35">${esc(PHOTOS[k].caption)}</div></td>`).join("")}</tr></table></td></tr>` : "";
+  // v88b: with the safety notice on, the offer is secondary — a compact list (one small photo, nights as ranges, a text link)
+  const compact = safetyOn(o);
+  const ranges = (nights: string[]) => {
+    const out: string[] = []; let a = "", b = "";
+    const md = (d: string) => new Date(d + "T00:00:00Z").toLocaleDateString("en-US", { timeZone: "UTC", month: "short", day: "numeric" });
+    const next = (d: string) => new Date(Date.parse(d + "T00:00:00Z") + 86400_000).toISOString().slice(0, 10);
+    const flush = () => { if (!a) return; out.push(a === b ? md(a) : a.slice(0, 7) === b.slice(0, 7) ? `${md(a)}–${new Date(b + "T00:00:00Z").getUTCDate()}` : `${md(a)}–${md(b)}`); };
+    for (const n of nights) { if (a && n === next(b)) b = n; else { flush(); a = b = n; } }
+    flush(); return out.join(" · ");
+  };
+  const roomRow = (rm: RoomCard) => { const info = ROOM_INFO[rm.slug]; const u = roomUrl(rm.slug); const sale = promo && o.kind === "percent" ? rm.rate * (1 - Number(o.percent || 0) / 100) : 0;
+    return `<tr><td style="padding:0 0 14px"><table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>
+<td width="120" valign="top" style="padding:0 14px 0 0"><a href="${esc(u)}"><img src="${casitaImg(rm.slug, 1)}" width="120" alt="${esc(rm.name)}" style="display:block;width:120px;height:auto;border:0;border-radius:10px"></a></td>
+<td valign="top" style="font-size:14px;line-height:1.5;color:${SOFT}"><a href="${esc(u)}" style="${SERIF};font-size:17px;font-weight:600;color:${INK};text-decoration:none">${esc(rm.name)}</a>
+<div style="font-size:12.5px;color:#7a6f5e">${esc(info?.facts || "")}</div>
+<div style="margin-top:4px">${sale ? `${peso(sale)} a weeknight with your code <span style="color:#9a907f">(regular ${peso(rm.rate)})</span>` : `${peso(rm.rate)} a weeknight`}</div>
+<div style="margin-top:2px"><span style="color:${INK}">Open:</span> ${esc(ranges(rm.nights))}</div>
+<a href="${esc(u)}" style="display:inline-block;margin-top:4px;color:${LAGOON};font-weight:700;text-decoration:none">Book on virginbeachresort.com &rarr;</a></td></tr></table></td></tr>`; };
+  const compactRooms = `<tr><td class="pad" style="padding:6px 36px 10px"><div style="border-top:1px solid ${LINE};padding-top:22px">
+<div style="${SERIF};font-size:19px;font-weight:500;color:${INK}">${esc(String(o.rooms_title || "") || (o.weekdays_only ? "Planning a visit? Weeknights still open" : "Planning a visit? Casitas still open"))}</div>
+${promo ? `<p style="margin:6px 0 16px;font-size:14px;line-height:1.55;color:${SOFT}">As a thank-you for staying with us before, your personal code <b style="font-family:'Courier New',monospace;color:${DEEP};letter-spacing:.04em">${esc(code)}</b> takes ${esc(offerLine(o).replace(/^(\d+%) off /, "$1 off the "))}${o.weekdays_only ? " for weeknights" : ""}. It's applied automatically when you book through the links below.</p>` : `<p style="margin:6px 0 16px"></p>`}
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0">${rooms.map(roomRow).join("")}</table></div></td></tr>`;
   const noRooms = `<tr><td class="pad" style="padding:0 36px 20px"><p style="margin:0;font-size:15px;line-height:1.6;color:${SOFT}">Our casitas for these dates have filled up. Reply to this email or call us and we'll find you the next best nights.</p></td></tr>`;
   let main = "";
-  if (layout === "rooms") main = eyebrowRow + headRow + msgRow(0) + safetyRow + codeRow + (rooms.length ? rooms.map(roomCard).join("") : noRooms) + expRow + termsRow;
+  if (layout === "rooms" && compact) main = eyebrowRow + headRow + msgRow(0) + safetyRow + (rooms.length ? compactRooms : "") + termsRow;
+  else if (layout === "rooms") main = eyebrowRow + headRow + msgRow(0) + safetyRow + codeRow + (rooms.length ? rooms.map(roomCard).join("") : noRooms) + expRow + termsRow;
   else if (layout === "letter") main = eyebrowRow + headRow.replace("padding:12px 36px 22px", "padding:12px 36px 4px") + msgRow(18) + signRow + (promo ? `<tr><td style="padding:14px 0 0"></td></tr>` + promoRow : "") + ctaRow + (hero ? `<tr><td style="padding:22px 20px 0"><a href="${esc(url)}"><img src="${img(hero)}" width="560" alt="${esc(PHOTOS[hero].alt)}" style="display:block;width:100%;height:auto;border:0;border-radius:14px"></a></td></tr>` : "") + termsRow;
   else if (layout === "spotlight") main = heroRow(hero, true) + eyebrowRow + headRow + msgRow(0) + promoRow + ctaRow + more.map(bigPhoto).join("") + termsRow;
   else if (layout === "news") main = banner + (hero ? `<tr><td style="padding:22px 20px 0"><a href="${esc(url)}"><img src="${img(hero)}" width="560" alt="${esc(PHOTOS[hero].alt)}" style="display:block;width:100%;height:auto;border:0;border-radius:14px"></a></td></tr>` : "") + msgRow() + ctaRow + (promo ? `<tr><td style="padding:16px 0 0"></td></tr>` + promoRow : "") + tiles + termsRow;
