@@ -272,7 +272,12 @@ function soundbite(c: Any) {
 
 const peso = (n: unknown) => "₱" + Number(n || 0).toLocaleString("en-PH", { maximumFractionDigits: 0 });
 const fmtDate = (s: unknown) => s ? new Date(String(s).slice(0, 10) + "T00:00:00Z").toLocaleDateString("en-PH", { timeZone: "UTC", month: "long", day: "numeric", year: "numeric" }) : "";
-const firstName = (n: unknown) => String(n || "").trim().split(/\s+/)[0]?.replace(/[^A-Za-zÀ-ž'-]/g, "") || "";
+// v88: skip "c/o", "Attn", "Mr.", "Ms." … and title-case ALL-CAPS names ("JUAN" → "Juan")
+const firstName = (n: unknown) => {
+  const toks = String(n || "").trim().split(/\s+/).filter((t) => !/^(c\/o|attn:?|mr\.?|mrs\.?|ms\.?|miss|dr\.?|engr\.?|atty\.?|sir|ma'?am)$/i.test(t));
+  const w = (toks[0] || "").replace(/[^A-Za-zÀ-ž'-]/g, "");
+  return w.length > 1 && w === w.toUpperCase() ? w[0] + w.slice(1).toLowerCase() : w;
+};
 
 export function offerLine(o: Any): string {
   const kinds: string[] = Array.isArray(o?.booking_kinds) && o.booking_kinds.length ? o.booking_kinds : ["overnight"];
@@ -398,7 +403,7 @@ export function renderEmail(c: Any, r: { name?: string; code?: string | null; un
   const photos = pickPhotos(c);
   const img = (k: string) => PHOTO_BASE + k + ".jpg";
   const [hero, ...more] = photos;
-  const tag = layout === "rooms" && safetyOn(o) && !String(o.tagline || "").trim() ? "Security notice · Virgin Beach Resort" : soundbite(c);  // v88
+  const tag = soundbite(c);
   const cta = c.cta_label || (promo ? "Book with my code" : "Plan your visit");
   const preheader = String(o.preheader || "").trim() ? noCove(fill(o.preheader, v)).replace(/\s+/g, " ").slice(0, 140)
     : promo ? `${offerLine(o)} — your personal code ${code}` : (paras.find((p) => !/^hi\b/i.test(p)) || headline).replace(/\s+/g, " ").slice(0, 110);
@@ -504,8 +509,9 @@ ${main}
 <tr><td><img src="${img("footer-beach")}" width="600" alt="" style="display:block;width:100%;height:auto;border:0"></td></tr>
 <tr><td style="background:${SAND};padding:20px 32px;font-size:12px;line-height:1.7;color:${SOFT}">
 Questions? Reply to this email or call +63 917 792 0712 · <a href="${SITE}/" style="color:${LAGOON}">virginbeachresort.com</a><br>
-You're getting this because you've been our guest. <a href="${esc(unsub)}" style="color:${SOFT}">Unsubscribe from ${promo ? "offers" : "these emails"}</a>.<br>
-Virgin Beach Resort · Laiya, San Juan, Batangas, Philippines</td></tr>
+You're getting this because you've been our guest. Don't want these emails? Unsubscribe in one click, no login needed.<br>
+Virgin Beach Resort · Laiya, San Juan, Batangas, Philippines
+<table role="presentation" cellpadding="0" cellspacing="0" style="margin-top:12px"><tr><td style="border:1px solid ${LINE};border-radius:999px;background:#ffffff"><a href="${esc(unsub)}" style="display:inline-block;padding:8px 18px;${SANS};font-size:12px;font-weight:700;color:${SOFT};text-decoration:none">Unsubscribe</a></td></tr></table></td></tr>
 </table></td></tr></table></body></html>`;
   const safetyText = safetyOn(o) ? [SAFETY.title.toUpperCase(), SAFETY.lead, ...SAFETY.items.map((it) => `• ${it.b} ${it.t}`), SAFETY.verify, ""] : [];
   const roomText = layout === "rooms" ? rooms.flatMap((rm) => [`${rm.name} — ${ROOM_INFO[rm.slug]?.facts || ""}`, `Open: ${rm.nights.map((n) => fmtDate(n).replace(/, \d{4}$/, "")).join(", ")}`, `Book: ${roomUrl(rm.slug)}`, ""]) : [];
