@@ -15,7 +15,7 @@
 //        price and the nights still open (live from cb_rates). offer.safety = the fake-website safety
 //        notice (any layout; on by default for "rooms"). offer.preheader = the inbox preview line.
 //        offer.weekdays_only = the code only takes % off Sun–Thu (non-peak) casita nights (booking-v88).
-//        With the safety notice on, the casitas show as a compact list under it (the notice leads).
+//        offer.room_style = "cards" (default: big photo cards) | "list" (compact list). The safety notice always leads.
 //   send_test { campaign, to? }  that email, to one address.
 //   process                   send the next batch now (also every 5 min by pg_cron).
 // Cron (header x-webhook-secret = cb_webhook_secret()): process, import_guests.
@@ -460,8 +460,8 @@ ${chips(rm.nights)}
 <div style="text-align:center;font-size:12px;color:#7a6f5e;margin-top:8px">Opens virginbeachresort.com</div></td></tr></table></td></tr>`; };
   const codeRow = promo ? `<tr><td class="pad" style="padding:0 36px 6px"><p style="margin:0 0 15px;font-size:16px;line-height:1.65;color:${SOFT}">Your personal code is <b style="font-family:'Courier New',monospace;color:${DEEP};letter-spacing:.06em">${esc(code)}</b>. It takes ${esc(offerLine(o).replace(/^(\d+%) off /, "$1 off the "))}${o.weekdays_only ? " for weeknights" : ""} and is already applied when you book through the buttons below, which take you to <b style="color:${INK}">virginbeachresort.com</b>.</p></td></tr>` : "";
   const expRow = photos.length ? `<tr><td style="padding:4px 30px 8px"><table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>${photos.map((k) => `<td class="tile" width="33%" valign="top" style="padding:0 6px"><img src="${img(k)}" width="170" alt="${esc(PHOTOS[k].alt)}" style="display:block;width:100%;height:auto;border:0;border-radius:12px"><div style="${SANS};font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:${DEEP};padding:8px 2px 0;line-height:1.35">${esc(PHOTOS[k].caption)}</div></td>`).join("")}</tr></table></td></tr>` : "";
-  // v88b: with the safety notice on, the offer is secondary — a compact list (one small photo, nights as ranges, a text link)
-  const compact = safetyOn(o);
+  // v88b: offer.room_style "list" = compact list (one small photo, nights as ranges, a text link); default = big cards
+  const compact = o.room_style === "list";
   const ranges = (nights: string[]) => {
     const out: string[] = []; let a = "", b = "";
     const md = (d: string) => new Date(d + "T00:00:00Z").toLocaleDateString("en-US", { timeZone: "UTC", month: "short", day: "numeric" });
