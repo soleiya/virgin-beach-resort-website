@@ -451,6 +451,11 @@ html = """<!doctype html>
   .acc-foot { font-size: .74rem; color: var(--ink-soft); margin-top: 14px; }
   @media (max-width: 900px) { .acc-tiles { grid-template-columns: 1fr 1fr; } table.acc-table { min-width: 860px; } }
   @media (max-width: 600px) { .dash-head .view-toggle { max-width: 100%; overflow-x: auto; margin-left: 0; } .view-toggle button { white-space: nowrap; } .acc-dates input { width: 122px; padding: 6px 4px; } }
+  /* F&B view (staff-fnb.js, booking-v89) — StoreHub POS sales; reuses the Accounting styles */
+  #fnbView { display: none; }
+  body.fnbv #fnbView { display: block; max-width: 1400px; margin: 0 auto; padding: 0; }
+  body.fnbv #dashScreen > :not(#fnbView) { display: none !important; }
+  #fnbView table.acc-table td a { cursor: pointer; }
   /* Executive view (staff-exec.js) — only for executive accounts */
   .view-toggle [data-view="executive"] { display: none; }
   body.exec-staff .view-toggle [data-view="executive"] { display: inline-block; }
@@ -1852,6 +1857,7 @@ html = """<!doctype html>
 <script src="../assets/js/staff-daycal.js?v=__V_DCAL__"></script>
 <script src="../assets/js/staff-summary.js?v=__V_SUMJS__"></script>
 <script src="../assets/js/staff-accounting.js?v=__V_ACCJS__"></script>
+<script src="../assets/js/staff-fnb.js?v=__V_FNBJS__"></script>
 <script src="../assets/js/staff-exec.js?v=__V_EXJS__"></script>
 <script src="../assets/js/staff-campaigns.js?v=__V_CMJS__"></script>
 <script src="../assets/js/staff-cancel.js?v=__V_CXJS__"></script>
@@ -1884,6 +1890,7 @@ html = (html.replace("__V_CSS__", v("assets/css/style.css"))
             .replace("__V_CBJS__", v("assets/js/staff-cloudbeds.js"))
             .replace("__V_SUMJS__", v("assets/js/staff-summary.js"))
             .replace("__V_ACCJS__", v("assets/js/staff-accounting.js"))
+            .replace("__V_FNBJS__", v("assets/js/staff-fnb.js"))
             .replace("__V_EXJS__", v("assets/js/staff-exec.js"))
             .replace("__V_CMJS__", v("assets/js/staff-campaigns.js"))
             .replace("__V_CXJS__", v("assets/js/staff-cancel.js"))
