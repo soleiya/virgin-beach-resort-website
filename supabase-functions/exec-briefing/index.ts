@@ -13,6 +13,8 @@
 // locked 15 min. The figures are read with the service role through
 // exec_briefing(), which only the service role can call.
 //
+// booking-v89: also returns exec_fnb(year) as data.fnb (StoreHub F&B sales).
+//
 // Secrets (Edge Functions → Secrets): EXEC_PIN (4 digits, set by the owner).
 // "Verify JWT" ON (the page sends the public anon key).
 // =============================================================================
@@ -78,7 +80,12 @@ export async function handle(req: Request): Promise<Response> {
     const rec = await rpc("exec_pin_record", { p_key: key, p_ok: ok });
     if (!ok) return json(rec?.locked ? { error: "locked", retry_in: 900 } : { error: "wrong_pin" }, rec?.locked ? 429 : 401);
 
-    const data = await rpc("exec_briefing", { p_year: year });
+    // v89: F&B sales from StoreHub ride along as data.fnb; the page still works without them.
+    const [data, fnb] = await Promise.all([
+      rpc("exec_briefing", { p_year: year }),
+      rpc("exec_fnb", { p_year: year }).catch((e) => { console.error("exec_fnb", (e as Error).message); return null; }),
+    ]);
+    if (data && fnb) data.fnb = fnb;
     return json({ data });
   } catch (e) {
     console.error("exec-briefing", (e as Error).message);
