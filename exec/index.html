@@ -280,6 +280,27 @@
   .now-tile .meter u { position: absolute; top: -3px; bottom: -3px; width: 2px; background: var(--gold-hi); z-index: 3; }
   td .sub { display: block; font-size: .72rem; color: var(--ink-mute); font-weight: 600; }
   td.pos { color: var(--lagoon-hi); }
+  /* v92: property switch (Virgin Beach Resort / Z Hostel) */
+  .prop-seg { display: none; }
+  .prop-seg.ready { display: inline-flex; }
+  #zhView { display: none; }
+  body.view-zh #vbrView { display: none; }
+  body.view-zh #zhView { display: block; }
+  body.view-zh .brand img { display: none; }
+  .zh-tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+  .zh-tiles .tile { min-height: 128px; }
+  .sw.zh-room { background: #2fa89e; } .sw.zh-fnb { background: #d98c6a; } .sw.zh-books { background: rgba(47,168,158,.35); border: 1px dashed rgba(95,211,200,.7); }
+  .sw.zh-adr { background: var(--gold-hi); height: 3px; width: 16px; border-radius: 2px; }
+  .sw.zh-tiki { background: #d98c6a; } .sw.zh-roof { background: #2fa89e; } .sw.zh-cafe { background: #b88a3c; }
+  .hbars { display: grid; gap: 9px; margin-top: 14px; }
+  .hbar { display: grid; grid-template-columns: minmax(96px, 34%) 1fr auto; align-items: center; gap: 10px; font-size: .8rem; }
+  .hbar span { color: var(--ink-soft); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .hbar .t { height: 10px; border-radius: 99px; background: rgba(238,231,214,.06); overflow: hidden; }
+  .hbar .t i { display: block; height: 100%; border-radius: 99px; }
+  .hbar b { font-weight: 700; font-variant-numeric: tabular-nums; min-width: 64px; text-align: right; }
+  .zh-note { font-size: .78rem; color: var(--ink-mute); line-height: 1.55; margin-top: 12px; }
+  @media (max-width: 980px) { .zh-tiles { grid-template-columns: 1fr 1fr; } }
+  @media (max-width: 600px) { .zh-tiles { grid-template-columns: 1fr; } .prop-seg button { padding: 5px 8px; } }
   .err-card { max-width: 420px; margin: 18vh auto; text-align: center; color: var(--ink-soft); }
   @media (max-width: 980px) { .yoy { grid-template-columns: 1fr 1fr; } }
   @media (max-width: 600px) { .top-right .live span { display: none; } .recon { grid-template-columns: 1fr; } .yoy { grid-template-columns: 1fr; } .seg button { padding: 5px 9px; } }
@@ -313,14 +334,19 @@
     <header class="top">
       <div class="brand">
         <img src="../assets/brand/logo-mark.png" alt="">
-        <div><b>Virgin Beach Resort</b><span>Executive Briefing</span></div>
+        <div><b id="brandName">Virgin Beach Resort</b><span>Executive Briefing</span></div>
       </div>
       <div class="top-right">
+        <div class="seg prop-seg" id="propSeg" role="group" aria-label="Property">
+          <button data-prop="vbr" class="on">Virgin Beach</button>
+          <button data-prop="zh">Z Hostel</button>
+        </div>
         <span class="live" id="live" title=""><i></i><span id="liveTxt">Live</span></span>
         <button class="lock" id="lockBtn">Lock</button>
       </div>
     </header>
 
+    <div id="vbrView">
     <div class="hello reveal">
       <div class="eyebrow" id="helloEyebrow"></div>
       <h2 id="headline"></h2>
@@ -439,6 +465,62 @@
       <div class="chart-head"><div><h3>Month by month</h3><p class="lead" id="tableLead"></p></div></div>
       <div class="scroll-x"><table id="tbl"></table></div>
     </section>
+
+    </div><!-- /vbrView -->
+
+    <!-- ================= Z Hostel (v92) ================= -->
+    <div id="zhView">
+      <div class="hello">
+        <div class="eyebrow" id="zhEyebrow"></div>
+        <h2 id="zhHeadline"></h2>
+        <p id="zhSubline"></p>
+      </div>
+      <div class="zh-tiles" id="zhTiles"></div>
+
+      <section class="block panel">
+        <div class="chart-head">
+          <div><h3>Monthly revenue · rooms + F&amp;B</h3><p class="lead">Solid = earned; light = rooms already booked for later in the month.</p></div>
+          <div class="legend"><span><i class="sw zh-room"></i>Rooms</span><span><i class="sw zh-fnb"></i>F&amp;B</span><span><i class="sw zh-books"></i>Rooms on the books</span></div>
+        </div>
+        <div class="scroll-x"><div class="chart" id="zhChartMain"></div></div>
+      </section>
+
+      <section class="block two">
+        <div class="panel">
+          <div class="chart-head">
+            <div><h3>Occupancy &amp; ADR</h3><p class="lead">Bars = occupancy; gold line = average daily rate (₱).</p></div>
+            <div class="legend"><span><i class="sw zh-room"></i>Occupancy</span><span><i class="sw zh-adr"></i>ADR</span></div>
+          </div>
+          <div class="scroll-x"><div class="chart" id="zhChartOcc"></div></div>
+        </div>
+        <div class="panel">
+          <h3>Room revenue by channel</h3>
+          <p class="lead" id="zhSrcLead"></p>
+          <div class="hbars" id="zhSources"></div>
+        </div>
+      </section>
+
+      <section class="block two">
+        <div class="panel">
+          <div class="chart-head">
+            <div><h3>F&amp;B by outlet</h3><p class="lead">StoreHub sales, net of VAT.</p></div>
+            <div class="legend"><span><i class="sw zh-tiki"></i>Tiki Bar</span><span><i class="sw zh-roof"></i>Z Roof Deck</span><span><i class="sw zh-cafe"></i>Cafe</span></div>
+          </div>
+          <div class="scroll-x"><div class="chart" id="zhChartFnb"></div></div>
+        </div>
+        <div class="panel">
+          <h3>What sells</h3>
+          <p class="lead">Top F&amp;B categories, year to date.</p>
+          <div class="hbars" id="zhCats"></div>
+        </div>
+      </section>
+
+      <section class="block panel">
+        <div class="chart-head"><div><h3>Month by month</h3><p class="lead">Rooms from Cloudbeds (taxes and fees excluded) · F&amp;B from StoreHub (net of VAT).</p></div></div>
+        <div class="scroll-x"><table id="zhTbl"></table></div>
+        <p class="zh-note" id="zhNote"></p>
+      </section>
+    </div><!-- /zhView -->
 
     <footer>
       <div id="footSrc"></div>
@@ -581,6 +663,7 @@
   /* ---------- render ---------- */
   function render(R) {
     RAW = R;
+    try { renderZ(R.zhostel); } catch (e) { console.error("zhostel", e); }   // v92: never let Z Hostel break the VBR view
     const X = model(R), MONTHS = X.months, Y = R.year;
     const closed = MONTHS.filter((m) => m.state === "closed");
     const cur = MONTHS.find((m) => m.state === "current");
@@ -939,6 +1022,173 @@
       hit.addEventListener("mouseenter", show); hit.addEventListener("click", show);
       hit.addEventListener("mouseleave", () => { tip.hide(); hit.setAttribute("fill", "transparent"); });
     });
+  }
+
+
+  /* ================= v92: Z Hostel view ================= */
+  let view = "vbr";
+  try { if (localStorage.getItem("exec.view") === "zh") view = "zh"; } catch (e) { /* storage off */ }
+  function setView(v) {
+    view = v;
+    document.body.classList.toggle("view-zh", v === "zh");
+    document.querySelectorAll("[data-prop]").forEach((b) => b.classList.toggle("on", b.dataset.prop === v));
+    $("brandName").textContent = v === "zh" ? "Z Hostel" : "Virgin Beach Resort";
+    document.title = "Executive Briefing · " + (v === "zh" ? "Z Hostel" : "Virgin Beach Resort");
+    try { localStorage.setItem("exec.view", v); } catch (e) { /* storage off */ }
+    window.scrollTo(0, 0);
+  }
+  document.querySelectorAll("[data-prop]").forEach((b) => b.addEventListener("click", () => setView(b.dataset.prop)));
+
+  const ZC = { room: "#2fa89e", fnb: "#d98c6a", books: "rgba(47,168,158,.35)", adr: "#e2b766",
+               out: { "Tiki Bar": "#d98c6a", "Z Roof Deck": "#2fa89e", "Cafe": "#b88a3c" } };
+  const esc = (t) => String(t).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
+  function renderZ(Z) {
+    const seg = $("propSeg");
+    if (!Z || !Array.isArray(Z.months)) { seg.classList.remove("ready"); if (view === "zh") setView("vbr"); return; }
+    seg.classList.add("ready");
+    setView(view);
+
+    const through = new Date(Z.through + "T00:00:00+08:00");
+    const curM = through.getMonth() + 1, day = through.getDate();
+    const thruTxt = `${NAMES[curM - 1].slice(0, 3)} ${day}`;
+    const ms = Z.months.map((m) => ({ ...m, i: m.month - 1, short: NAMES[m.month - 1].slice(0, 3), name: NAMES[m.month - 1],
+      state: m.month < curM ? "closed" : m.month === curM ? "current" : "future" }));
+    const done = ms.filter((m) => m.state !== "future");
+    const closed = ms.filter((m) => m.state === "closed");
+    const roomY = Z.room_ytd ? Number(Z.room_ytd.revenue) : sum(done, (m) => m.room_rev);
+    const fnbY = Z.fnb_ytd ? Number(Z.fnb_ytd.net) : sum(done, (m) => m.fnb_net);
+    const totY = roomY + fnbY;
+    const occY = sum(closed, (m) => m.rooms_sold) / Math.max(1, sum(closed, (m) => m.capacity));
+    const adrY = sum(closed, (m) => m.room_rev) / Math.max(1, sum(closed, (m) => m.rooms_sold));
+    const revparY = sum(closed, (m) => m.room_rev) / Math.max(1, sum(closed, (m) => m.capacity));
+    const booksAhead = sum(ms.filter((m) => m.state !== "closed"), (m) => m.room_rev_books);
+    const tot = (m) => m.room_rev + m.fnb_net;
+    const peak = done.reduce((a, b) => (tot(b) > tot(a) ? b : a));
+    const last = closed[closed.length - 1], prev = closed[closed.length - 2];
+    const outl = {};
+    done.forEach((m) => Object.entries(m.outlets || {}).forEach(([k, v]) => { outl[k] = (outl[k] || 0) + Number(v); }));
+    const outSorted = Object.entries(outl).sort((a, b) => b[1] - a[1]);
+    const asOf = Z.as_of ? new Date(Z.as_of) : null;
+    const asOfTxt = asOf ? asOf.toLocaleString("en-PH", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZone: "Asia/Manila" }) : thruTxt;
+
+    $("zhEyebrow").textContent = `Z Hostel · Jan 1 – ${thruTxt}, ${R0year(Z)}`;
+    $("zhHeadline").innerHTML = `<em>${M(totY)}</em> earned so far this year`;
+    $("zhSubline").innerHTML = `Rooms ${M(roomY)} and F&amp;B ${M(fnbY)}. ${last && prev ? `${last.name} brought in ${M(tot(last))}, ${tot(last) >= tot(prev) ? "up" : "down"} ${pct(Math.abs(tot(last) / tot(prev) - 1), 0)} on ${prev.name}. ` : ""}Best month so far: ${peak.name} (${M(tot(peak))}).`;
+
+    const tiles = [
+      ["Room revenue", M(roomY), `${Number(Z.room_ytd ? Z.room_ytd.rooms_sold : sum(done, (m) => m.rooms_sold)).toLocaleString("en-PH")} room nights · Cloudbeds`, true],
+      ["F&amp;B sales", M(fnbY), `Net of VAT · ${outSorted.map(([k, v]) => `${esc(k)} ${pct(v / fnbY, 0)}`).join(" · ")}`],
+      ["Occupancy", pct(occY), `Jan–${last ? last.short : ""} · peak ${closed.reduce((a, b) => (b.occ > a.occ ? b : a)).short} ${Math.round(Math.max(...closed.map((m) => m.occ)))}%`],
+      ["ADR · RevPAR", `${peso(adrY, 0)}`, `Average daily rate · RevPAR ${peso(revparY, 0)} (Jan–${last ? last.short : ""})`],
+      ["Rooms on the books", M(booksAhead), `Rest of ${NAMES[curM - 1]} and beyond, already booked`],
+      ["F&amp;B vs rooms", pct(fnbY / roomY, 0), "F&amp;B earned for every ₱1 of room revenue"],
+    ];
+    $("zhTiles").innerHTML = tiles.map(([k, v, sub, star]) => `<div class="tile${star ? " star" : ""}"><div><div class="k">${k}</div><div class="v num">${v}</div></div><div class="s">${sub}</div></div>`).join("");
+
+    zhDrawMain(ms);
+    zhDrawOcc(ms.filter((m) => m.state !== "future" || m.room_rev_books > 0));
+    zhDrawFnb(done);
+
+    const src = (Z.room_sources || []).slice(0, 8);
+    const srcTot = sum(Z.room_sources || [], (x) => Number(x[2]));
+    const ota = sum((Z.room_sources || []).filter((x) => /booking\.com|hostelworld|trip\.com|agoda|expedia/i.test(x[0])), (x) => Number(x[2]));
+    $("zhSrcLead").textContent = `Year to date. Online travel agencies bring in ${pct(ota / srcTot, 0)} of room revenue.`;
+    const maxS = Math.max(...src.map((x) => Number(x[2])));
+    $("zhSources").innerHTML = src.map((x) => `<div class="hbar"><span title="${esc(x[0])}">${esc(x[0])}</span><div class="t"><i style="width:${(x[2] / maxS * 100).toFixed(1)}%;background:${ZC.room}"></i></div><b>${M(x[2])}</b></div>`).join("");
+
+    const cats = (Z.fnb_categories || []).slice(0, 8), maxC = Math.max(...cats.map((x) => Number(x[1])));
+    $("zhCats").innerHTML = cats.map((x) => `<div class="hbar"><span title="${esc(x[0])}">${esc(x[0])}</span><div class="t"><i style="width:${(x[1] / maxC * 100).toFixed(1)}%;background:${ZC.fnb}"></i></div><b>${M(x[1])}</b></div>`).join("")
+      + (Z.top_products && Z.top_products.length ? `<p class="zh-note">Best sellers: ${Z.top_products.slice(0, 3).map((p) => `${esc(p.name)} (${Number(p.qty).toLocaleString("en-PH")})`).join(", ")}.</p>` : "");
+
+    const rows = ms.filter((m) => m.state !== "future" || m.room_rev_books > 0).map((m) => `<tr>
+        <td>${m.name}${m.state === "current" ? `<span class="sub">to ${thruTxt}</span>` : m.state === "future" ? `<span class="sub">on the books</span>` : ""}</td>
+        <td class="num">${peso(m.room_rev, 0)}${m.room_rev_books ? `<span class="sub">+${M(m.room_rev_books)} booked</span>` : ""}</td>
+        <td class="num">${m.fnb_net ? peso(m.fnb_net, 0) : "—"}</td>
+        <td class="num"><b>${peso(tot(m), 0)}</b></td>
+        <td class="num">${Number(m.occ).toFixed(1)}%</td>
+        <td class="num">${peso(m.adr, 0)}</td>
+        <td class="num">${Number(m.rooms_sold).toLocaleString("en-PH")}</td></tr>`).join("");
+    $("zhTbl").innerHTML = `<thead><tr><th>Month</th><th>Rooms</th><th>F&amp;B</th><th>Total</th><th>Occupancy</th><th>ADR</th><th>Room nights</th></tr></thead><tbody>${rows}</tbody>
+      <tfoot><tr><td><b>Year to date</b></td><td class="num"><b>${peso(roomY, 0)}</b></td><td class="num"><b>${peso(fnbY, 0)}</b></td><td class="num"><b>${peso(totY, 0)}</b></td><td class="num">${pct(occY)}</td><td class="num">${peso(adrY, 0)}</td><td class="num">${Number(Z.room_ytd ? Z.room_ytd.rooms_sold : 0).toLocaleString("en-PH")}</td></tr></tfoot>`;
+    $("zhNote").innerHTML = `Snapshot as of ${asOfTxt}. ${esc(Z.sources_note || "")} Occupancy, ADR and room nights for ${NAMES[curM - 1]} onward cover the whole month as booked. No targets are set for Z Hostel yet. The year-to-date room total is Cloudbeds' own figure.`;
+  }
+  const R0year = (Z) => Number(String(Z.through).slice(0, 4));
+
+  function zhAxis(svg, W, P, max, step, y, fmt) {
+    for (let v = 0; v <= max + 1e-6; v += step) {
+      el("line", { x1: P.l, x2: W - P.r, y1: y(v), y2: y(v), class: v ? "gridline" : "base" }, svg);
+      const t = el("text", { x: P.l - 8, y: y(v) + 4, "text-anchor": "end" }, svg); t.textContent = fmt(v);
+    }
+  }
+  function zhBars(host, ms, layers, opts) {
+    host.innerHTML = "";
+    const W = opts.W || 900, H = opts.H || 320, P = { l: 48, r: 10, t: 26, b: 34 };
+    const totals = ms.map((m) => sum(layers, (L) => L.v(m)));
+    const step = opts.step, max = niceMax(Math.max(...totals) * 1.08, step);
+    const iw = W - P.l - P.r, ih = H - P.t - P.b, bw = iw / ms.length;
+    const y = (v) => P.t + ih - (v / max) * ih;
+    const svg = el("svg", { viewBox: `0 0 ${W} ${H}`, role: "img", "aria-label": opts.label }, host);
+    zhAxis(svg, W, P, max, step, y, (v) => (v ? (v / 1e6).toFixed(step % 1e5 ? 2 : 1) + "M" : "0"));
+    const tip = tipFor(host);
+    ms.forEach((m, i) => {
+      const cx = P.l + bw * i + bw / 2, w = Math.min(38, bw * 0.6);
+      let base = 0;
+      layers.forEach((L) => {
+        const v = L.v(m); if (!v) return;
+        const r = el("rect", { x: cx - w / 2, y: y(base + v), width: w, height: Math.max(1, y(base) - y(base + v)), fill: L.c, rx: 2 }, svg);
+        if (L.dash) { r.setAttribute("stroke", "rgba(95,211,200,.7)"); r.setAttribute("stroke-dasharray", "3 3"); }
+        base += v;
+      });
+      const t = el("text", { x: cx, y: y(base) - 7, "text-anchor": "middle", style: "font-weight:700;fill:#b8ae98" }, svg); t.textContent = (base / 1e6).toFixed(2);
+      const l = el("text", { x: cx, y: H - 12, "text-anchor": "middle" }, svg); l.textContent = m.short;
+      const hit = el("rect", { x: P.l + bw * i, y: 0, width: bw, height: H - P.b + 10, fill: "transparent" }, svg);
+      const show = () => {
+        const sx = host.getBoundingClientRect().width / W;
+        tip.show(`<div class="t">${m.name}${m.state === "current" ? " · in progress" : ""}</div>` + layers.filter((L) => L.v(m)).map((L) => `<div class="r"><span>${L.n}</span><b>${peso(L.v(m), 0)}</b></div>`).join(""), cx * sx, y(base) * sx);
+        hit.setAttribute("fill", "rgba(238,231,214,.04)");
+      };
+      hit.addEventListener("mouseenter", show); hit.addEventListener("click", show);
+      hit.addEventListener("mouseleave", () => { tip.hide(); hit.setAttribute("fill", "transparent"); });
+    });
+  }
+  function zhDrawMain(ms) {
+    zhBars($("zhChartMain"), ms.filter((m) => m.state !== "future" || m.room_rev_books > 0), [
+      { n: "Rooms", c: ZC.room, v: (m) => Number(m.room_rev) },
+      { n: "F&amp;B", c: ZC.fnb, v: (m) => Number(m.fnb_net) },
+      { n: "Rooms on the books", c: ZC.books, dash: true, v: (m) => Number(m.room_rev_books) },
+    ], { step: 5e5, label: "Z Hostel monthly revenue" });
+  }
+  function zhDrawFnb(ms) {
+    zhBars($("zhChartFnb"), ms, ["Tiki Bar", "Z Roof Deck", "Cafe"].map((k) => ({ n: k, c: ZC.out[k], v: (m) => Number((m.outlets || {})[k] || 0) })),
+      { step: 2.5e5, W: 640, H: 300, label: "Z Hostel F&B by outlet" });
+  }
+  function zhDrawOcc(ms) {
+    const host = $("zhChartOcc"); host.innerHTML = "";
+    const W = 640, H = 300, P = { l: 40, r: 58, t: 24, b: 34 };
+    const iw = W - P.l - P.r, ih = H - P.t - P.b, bw = iw / ms.length;
+    const y = (v) => P.t + ih - (v / 100) * ih;
+    const amax = niceMax(Math.max(...ms.map((m) => m.adr)) * 1.1, 250), ya = (v) => P.t + ih - (v / amax) * ih;
+    const svg = el("svg", { viewBox: `0 0 ${W} ${H}`, role: "img", "aria-label": "Z Hostel occupancy and ADR" }, host);
+    zhAxis(svg, W, P, 100, 25, y, (v) => v + "%");
+    for (let v = 0; v <= amax; v += 250) { const t = el("text", { x: W - P.r + 6, y: ya(v) + 4 }, svg); t.textContent = "₱" + v.toLocaleString("en-PH"); }
+    const tip = tipFor(host), pts = [];
+    ms.forEach((m, i) => {
+      const cx = P.l + bw * i + bw / 2, w = Math.min(30, bw * 0.58);
+      el("rect", { x: cx - w / 2, y: y(m.occ), width: w, height: y(0) - y(m.occ), fill: m.state === "closed" ? ZC.room : ZC.books, rx: 2 }, svg);
+      const t = el("text", { x: cx, y: y(m.occ) + 14, "text-anchor": "middle", style: "font-weight:700;fill:#0d1715;font-size:10px" }, svg); t.textContent = Math.round(m.occ) + "%";
+      const l = el("text", { x: cx, y: H - 12, "text-anchor": "middle" }, svg); l.textContent = m.short;
+      pts.push([cx, ya(m.adr)]);
+      const hit = el("rect", { x: P.l + bw * i, y: 0, width: bw, height: H - P.b + 10, fill: "transparent" }, svg);
+      const show = () => {
+        const sx = host.getBoundingClientRect().width / W;
+        tip.show(`<div class="t">${m.name}</div><div class="r"><span>Occupancy</span><b>${Number(m.occ).toFixed(1)}%</b></div><div class="r"><span>ADR</span><b>${peso(m.adr, 0)}</b></div><div class="r"><span>RevPAR</span><b>${peso(m.revpar, 0)}</b></div><div class="r"><span>Room nights</span><b>${Number(m.rooms_sold).toLocaleString("en-PH")}</b></div>`, cx * sx, y(m.occ) * sx);
+      };
+      hit.addEventListener("mouseenter", show); hit.addEventListener("click", show);
+      hit.addEventListener("mouseleave", () => tip.hide());
+    });
+    el("polyline", { points: pts.map((p) => p.join(",")).join(" "), fill: "none", stroke: ZC.adr, "stroke-width": 2.5 }, svg);
+    pts.forEach(([x, yy]) => el("circle", { cx: x, cy: yy, r: 3.5, fill: "#0d1715", stroke: ZC.adr, "stroke-width": 2 }, svg));
   }
 
   function drawGap(closed) {
