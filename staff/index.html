@@ -429,6 +429,11 @@
   .acc-foot { font-size: .74rem; color: var(--ink-soft); margin-top: 14px; }
   @media (max-width: 900px) { .acc-tiles { grid-template-columns: 1fr 1fr; } table.acc-table { min-width: 860px; } }
   @media (max-width: 600px) { .dash-head .view-toggle { max-width: 100%; overflow-x: auto; margin-left: 0; } .view-toggle button { white-space: nowrap; } .acc-dates input { width: 122px; padding: 6px 4px; } }
+  /* F&B view (staff-fnb.js, booking-v89) — StoreHub POS sales; reuses the Accounting styles */
+  #fnbView { display: none; }
+  body.fnbv #fnbView { display: block; max-width: 1400px; margin: 0 auto; padding: 0; }
+  body.fnbv #dashScreen > :not(#fnbView) { display: none !important; }
+  #fnbView table.acc-table td a { cursor: pointer; }
   /* Executive view (staff-exec.js) — only for executive accounts */
   .view-toggle [data-view="executive"] { display: none; }
   body.exec-staff .view-toggle [data-view="executive"] { display: inline-block; }
@@ -1830,6 +1835,7 @@
 <script src="../assets/js/staff-daycal.js?v=65e7efa292"></script>
 <script src="../assets/js/staff-summary.js?v=9596d523a5"></script>
 <script src="../assets/js/staff-accounting.js?v=7a2f80d1b0"></script>
+<script src="../assets/js/staff-fnb.js?v=e1c5c0894c"></script>
 <script src="../assets/js/staff-exec.js?v=720e9a00ac"></script>
 <script src="../assets/js/staff-campaigns.js?v=665d18a381"></script>
 <script src="../assets/js/staff-cancel.js?v=c0aad2faad"></script>
@@ -1838,7 +1844,7 @@
 <script src="../assets/js/staff-alerts.js?v=96aa0b59bd"></script>
 <script src="../assets/js/staff-insights.js?v=9f52209975"></script>
 <script src="../assets/js/staff-track.js?v=28f180d1db"></script>
-<script src="../assets/js/staff-cloudbeds.js?v=e6952cc019"></script>
+<script src="../assets/js/staff-cloudbeds.js?v=306613f9b4"></script>
 <script src="../assets/js/staff-cloudbeds-pages.js?v=4e54e15179"></script>
 <script src="../assets/js/staff-assistant.js?v=403176ab1b"></script>
 </body>
