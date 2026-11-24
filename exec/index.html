@@ -262,7 +262,7 @@
   .basis-note b { color: var(--ink-soft); }
   .sw.books { background: rgba(47,168,158,.35); border: 1px dashed rgba(95,211,200,.7); }
   .sw.l26 { background: #2fa89e; } .sw.l25 { background: #b88a3c; } .sw.l24 { background: #8f7fc4; }
-  .sw.mix-room { background: #2fa89e; } .sw.mix-other { background: #7fd3ca; } .sw.mix-dt { background: #b88a3c; }
+  .sw.mix-room { background: #2fa89e; } .sw.mix-other { background: #7fd3ca; } .sw.mix-dt { background: #b88a3c; } .sw.mix-fnb { background: #d98c6a; }
   .mix { display: flex; height: 22px; border-radius: 8px; overflow: hidden; gap: 2px; margin: 16px 0 14px; }
   .mix i { display: block; height: 100%; transition: flex-grow 1.2s cubic-bezier(.2,.7,.2,1); flex-grow: 0; flex-basis: 0; }
   .mix-rows { display: grid; gap: 10px; }
@@ -559,19 +559,23 @@
     const today = R.today, curM = Number(today.slice(5, 7)), curY = Number(today.slice(0, 4));
     const audited = R.months.filter((m) => m.nights_audited > 0);
     const ratio = sum(audited, (m) => m.casita_other) / Math.max(1, sum(audited, (m) => m.casita_room));
+    // v89: F&B sales from StoreHub (net of VAT and service charge) — not in Cloudbeds nor in accounting's figure, so added on top
+    const fnbRows = (R.fnb && R.fnb.months) || [];
+    const fnbOf = (y, mo) => { const r = fnbRows.find((f) => f.year === y && f.month === mo); return r ? Number(r.net) || 0 : 0; };
     const months = R.months.map((m) => {
       const i = m.month - 1;
+      const fnb = fnbOf(R.year, m.month);
       const state = R.year < curY || m.month < curM ? "closed" : m.month === curM && R.year === curY ? "current" : "future";
       const casAct = m.casita_room + m.casita_other;
       const casFc = m.casita_room_fc + Math.max(m.casita_other_fc, m.casita_room_fc * ratio);
-      const live = casAct + m.daytrip;
+      const live = casAct + m.daytrip + fnb;
       const books = casFc + m.daytrip_upcoming;
       const rep = m.accounting_actual == null ? null : Number(m.accounting_actual);
-      const actual = basis === "blend" && rep != null ? rep : (state === "future" ? 0 : live);
-      return { ...m, i, m: NAMES[i], short: NAMES[i].slice(0, 3), state, casAct, casFc, live, books, rep, actual,
+      const actual = basis === "blend" && rep != null ? rep + fnb : (state === "future" ? 0 : live);
+      return { ...m, i, m: NAMES[i], short: NAMES[i].slice(0, 3), state, casAct, casFc, fnb, live, books, rep, actual,
                src: basis === "blend" && rep != null ? "accounting" : "live", target: Number(m.target || 0) };
     });
-    return { R, months, ratio, curM, today };
+    return { R, months, ratio, curM, today, fnbRows };
   }
 
   /* ---------- render ---------- */
@@ -598,10 +602,10 @@
 
     /* header */
     $("liveTxt").textContent = `Live · updated ${hhmm(R.generated_at)}`;
-    $("live").title = `Cloudbeds synced ${hhmm(R.cloudbeds_synced_at)} · night audit through ${R.audited_through} · refreshes every 5 minutes`;
+    $("live").title = `Cloudbeds synced ${hhmm(R.cloudbeds_synced_at)}${R.fnb && R.fnb.synced_at ? ` · StoreHub synced ${hhmm(R.fnb.synced_at)}` : ""} · night audit through ${R.audited_through} · refreshes every 5 minutes`;
     $("basisNote").innerHTML = basis === "blend"
-      ? `${reported.length ? `<b>${reported[0].short}–${reported[reported.length - 1].short}</b>: as reported by accounting. ` : ""}<b>After that</b>: live from Cloudbeds + day-trip bookings.`
-      : `<b>All months</b>: live from Cloudbeds (casitas) + day-trip bookings.`;
+      ? `${reported.length ? `<b>${reported[0].short}–${reported[reported.length - 1].short}</b>: as reported by accounting${R.fnb ? ", plus F&amp;B from StoreHub" : ""}. ` : ""}<b>After that</b>: live from Cloudbeds + day-trip bookings${R.fnb ? " + F&amp;B (StoreHub)" : ""}.`
+      : `<b>All months</b>: live from Cloudbeds (casitas) + day-trip bookings${R.fnb ? " + F&amp;B outlets (StoreHub)" : ""}.`;
 
     /* hello */
     $("helloEyebrow").textContent = `FY ${Y} sales performance · ${throughLabel} closed${cur ? ` · ${cur.m} in progress` : ""}`;
@@ -684,9 +688,10 @@
     setTimeout(() => document.querySelectorAll(".q .track i").forEach((i) => { i.style.width = i.dataset.w + "%"; }), firstRender ? 500 : 0);
 
     /* revenue mix (live, closed months) */
-    const room = sum(closed, (m) => m.casita_room), other = sum(closed, (m) => m.casita_other), dtS = sum(closed, (m) => m.daytrip), tot = room + other + dtS;
-    $("mixLead").textContent = `${throughLabel} ${Y}, from Cloudbeds and day-trip bookings (taxes and fees excluded).`;
+    const room = sum(closed, (m) => m.casita_room), other = sum(closed, (m) => m.casita_other), dtS = sum(closed, (m) => m.daytrip), fnbS = sum(closed, (m) => m.fnb), tot = room + other + dtS + fnbS;
+    $("mixLead").textContent = `${throughLabel} ${Y}, from Cloudbeds, day-trip bookings${R.fnb ? " and StoreHub F&B" : ""} (taxes and fees excluded).`;
     const mix = [["mix-room", "#2fa89e", "Casitas · rooms", room], ["mix-other", "#7fd3ca", "Casitas · meals, add-ons & extras", other], ["mix-dt", "#b88a3c", "Day trips", dtS]];
+    if (R.fnb) mix.push(["mix-fnb", "#d98c6a", "F&B outlets (StoreHub)", fnbS]);
     $("mixBar").innerHTML = mix.map(([, c, n, v]) => `<i style="background:${c}" data-g="${v / tot}" title="${n}: ${M(v)} (${pct(v / tot, 0)})"></i>`).join("");
     setTimeout(() => document.querySelectorAll("#mixBar i").forEach((i) => { i.style.flexGrow = i.dataset.g; }), firstRender ? 400 : 0);
     $("mixRows").innerHTML = mix.map(([k, , n, v]) => `<div class="mix-row"><i class="sw ${k}"></i><span>${n}</span><b class="num">${M(v)}</b><span class="p num">${pct(v / tot, 0)}</span></div>`).join("") +
@@ -694,13 +699,13 @@
 
     /* reconciliation */
     const recM = MONTHS.filter((m) => m.rep != null && m.state === "closed");
-    const recLive = sum(recM, (m) => m.live), recRep = sum(recM, (m) => m.rep);
+    const recLive = sum(recM, (m) => m.live - m.fnb), recRep = sum(recM, (m) => m.rep);
     const stat = (k, v, s) => `<div class="mx-stat"><div class="k">${k}</div><div class="v num">${v}</div><div class="s">${s}</div></div>`;
     if (recM.length) {
-      const worstM = recM.reduce((a, b) => (Math.abs(b.live - b.rep) > Math.abs(a.live - a.rep) ? b : a));
+      const worstM = recM.reduce((a, b) => (Math.abs(b.live - b.fnb - b.rep) > Math.abs(a.live - a.fnb - a.rep) ? b : a));
       $("recon").innerHTML = stat(`Accounting, ${recM[0].short}–${recM[recM.length - 1].short}`, M(recRep), "as reported by Sugar") +
-        stat("Live system, same months", M(recLive), `${recLive >= recRep ? "+" : "−"}${M(Math.abs(recLive - recRep))} (${pct(Math.abs(recLive - recRep) / recRep)} ${recLive >= recRep ? "over" : "under"})`);
-      $("reconNote").innerHTML = `The year totals agree closely. Single months can differ by up to <b>${M(Math.abs(worstM.live - worstM.rep))}</b> (${worstM.m}), mostly timing between when a sale is booked and when it is recorded. Months accounting hasn’t reported yet use the live figure.`;
+        stat(R.fnb ? "Live system (excl. F&B), same months" : "Live system, same months", M(recLive), `${recLive >= recRep ? "+" : "−"}${M(Math.abs(recLive - recRep))} (${pct(Math.abs(recLive - recRep) / recRep)} ${recLive >= recRep ? "over" : "under"})`);
+      $("reconNote").innerHTML = `The year totals agree closely. Single months can differ by up to <b>${M(Math.abs(worstM.live - worstM.fnb - worstM.rep))}</b> (${worstM.m}), mostly timing between when a sale is booked and when it is recorded. Months accounting hasn’t reported yet use the live figure.${R.fnb ? " F&amp;B outlet sales (StoreHub) are not in accounting’s figure, so they are left out of this comparison and added on top of it in the totals." : ""}`;
     } else { $("recon").innerHTML = ""; $("reconNote").textContent = "No months reported by accounting yet; all figures are live."; }
 
     renderDaytrips(R, X);
@@ -918,6 +923,7 @@
         const rows = m.state === "closed"
           ? `<div class="r"><span>Actual${m.src === "accounting" ? " (accounting)" : ""}</span><b>${peso(m.actual)}</b></div>
              ${m.src === "accounting" ? `<div class="r"><span>Live system</span><b>${peso(m.live, 0)}</b></div>` : ""}
+             ${m.fnb ? `<div class="r"><span>incl. F&amp;B (StoreHub)</span><b>${peso(m.fnb, 0)}</b></div>` : ""}
              <div class="r"><span>Target</span><b>${peso(m.target)}</b></div>
              <div class="r ${m.actual < m.target ? "neg" : ""}"><span>Variance</span><b>${m.actual < m.target ? "−" : "+"}${peso(Math.abs(m.target - m.actual))}</b></div>
              <div class="r"><span>% of target</span><b>${pct(m.actual / m.target)}</b></div>`
@@ -925,7 +931,8 @@
              <div class="r"><span>On the books</span><b>${peso(bk, 0)}</b></div>
              <div class="r"><span>Target</span><b>${peso(m.target)}</b></div>
              <div class="r"><span>Booked vs target</span><b>${pct((act + bk) / m.target)}</b></div>
-             <div class="r"><span>Casitas · day trips</span><b>${M(m.casAct + m.casFc)} · ${M(m.daytrip + m.daytrip_upcoming)}</b></div>`;
+             <div class="r"><span>Casitas · day trips</span><b>${M(m.casAct + m.casFc)} · ${M(m.daytrip + m.daytrip_upcoming)}</b></div>
+             ${m.fnb ? `<div class="r"><span>F&amp;B outlets so far</span><b>${M(m.fnb)}</b></div>` : ""}`;
         tip.show(`<div class="t">${m.m}${m.state === "current" ? " · in progress" : m.state === "future" ? " · upcoming" : ""}</div>${rows}`, cx * sx, y(Math.max(m.target, act + bk)) * sx);
         hit.setAttribute("fill", "rgba(238,231,214,.04)");
       };
