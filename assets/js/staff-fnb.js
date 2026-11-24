@@ -117,7 +117,7 @@
     var sales = num(T.sales);
     $("fnbTiles").innerHTML = R ? (
       tile("Net sales", money(T.net), "excl. VAT &amp; service charge") +
-      tile("Gross paid", money(T.gross), "VAT " + money(T.tax) + (num(T.service_charge) ? " · SC " + money(T.service_charge) : "")) +
+      tile("Gross paid", money(T.gross), "VAT " + money(T.tax) + (num(T.service_charge) ? " · service charge " + money(T.service_charge) : "")) +
       tile("Transactions", n0(sales), (num(T.returns) ? n0(T.returns) + " returns · " : "") + n0(T.cancelled) + " cancelled") +
       tile("Average sale", money(sales ? num(T.gross) / sales : 0), "gross per transaction") +
       tile("Items sold", n0(T.items), num(T.discount) ? "discounts " + money(T.discount) : "")) : "";
@@ -138,14 +138,14 @@
         (R.stores || []).map(function (s) { return "<tr><td>" + esc(s.store) + '</td><td class="num">' + n0(s.sales) + '</td><td class="num">' + money(s.gross) + '</td><td class="num">' + money(s.net) + '</td><td class="num">' + (num(T.net) ? Math.round(num(s.net) / num(T.net) * 1000) / 10 + "%" : "—") + "</td></tr>"; }),
         '<tr><td>Total</td><td class="num">' + n0(sales) + '</td><td class="num">' + money(T.gross) + '</td><td class="num">' + money(T.net) + '</td><td class="num">100%</td></tr>');
     } else if (tab === "products") {
-      h = '<p class="acc-note">Top 50 products by amount (line totals as rung up, incl. VAT).</p>' +
+      h = '<p class="acc-note">Top 50 products by sales amount (net of VAT for days loaded from StoreHub’s reports).</p>' +
         table([{ t: "#" }, { t: "Product" }, { t: "Category" }, { t: "Qty", n: 1 }, { t: "Amount", n: 1 }],
           (R.products || []).map(function (p, i) { return "<tr><td>" + (i + 1) + "</td><td>" + esc(p.product) + "</td><td>" + esc(p.category || "—") + '</td><td class="num">' + n0(p.qty) + '</td><td class="num">' + money(p.amount) + "</td></tr>"; }));
     } else if (tab === "payments") {
       h = table([{ t: "Payment method" }, { t: "Payments", n: 1 }, { t: "Amount", n: 1 }],
         (R.payments || []).map(function (p) { return "<tr><td>" + esc(p.method) + '</td><td class="num">' + n0(p.count) + '</td><td class="num">' + money(p.amount) + "</td></tr>"; }));
     } else {
-      h = '<p class="acc-note">Latest 300 transactions in the period, newest first.</p>' +
+      h = '<p class="acc-note">Latest 300 entries in the period, newest first. Days loaded from StoreHub’s reports show one “Daily summary” line per outlet.</p>' +
         table([{ t: "Time" }, { t: "Invoice" }, { t: "Outlet" }, { t: "Items" }, { t: "Paid by" }, { t: "Total", n: 1 }],
           (R.recent || []).map(function (r) {
             var cls = r.cancelled ? ' class="acc-rejected"' : "";
