@@ -31,6 +31,8 @@
 //   manager_backfill  { kind: ledger|nights|blocks, from, to } one-off fill.
 //            v84: manager_sync also keeps Cloudbeds' pending (not yet audited)
 //            charges — the forecast part of the Manager's Report.
+//   void_dupes { booking_id, sold_product_ids, adjustment_ids, expect_before, dry }
+//            v93 cleanup: void folio lines a booking got twice (dry by default).
 //   test     check the API key.
 // v21 (Cloudbeds first): the website sends only the quotation for these
 // villa bookings; Cloudbeds' own emails take over (status changes are pushed
@@ -729,6 +731,47 @@ async function refolio(bookingId: string, withDiscounts: boolean, suffix = ""): 
   return { reservation_id: res, posted, notes, website_total: b.total_amount, cloudbeds_total: await cbTotal(res).catch(() => null) };
 }
 
+// v93 cleanup: void folio lines a booking got twice (the v85 double posting,
+// Nov 23–24 2026). { booking_id, sold_product_ids, adjustment_ids, expect_before, dry }
+// The ids come from cb_transactions (ITEM_POS / ADJUSTMENT relation ids of the
+// second, repeated batch). Refuses unless Cloudbeds' current total equals
+// expect_before (website total + the duplicate set), so a folio staff already
+// fixed — or changed since — is left alone. dry: only reports.
+async function voidDupes(body: Any): Promise<Any> {
+  const h = { apikey: SR(), Authorization: `Bearer ${SR()}` };
+  const b = (await (await fetch(`${SB_URL()}/rest/v1/booking_requests?id=eq.${encodeURIComponent(String(body.booking_id))}&select=id,order_code,cb_reservation_id,cb_owned,total_amount`, { headers: h })).json())?.[0];
+  if (!b?.cb_reservation_id || b.cb_owned) return { error: "not a website booking in Cloudbeds" };
+  const res = String(b.cb_reservation_id);
+  const items: string[] = (Array.isArray(body.sold_product_ids) ? body.sold_product_ids : []).map(String);
+  const adjs: string[] = (Array.isArray(body.adjustment_ids) ? body.adjustment_ids : []).map(String);
+  const before = await cbTotal(res);
+  const expect = Number(body.expect_before);
+  const out: Any = { order_code: b.order_code, reservation_id: res, website_total: Number(b.total_amount), cloudbeds_before: before, expect_before: expect, items, adjustments: adjs };
+  if (before === null || !Number.isFinite(expect) || Math.abs(before - expect) > 1) return { ...out, skipped: "Cloudbeds total is not what was expected — folio changed since; nothing voided" };
+  if (body.dry !== false) return { ...out, dry: true };
+  const done: string[] = [], errors: string[] = [];
+  for (const id of items) {
+    try { await cb("POST", "postVoidItem", { reservationID: res, soldProductID: id }); done.push("item " + id); }
+    catch (e) { errors.push(`item ${id}: ${(e as Error).message}`); }
+  }
+  for (const id of adjs) {
+    try {
+      try { await cb("POST", "deleteAdjustment", { reservationID: res, adjustmentID: id }); }
+      catch (e) { if (![404, 405].includes(Number((e as Any).status))) throw e; await cb("DELETE", "deleteAdjustment", { reservationID: res, adjustmentID: id }); }
+      done.push("adjustment " + id);
+    } catch (e) { errors.push(`adjustment ${id}: ${(e as Error).message}`); }
+  }
+  let after = await cbTotal(res).catch(() => null);
+  for (let i = 0; i < 4 && after !== null && Math.abs(after - Number(b.total_amount)) > 1; i++) { await sleep(3000); after = await cbTotal(res).catch(() => after); }
+  if (done.length) {
+    await cb("POST", "postReservationNote", { reservationID: res,
+      reservationNote: `Folio corrected ${new Date().toISOString().slice(0, 10)}: meals / discounts the website posted twice (system error, Nov 23–24) were voided. ` +
+        `Website total ${peso(b.total_amount)}; Cloudbeds total now ${peso(after)}.` }).catch(() => null);
+    await syncOne(res).catch(() => null);
+  }
+  return { ...out, voided: done, errors, cloudbeds_after: after };
+}
+
 // ---------------------------------------------------------------- proof → Cloudbeds Documents
 async function postProofDocument(reservationId: string, path: string, label: string, bucket = "payment-proofs"): Promise<void> {
   const key = env("CLOUDBEDS_API_KEY");
@@ -1312,6 +1355,8 @@ export async function handle(req: Request): Promise<Response> {
         const plan = folioPlan(b, await quoteFor(b));
         return json({ items: plan.items.map((l) => customItemParams(String(b.cb_reservation_id || "RES"), l).items[0]), discounts: plan.discounts, website_total: b.total_amount });
       }
+      case "void_dupes": return json(await voidDupes(body));
+      case "custom_item": return json(await cb("GET", "getCustomItem", { soldProductID: String(body.sold_product_id) })); // read-only lookup
       case "refolio": return json(await refolio(String(body.booking_id), body.discounts === true, String(body.suffix || "")));
       case "sync_one": return json(await syncOne(String(body.reservation_id)));
       case "rates": {
