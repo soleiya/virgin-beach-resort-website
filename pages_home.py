@@ -61,6 +61,8 @@ body = f"""
   </div>
 </section>
 
+<section class="section-tight" data-weeknight-offer data-base="" hidden></section>
+
 <section class="section-tight how-book">
   <div class="wrap">
     <span class="eyebrow">How booking works</span>
@@ -211,6 +213,7 @@ body = f"""
 <script src="assets/js/booking-config.js?v={asset_v('assets/js/booking-config.js')}"></script>
 <script src="assets/js/booking-window.js?v={asset_v('assets/js/booking-window.js')}"></script>
 <script src="assets/js/quickbook.js?v={asset_v('assets/js/quickbook.js')}"></script>
+<script src="assets/js/weeknight-offer.js?v={asset_v('assets/js/weeknight-offer.js')}"></script>
 """
 
 page("index.html", "Private Beach Resort in Laiya, Batangas", "A tranquil, natural beach escape in Laiya, San Juan, Batangas — a 3-hour drive from Metro Manila.", body, solid_header=False)

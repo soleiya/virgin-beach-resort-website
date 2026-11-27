@@ -240,6 +240,8 @@ overnight_body = f"""
   </div>
 </section>
 
+<section class="section-tight" data-weeknight-offer data-base="../" hidden></section>
+
 <section class="section-tight">
   <div class="wrap">
     <p class="prose" style="font-size:1.05rem;">Our rooms come with an understated elegance that feels like home. While the day away in one of our many
@@ -266,6 +268,8 @@ overnight_body = f"""
     {FINE_PRINT}
   </div>
 </section>
+<script src="../assets/js/booking-config.js?v={asset_v('assets/js/booking-config.js')}"></script>
+<script src="../assets/js/weeknight-offer.js?v={asset_v('assets/js/weeknight-offer.js')}"></script>
 """
 page("overnight/index.html", "Overnight", "Oceanfront casitas at Virgin Beach Resort — rates, sizes, and room details.", overnight_body)
 
